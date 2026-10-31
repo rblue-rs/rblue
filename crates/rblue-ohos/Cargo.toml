@@ -1,0 +1,39 @@
+[package]
+name = "rblue-ohos"
+description = "HarmonyOS (OHOS) backend for rblue: BleDriver protocol over the Node-API bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["bluetooth", "ble", "harmonyos", "ohos"]
+categories = ["hardware-support"]
+
+[features]
+default = []
+# ohos-rs Node-API facade (the ArkTS driver bridge). Off by default so host
+# checks and tests never need the Node-API toolchain; enable it for the OHOS
+# .so build (M4). See docs/platform-notes.md.
+napi = ["dep:napi-ohos", "dep:napi-derive-ohos", "dep:serde", "dep:serde_json"]
+
+[dependencies]
+rblue-api = { workspace = true, features = ["serde"] }
+rblue-driver = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+futures-timer = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+# Node-API bindings, compiled only with the `napi` feature. The `async`
+# feature (implies tokio_rt/napi4) drives the async facade methods and the
+# stream-forwarding tasks on napi's embedded tokio runtime. The final .so
+# links against the OHOS NDK stubs; host builds of this feature are
+# check/test-only (no linking happens under `cargo check`/`cargo test`).
+napi-ohos = { version = "1.2", optional = true, features = ["async"] }
+napi-derive-ohos = { version = "1.2", optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+rblue-api = { workspace = true, features = ["contract"] }
+tokio = { workspace = true }

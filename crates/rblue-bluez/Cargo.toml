@@ -1,0 +1,32 @@
+[package]
+name = "rblue-bluez"
+description = "Linux (BlueZ) backend for rblue"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+btleplug = { git = "https://github.com/rblue-rs/btleplug", rev = "1af8299c291f24fca68dfb6b7ef1b5c0475892e1" }
+futures = { workspace = true }
+rblue-api = { workspace = true }
+# Minimal feature set so the crate also compiles on non-Linux targets
+# (the glue is `cfg(linux)`; `net`/`full` would pull mio everywhere).
+tokio = { version = "1", default-features = false, features = ["sync", "rt", "macros", "time"] }
+uuid = { workspace = true }
+
+# Same version as the fork's bluez implementation, so the shell can downcast
+# `btleplug::Error::Other` payloads back to `bluez_async::BluetoothError` and
+# read the D-Bus error names. Linux-only: bluez-async (and libdbus) build
+# there, exactly like inside the fork.
+[target.'cfg(target_os = "linux")'.dependencies]
+bluez-async = "0.9.0"
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["sync", "rt", "macros", "time"] }
+
+# Constructing real D-Bus errors for the fork-type round-trip tests.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+dbus = "0.9.12"

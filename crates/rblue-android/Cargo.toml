@@ -1,0 +1,26 @@
+[package]
+name = "rblue-android"
+description = "Android (JNI) backend for rblue"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+btleplug = { git = "https://github.com/rblue-rs/btleplug", rev = "1af8299c291f24fca68dfb6b7ef1b5c0475892e1" }
+futures = { workspace = true }
+rblue-api = { workspace = true }
+# Minimal feature set so the crate also compiles on non-Android targets
+# (the glue is `cfg(target_os = "android")`; `net`/`full` would pull mio
+# everywhere).
+tokio = { version = "1", default-features = false, features = ["sync", "rt", "macros", "time"] }
+uuid = { workspace = true }
+
+# Same version as the fork's droidplug implementation, so the shell's
+# `init(&mut jni::Env)` entry point speaks the exact `Env` type the fork's
+# `platform::init` expects. Android-only: the JNI machinery only builds there,
+# exactly like inside the fork.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.22"

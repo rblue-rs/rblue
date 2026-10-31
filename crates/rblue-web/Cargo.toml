@@ -1,0 +1,30 @@
+[package]
+name = "rblue-web"
+description = "Web (Web Bluetooth via web-sys) backend for rblue, targets wasm32-unknown-unknown"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rblue-api = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
+
+# Web Bluetooth itself is declared against the DOM in `src/backend.rs`:
+# web-sys gates its Bluetooth bindings behind `--cfg=web_sys_unstable_apis`,
+# which would leak a RUSTFLAGS requirement into every build of this crate and
+# its dependents. web-sys is still used for the stable Window/Navigator/Event
+# pieces.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+async-trait = { workspace = true }
+js-sys = "0.3"
+tracing = { workspace = true }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Event", "EventTarget", "Navigator", "Window"] }
+# The workspace `uuid` enables v4, which needs a randomness source on wasm;
+# `js` routes it through the browser CSPRNG. Feature unification fixes the
+# shared uuid build for this target, including rblue-api's copy.
+uuid = { workspace = true, features = ["js"] }
