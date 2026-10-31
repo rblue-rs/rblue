@@ -1,0 +1,52 @@
+[package]
+name = "rblue-ffi"
+description = "UniFFI facade for rblue: one async surface shared by Kotlin and Swift bindings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# The scaffolding must link into a library consumers can load, and
+# `uniffi-bindgen generate --library` reads the built artifact back out.
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+# The feature set mirrors the aggregate `rblue` crate; each flag is forwarded
+# so `--features corebluetooth` selects the same backend here as there.
+[features]
+default = ["mock"]
+mock = ["rblue/mock"]
+winrt = ["rblue/winrt"]
+corebluetooth = ["rblue/corebluetooth"]
+bluez = ["rblue/bluez"]
+android = ["rblue/android"]
+web = ["rblue/web"]
+ohos = ["rblue/ohos"]
+
+[dependencies]
+futures = { workspace = true }
+rblue = { path = "../rblue", version = "0.0.1", default-features = false }
+rblue-api = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# The facade targets Kotlin/Swift on desktop and mobile. On wasm32 the
+# aggregate `rblue` crate's `web` feature is the facade (wasm-bindgen), and
+# tokio has no multi-thread runtime there, so the FFI surface - including the
+# tokio and uniffi dependencies - is compiled out on that target.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true }
+uniffi = { version = "0.32", features = ["tokio", "cli"] }
+
+[dev-dependencies]
+rblue-api = { workspace = true, features = ["serde", "contract"] }
+rblue-mock = { workspace = true }
+tokio = { workspace = true }
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"

@@ -8,4 +8,33 @@ repository = "https://github.com/rblue-rs/rblue"
 keywords = ["bluetooth", "ble", "web-bluetooth", "harmonyos"]
 categories = ["hardware-support"]
 
+# One feature per backend, mirroring `btleplug::platform`: the `platform`
+# module picks the backend that matches the target OS, and any explicitly
+# enabled feature adds that backend to the build. `mock` is the default so
+# tests, doctests, and prototyping run without Bluetooth hardware.
+[features]
+default = ["mock"]
+mock = ["dep:rblue-mock"]
+winrt = ["dep:rblue-winrt"]
+corebluetooth = ["dep:rblue-corebluetooth"]
+bluez = ["dep:rblue-bluez"]
+android = ["dep:rblue-android"]
+web = ["dep:rblue-web"]
+ohos = ["dep:rblue-ohos"]
+
 [dependencies]
+cfg-if = "1"
+rblue-api = { workspace = true }
+
+rblue-mock = { path = "../rblue-mock", version = "0.1.0", optional = true }
+rblue-winrt = { path = "../rblue-winrt", version = "0.1.0", optional = true }
+rblue-corebluetooth = { path = "../rblue-corebluetooth", version = "0.1.0", optional = true }
+rblue-bluez = { path = "../rblue-bluez", version = "0.1.0", optional = true }
+rblue-android = { path = "../rblue-android", version = "0.1.0", optional = true }
+rblue-web = { path = "../rblue-web", version = "0.1.0", optional = true }
+rblue-ohos = { path = "../rblue-ohos", version = "0.1.0", optional = true }
+
+[dev-dependencies]
+futures = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
