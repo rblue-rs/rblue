@@ -1,0 +1,50 @@
+[workspace]
+resolver = "2"
+members = [
+    "xtask",
+    "crates/rblue-api",
+    "crates/rblue-mock",
+    "crates/rblue",
+    "crates/rblue-winrt",
+    "crates/rblue-corebluetooth",
+    "crates/rblue-bluez",
+    "crates/rblue-android",
+    "crates/rblue-web",
+    "crates/rblue-ohos",
+    "crates/rblue-ffi",
+    "crates/rblue-driver",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/rblue-rs/rblue"
+
+[workspace.dependencies]
+# Async core (runtime-agnostic; rblue-api must not depend on any executor)
+async-trait = "0.1"
+futures = "0.3"
+futures-timer = "3"
+
+# Modeling
+bitflags = "2"
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
+
+# Serialization: driver protocol, FFI payloads, mock scripting only
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Diagnostics
+tracing = "0.1"
+
+# Dev/test only (never a dependency of rblue-api)
+tokio = { version = "1", features = ["full"] }
+proptest = "1"
+
+# Internal crates
+rblue-api = { version = "0.1.0", path = "crates/rblue-api" }
+rblue-driver = { version = "0.1.0", path = "crates/rblue-driver" }
+rblue-mock = { version = "0.1.0", path = "crates/rblue-mock" }

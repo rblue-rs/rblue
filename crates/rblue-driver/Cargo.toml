@@ -1,0 +1,19 @@
+[package]
+name = "rblue-driver"
+description = "BleDriver protocol definition: the single Rust-side source of truth for the rblue Driver track (HarmonyOS now, Android optionally later)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["bluetooth", "ble", "harmonyos", "ohos"]
+categories = ["hardware-support"]
+
+[dependencies]
+rblue-api = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -1,2 +1,12 @@
 /target
 Cargo.lock
+
+# Build artifacts (workspace members included)
+target/
+
+# Local environment / secrets
+.env
+.env.*
+
+# OS cruft
+.DS_Store
