@@ -7,9 +7,10 @@ Pronounced **"R-blue"**. Member of the Blue* family: BlueZ, bluer, bluest … rb
 
 ## Status
 
-🚧 Design phase. The crate name `rblue` is reserved for crates.io; the GitHub
-organization will be `rblue-rs` (the exact-name `rblue` namespace is held by an
-inactive 2014 account, which GitHub does not release).
+🚧 Design phase. Published on crates.io as [`rblue`](https://crates.io/crates/rblue)
+(v0.0.1, name-reservation release). Source lives at [`rblue-rs/rblue`](https://github.com/rblue-rs/rblue)
+(the exact-name `rblue` namespace is held by an inactive 2014 account, which
+GitHub does not release).
 
 ## Scope
 

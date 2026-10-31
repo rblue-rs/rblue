@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 description = "Cross-platform async Bluetooth Low Energy (BLE) for Rust: Windows, macOS, Linux, iOS, Android, Web Bluetooth, and HarmonyOS. Name-reservation release; the unified API is in design."
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/charles0122/rblue"
+repository = "https://github.com/rblue-rs/rblue"
 keywords = ["bluetooth", "ble", "web-bluetooth", "harmonyos"]
 categories = ["hardware-support"]
 
