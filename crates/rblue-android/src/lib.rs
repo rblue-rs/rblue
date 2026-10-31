@@ -63,6 +63,8 @@ mod mapping;
 #[cfg(target_os = "android")]
 mod adapter;
 #[cfg(target_os = "android")]
+mod jni_shim;
+#[cfg(target_os = "android")]
 mod peripheral;
 
 #[cfg(target_os = "android")]

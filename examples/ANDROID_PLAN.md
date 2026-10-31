@@ -98,8 +98,21 @@ Kotlin 侧自动重连(退避可见)→ 权限被拒/蓝牙关闭等错误面的
 
 ## 4. 门面缺口清单(上报协调者,不在本计划内自行修改)
 
-1. **阻塞 M-A1**:`rblue-ffi` 需导出 `android_init()`(建议签名
-   `pub fn android_init(&self) -> Result<(), Error>`,内部 attach 当前线程 Env 并调
-   `rblue_android::init`;需在 Android target 下编译)。约 20 行,协调者一次补齐,
-   三端互不影响。
+1. ~~**阻塞 M-A1**:`rblue-ffi` 需导出 `android_init()`~~ **已由协调者解决**
+   (比原方案更好):`rblue-android` 现已导出 JNI 符号
+   `Java_com_rblue_RblueNative_nativeInit`(位于 `crates/rblue-android/src/jni_shim.rs`,
+   随 `librblue_ffi.so` 一起打包),`.so` 构建命令为
+   `cargo build --release -p rblue-ffi --target <android-abi>`。
+   Kotlin 侧(在 `bindings/kotlin` 内,本计划 M-A1 实现此包装):
+   ```kotlin
+   package com.rblue  // 必须与 mangled symbol 匹配
+   object RblueNative {
+       init { System.loadLibrary("rblue_ffi") }
+       external fun nativeInit(): Boolean
+   }
+   ```
+   `RblueAndroid.initialize(context)` 在任意 Java 线程(建议主线程)调用
+   `RblueNative.nativeInit()`,返回 false 时抛出带说明的异常;幂等,可重复调用。
+   注意 NDK 已安装(`/opt/homebrew/share/android-commandlinetools/ndk`,27/28 两版),
+   cargo 需要 android target 的 linker 配置(NDK clang wrapper 或 cargo-ndk)。
 2. supervisor/queue 未导出 FFI——M-A4 的重连在 Kotlin 侧实现即为有意取舍。
