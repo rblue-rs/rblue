@@ -1,0 +1,64 @@
+name: RblueExample
+options:
+  bundleIdPrefix: rs.rblue.examples
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+packages:
+  Rblue:
+    path: ../../bindings/swift/Rblue
+settings:
+  base:
+    # Swift 5 language mode: UniFFI 0.32 generated code is not yet
+    # Swift-6-strict-concurrency clean; migrating is tracked in KNOWN-GAPS.md.
+    SWIFT_VERSION: "5.0"
+targets:
+  RblueExample:
+    type: application
+    platform: iOS
+    sources:
+      - path: RblueExample
+    dependencies:
+      - package: Rblue
+    info:
+      path: RblueExample/Info.plist
+      properties:
+        CFBundleDisplayName: rblue Example
+        UILaunchScreen: {}
+        # The authorization prompt fires when the backend creates its
+        # CBCentralManager (during `initialize`); App Store submissions
+        # reject the build without this key.
+        NSBluetoothAlwaysUsageDescription: >-
+          rblue 使用蓝牙扫描附近的 BLE 外设,连接并演示 GATT 读/写/通知。
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: false
+        # The Rust static libraries are arm64-only (aarch64-apple-ios /
+        # aarch64-apple-ios-sim), so generic simulator builds must not
+        # emit an x86_64 slice; Intel simulators are out of scope.
+        ARCHS[sdk=iphonesimulator*]: arm64
+  RblueExampleTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RblueExampleTests
+    dependencies:
+      - target: RblueExample
+schemes:
+  RblueExample:
+    build:
+      targets:
+        RblueExample: all
+        RblueExampleTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - RblueExampleTests

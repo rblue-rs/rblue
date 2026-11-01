@@ -1,0 +1,95 @@
+# iOS example: XCFramework pipeline + simulator build + unit tests.
+#
+# Owned by the iOS example plan (examples/IOS_PLAN.md); see
+# examples/README.md for the non-interference contract. The iOS Simulator has
+# no Bluetooth hardware, so CI builds and runs mock-level unit tests only;
+# device acceptance is documented in examples/ios/README.md.
+name: example-ios
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/example-ios.yml"
+      - "bindings/swift/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "examples/ios/**"
+  pull_request:
+    paths:
+      - ".github/workflows/example-ios.yml"
+      - "bindings/swift/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "examples/ios/**"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust iOS targets
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build XCFramework and Swift bindings
+        run: examples/ios/scripts/build-frameworks.sh
+
+      # The script syncs the generated Swift module into the SPM package;
+      # a dirty tree means the committed copy is stale.
+      - name: Fail if committed generated sources drifted
+        run: git diff --exit-code -- bindings/swift
+
+      - name: Generate Xcode project
+        working-directory: examples/ios
+        run: xcodegen generate
+
+      # Links the simulator slice of the XCFramework.
+      - name: Build app (iOS Simulator)
+        working-directory: examples/ios
+        run: >-
+          xcodebuild -project RblueExample.xcodeproj -scheme RblueExample
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build/DerivedData build CODE_SIGNING_ALLOWED=NO
+
+      # Links the device slice of the XCFramework (no signing needed for a
+      # generic build).
+      - name: Build app (generic iOS device)
+        working-directory: examples/ios
+        run: >-
+          xcodebuild -project RblueExample.xcodeproj -scheme RblueExample
+          -destination 'generic/platform=iOS'
+          -derivedDataPath build/DerivedData build CODE_SIGNING_ALLOWED=NO
+
+      # Unit tests are mock-level (fakes + JSON contract) and run on any
+      # simulator; pick the first available iPhone runtime-agnostically.
+      - name: Pick a simulator
+        id: sim
+        run: |
+          device="$(xcrun simctl list devices available \
+            | awk -F' \\(' '/iPhone/ { print $1 }' | head -1 | xargs)"
+          if [ -z "$device" ]; then
+            echo "no available iPhone simulator found" >&2
+            exit 1
+          fi
+          echo "device=$device" >> "$GITHUB_OUTPUT"
+          echo "using simulator: $device"
+
+      - name: Run unit tests
+        working-directory: examples/ios
+        run: >-
+          xcodebuild -project RblueExample.xcodeproj -scheme RblueExample
+          -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }},OS=latest"
+          -derivedDataPath build/DerivedData
+          test CODE_SIGNING_ALLOWED=NO

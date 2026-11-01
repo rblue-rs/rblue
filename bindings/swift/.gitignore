@@ -1,0 +1,6 @@
+# Build outputs of bindings/swift are not committed; rebuild them with
+# examples/ios/scripts/build-frameworks.sh (layout documented in
+# examples/ios/README.md).
+Rblue/Rblue.xcframework
+.build/
+.DS_Store

@@ -1,0 +1,6 @@
+# Local build outputs; nothing here is committed.
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.DS_Store
