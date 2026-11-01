@@ -13,7 +13,8 @@ import 'package:rblue_flutter/src/native_bridge.dart';
 /// runs; the pointers are address tokens.
 class FakeNativeBridge implements NativeBridge {
   /// Records every send as (reqId, method, params, payload).
-  final sent = <({int reqId, String method, String params, Uint8List payload})>[];
+  final sent =
+      <({int reqId, String method, String params, Uint8List payload})>[];
 
   /// Callbacks the client registered (non-null after construction).
   void Function(int reqId, String? statusJson, Uint8List payload)? onResponse;
@@ -89,11 +90,14 @@ class FakeNativeBridge implements NativeBridge {
 
   @override
   ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>?
-      get freeFinalizer => null;
+  get freeFinalizer => null;
 
   /// Completes one request with a success payload; asserts it was sent.
   void respondTo(int reqId, [List<int> payload = const []]) {
-    assert(sent.any((entry) => entry.reqId == reqId), 'no request $reqId was sent');
+    assert(
+      sent.any((entry) => entry.reqId == reqId),
+      'no request $reqId was sent',
+    );
     onResponse!(reqId, null, Uint8List.fromList(payload));
   }
 

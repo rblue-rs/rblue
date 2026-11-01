@@ -36,7 +36,8 @@ class RblueClient implements ffi.Finalizable {
   var _nextReqId = 1;
   var _disposed = false;
 
-  RblueClient._(this._bridge, this._handle) : _finalizer = _makeFinalizer(_bridge) {
+  RblueClient._(this._bridge, this._handle)
+    : _finalizer = _makeFinalizer(_bridge) {
     _bridge.registerCallbacks(
       _handle,
       onResponse: _onResponse,
@@ -61,14 +62,18 @@ class RblueClient implements ffi.Finalizable {
     await RbluePluginChannel.instance.initialize();
     final handle = native.create();
     if (handle == null) {
-      throw RblueContractError('rblue_new returned NULL: the backend cannot run here');
+      throw RblueContractError(
+        'rblue_new returned NULL: the backend cannot run here',
+      );
     }
     return RblueClient._(native, handle);
   }
 
   /// Test seam: builds the client over an already-initialized bridge.
-  factory RblueClient.forBridge(NativeBridge bridge, ffi.Pointer<RblueHandle> handle) =>
-      RblueClient._(bridge, handle);
+  factory RblueClient.forBridge(
+    NativeBridge bridge,
+    ffi.Pointer<RblueHandle> handle,
+  ) => RblueClient._(bridge, handle);
 
   /// Broadcast stream of adapter events (state, discoveries, connections).
   Stream<AdapterEvent> get events => _events.stream;
@@ -79,31 +84,32 @@ class RblueClient implements ffi.Finalizable {
 
   /// Backend version string, for the platform page and smoke checks.
   Future<String> backendVersion() => _request(
-        'backend_version',
-        decode: (payload) => jsonDecode(utf8.decode(payload))! as String,
-      );
+    'backend_version',
+    decode: (payload) => jsonDecode(utf8.decode(payload))! as String,
+  );
 
   /// Opens the adapter; on some platforms the permission prompt happens here.
   Future<void> initialize() => _request('initialize', decode: _noPayload);
 
   /// Starts scanning with [filter] (defaults to the unfiltered scan).
   /// Discoveries arrive on [events].
-  Future<void> startScan({ScanFilter? filter}) => _request(
-        'start_scan',
-        params: filter?.toJson(),
-        decode: _noPayload,
-      );
+  Future<void> startScan({ScanFilter? filter}) =>
+      _request('start_scan', params: filter?.toJson(), decode: _noPayload);
 
   /// Stops the running scan.
   Future<void> stopScan() => _request('stop_scan', decode: _noPayload);
 
   /// Snapshot of the devices known to the adapter.
   Future<List<DiscoveredDevice>> peripherals() => _request(
-        'peripherals',
-        decode: (payload) => (jsonDecode(utf8.decode(payload))! as List<Object?>)
-            .map((value) => DiscoveredDevice.fromJson((value! as Map).cast<String, Object?>()))
-            .toList(),
-      );
+    'peripherals',
+    decode: (payload) => (jsonDecode(utf8.decode(payload))! as List<Object?>)
+        .map(
+          (value) => DiscoveredDevice.fromJson(
+            (value! as Map).cast<String, Object?>(),
+          ),
+        )
+        .toList(),
+  );
 
   /// Connects to the device. Resolves when the link is up; run
   /// [discoverServices] next.
@@ -112,21 +118,26 @@ class RblueClient implements ffi.Finalizable {
 
   /// Disconnects the device. Idempotent. Subscriptions of the device are
   /// dropped; subscribe again after reconnecting.
-  Future<void> disconnect(DeviceId device) =>
-      _request('disconnect', params: {'device': device.json}, decode: _noPayload);
+  Future<void> disconnect(DeviceId device) => _request(
+    'disconnect',
+    params: {'device': device.json},
+    decode: _noPayload,
+  );
 
   /// Discovers the GATT tree; must run on every connection (iOS requires it,
   /// Android caches may be stale). The returned characteristic ids are valid
   /// only for this connection.
   Future<ServiceSet> discoverServices(DeviceId device) => _request(
-        'discover_services',
-        params: {'device': device.json},
-        decode: (payload) =>
-            ServiceSet.fromJson((jsonDecode(utf8.decode(payload))! as Map).cast<String, Object?>()),
-      );
+    'discover_services',
+    params: {'device': device.json},
+    decode: (payload) => ServiceSet.fromJson(
+      (jsonDecode(utf8.decode(payload))! as Map).cast<String, Object?>(),
+    ),
+  );
 
   /// Reads the characteristic value.
-  Future<Uint8List> read(DeviceId device, CharacteristicId characteristic) => _request(
+  Future<Uint8List> read(DeviceId device, CharacteristicId characteristic) =>
+      _request(
         'read',
         params: _characteristicParams(device, characteristic),
         decode: (payload) => payload,
@@ -139,26 +150,27 @@ class RblueClient implements ffi.Finalizable {
     CharacteristicId characteristic,
     List<int> data, {
     WriteMode mode = WriteMode.withResponse,
-  }) =>
-      _request(
-        'write',
-        params: {
-          ..._characteristicParams(device, characteristic),
-          'mode': mode.toJson(),
-        },
-        payload: data,
-        decode: _noPayload,
-      );
+  }) => _request(
+    'write',
+    params: {
+      ..._characteristicParams(device, characteristic),
+      'mode': mode.toJson(),
+    },
+    payload: data,
+    decode: _noPayload,
+  );
 
   /// Subscribes to value changes; values arrive on [notifications].
-  Future<void> subscribe(DeviceId device, CharacteristicId characteristic) => _request(
+  Future<void> subscribe(DeviceId device, CharacteristicId characteristic) =>
+      _request(
         'subscribe',
         params: _characteristicParams(device, characteristic),
         decode: _noPayload,
       );
 
   /// Cancels a subscription. Idempotent.
-  Future<void> unsubscribe(DeviceId device, CharacteristicId characteristic) => _request(
+  Future<void> unsubscribe(DeviceId device, CharacteristicId characteristic) =>
+      _request(
         'unsubscribe',
         params: _characteristicParams(device, characteristic),
         decode: _noPayload,
@@ -166,10 +178,10 @@ class RblueClient implements ffi.Finalizable {
 
   /// Connection state of the device.
   Future<bool> isConnected(DeviceId device) => _request(
-        'is_connected',
-        params: {'device': device.json},
-        decode: (payload) => jsonDecode(utf8.decode(payload))! as bool,
-      );
+    'is_connected',
+    params: {'device': device.json},
+    decode: (payload) => jsonDecode(utf8.decode(payload))! as bool,
+  );
 
   /// Shuts the facade down. After this returns, no callback can fire and all
   /// client methods throw.
@@ -178,7 +190,10 @@ class RblueClient implements ffi.Finalizable {
     _disposed = true;
     _finalizer?.detach(this);
     for (final completer in _pending.values) {
-      completer.completeError(RblueException.client('client disposed'), StackTrace.current);
+      completer.completeError(
+        RblueException.client('client disposed'),
+        StackTrace.current,
+      );
     }
     _pending.clear();
     _bridge.dispose(_handle);
@@ -190,8 +205,10 @@ class RblueClient implements ffi.Finalizable {
   /// enough that the reconnect demo stays responsive.
   static const _defaultTimeout = Duration(seconds: 30);
 
-  Map<String, Object?> _characteristicParams(DeviceId device, CharacteristicId characteristic) =>
-      {'device': device.json, 'characteristic': characteristic.toJson()};
+  Map<String, Object?> _characteristicParams(
+    DeviceId device,
+    CharacteristicId characteristic,
+  ) => {'device': device.json, 'characteristic': characteristic.toJson()};
 
   static void _noPayload(Uint8List payload) {}
 
@@ -223,10 +240,15 @@ class RblueClient implements ffi.Finalizable {
     }
     RawResponse raw;
     try {
-      raw = await completer.future.timeout(_defaultTimeout, onTimeout: () {
-        _pending.remove(reqId);
-        throw RblueException.client('request "$method" (req $reqId) timed out');
-      });
+      raw = await completer.future.timeout(
+        _defaultTimeout,
+        onTimeout: () {
+          _pending.remove(reqId);
+          throw RblueException.client(
+            'request "$method" (req $reqId) timed out',
+          );
+        },
+      );
     } finally {
       _pending.remove(reqId);
     }
@@ -278,7 +300,6 @@ class RblueClient implements ffi.Finalizable {
       throw RblueContractError(detail);
     }(), 'rblue contract violation: $detail');
   }
-
 }
 
 /// Scan filter (`rblue_api::ScanFilter`); omitted fields keep the backend
@@ -295,12 +316,16 @@ class ScanFilter {
   final int? rssiThreshold;
 
   /// Builds a filter; pass no arguments for the unfiltered scan.
-  const ScanFilter({this.namePrefix, this.services = const [], this.rssiThreshold});
+  const ScanFilter({
+    this.namePrefix,
+    this.services = const [],
+    this.rssiThreshold,
+  });
 
   /// The serde form; absent optional fields are serialized as null.
   Map<String, Object?> toJson() => {
-        'name_prefix': namePrefix,
-        'services': services,
-        'rssi_threshold': rssiThreshold,
-      };
+    'name_prefix': namePrefix,
+    'services': services,
+    'rssi_threshold': rssiThreshold,
+  };
 }

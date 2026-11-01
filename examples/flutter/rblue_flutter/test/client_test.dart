@@ -40,7 +40,10 @@ void main() {
     // out-of-order test in crates/rblue-c.
     final versionFuture = client.backendVersion();
     final initFuture = client.initialize();
-    expect(bridge.sent.map((entry) => entry.method), ['backend_version', 'initialize']);
+    expect(bridge.sent.map((entry) => entry.method), [
+      'backend_version',
+      'initialize',
+    ]);
     expect(bridge.sent[1].reqId, bridge.sent[0].reqId + 1);
 
     bridge.respondTo(2);
@@ -56,7 +59,9 @@ void main() {
     final client = RblueClient.forBridge(bridge, bridge.create()!);
     final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
 
-    unawaited(quiet(client.startScan(filter: const ScanFilter(namePrefix: 'sensor'))));
+    unawaited(
+      quiet(client.startScan(filter: const ScanFilter(namePrefix: 'sensor'))),
+    );
     unawaited(quiet(client.connect(device)));
     expect(bridge.sent[0].params, contains('sensor'));
     expect(bridge.sent[1].params, contains('random_static'));
@@ -86,7 +91,11 @@ void main() {
       '{"InvalidLength":{"len":600,"max":514}}',
       isA<RblueException>()
           .having((e) => e.kind, 'kind', RblueErrorKind.invalidLength)
-          .having((e) => e.message, 'message', 'data length 600 exceeds max 514'),
+          .having(
+            (e) => e.message,
+            'message',
+            'data length 600 exceeds max 514',
+          ),
     );
 
     // Facade-only argument errors surface as InvalidArgument.
@@ -94,8 +103,11 @@ void main() {
       bridge,
       client.stopScan(),
       '{"InvalidArgument":{"message":"unknown method"}}',
-      isA<RblueException>()
-          .having((e) => e.kind, 'kind', RblueErrorKind.invalidArgument),
+      isA<RblueException>().having(
+        (e) => e.kind,
+        'kind',
+        RblueErrorKind.invalidArgument,
+      ),
     );
     client.dispose();
   });
@@ -106,11 +118,13 @@ void main() {
     bridge.nextSyncCode = -1; // RBLUE_REQUEST_NULL_HANDLE
     await expectLater(
       client.initialize(),
-      throwsA(isA<RblueException>().having(
-        (e) => e.message,
-        'message',
-        contains('null handle'),
-      )),
+      throwsA(
+        isA<RblueException>().having(
+          (e) => e.message,
+          'message',
+          contains('null handle'),
+        ),
+      ),
     );
     client.dispose();
   });
@@ -145,7 +159,10 @@ void main() {
     expect(discovered.device.displayName, 'sensor');
     expect(discovered.device.advertisement.rssi, -40);
     expect(notifications.single.dataAsText, 'hi');
-    expect(notifications.single.id.uuid, '00000000-0000-0000-0000-000000002a19');
+    expect(
+      notifications.single.id.uuid,
+      '00000000-0000-0000-0000-000000002a19',
+    );
     client.dispose();
   });
 
@@ -174,10 +191,10 @@ void main() {
 }
 
 CharacteristicId _characteristic() => CharacteristicId(
-      service: const ServiceId(
-        uuid: '00000000-0000-0000-0000-00000000180f',
-        instance: 0,
-      ),
-      uuid: '00000000-0000-0000-0000-000000002a19',
-      instance: 0,
-    );
+  service: const ServiceId(
+    uuid: '00000000-0000-0000-0000-00000000180f',
+    instance: 0,
+  ),
+  uuid: '00000000-0000-0000-0000-000000002a19',
+  instance: 0,
+);

@@ -41,7 +41,8 @@ abstract interface class NativeBridge {
 
   /// A `NativeFinalizer`-compatible function pointer freeing the handle, or
   /// null when the bridge does not support one (tests).
-  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>? get freeFinalizer;
+  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>?
+  get freeFinalizer;
 }
 
 /// Production bridge over the ffigen bindings.
@@ -80,8 +81,10 @@ class RealNativeBridge implements NativeBridge {
     );
   }
 
-  late final ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<RblueHandle>)>>
-      _freePtr = _lib.lookup('rblue_free');
+  late final ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<RblueHandle>)>
+  >
+  _freePtr = _lib.lookup('rblue_free');
 
   ffi.NativeCallable<rblue_response_cbFunction>? _responseCallable;
   ffi.NativeCallable<rblue_event_cbFunction>? _eventCallable;
@@ -102,7 +105,9 @@ class RealNativeBridge implements NativeBridge {
     // and closed only with dispose().
     _responseCallable?.close();
     _eventCallable?.close();
-    _responseCallable = onResponse == null ? null : _makeResponseCallable(onResponse);
+    _responseCallable = onResponse == null
+        ? null
+        : _makeResponseCallable(onResponse);
     _eventCallable = onEvent == null ? null : _makeEventCallable(onEvent);
     final responseCode = _bindings.rblueSetResponseCallback(
       handle,
@@ -115,38 +120,44 @@ class RealNativeBridge implements NativeBridge {
       ffi.nullptr,
     );
     if (responseCode != RBLUE_REQUEST_OK || eventCode != RBLUE_REQUEST_OK) {
-      throw StateError('rblue_flutter: callback registration failed ($responseCode/$eventCode)');
+      throw StateError(
+        'rblue_flutter: callback registration failed ($responseCode/$eventCode)',
+      );
     }
   }
 
   ffi.NativeCallable<rblue_response_cbFunction> _makeResponseCallable(
     void Function(int, String?, Uint8List) onResponse,
-  ) => ffi.NativeCallable<rblue_response_cbFunction>.listener(
-        (int reqId, ffi.Pointer<ffi.Char> statusJson, ffi.Pointer<ffi.Uint8> payload,
-            int payloadLen, ffi.Pointer<ffi.Void> userData) {
-          String? status;
-          if (statusJson != ffi.nullptr) {
-            status = statusJson.cast<Utf8>().toDartString();
-            // Ownership contract: the callback copies and returns the string.
-            _bindings.rblueFreeString(statusJson);
-          }
-          final data = payloadLen == 0
-              ? Uint8List(0)
-              // Copy before returning: the borrow is only valid for the call.
-              : Uint8List.fromList(payload.asTypedList(payloadLen));
-          onResponse(reqId, status, data);
-        },
-      );
+  ) => ffi.NativeCallable<rblue_response_cbFunction>.listener((
+    int reqId,
+    ffi.Pointer<ffi.Char> statusJson,
+    ffi.Pointer<ffi.Uint8> payload,
+    int payloadLen,
+    ffi.Pointer<ffi.Void> userData,
+  ) {
+    String? status;
+    if (statusJson != ffi.nullptr) {
+      status = statusJson.cast<Utf8>().toDartString();
+      // Ownership contract: the callback copies and returns the string.
+      _bindings.rblueFreeString(statusJson);
+    }
+    final data = payloadLen == 0
+        ? Uint8List(0)
+        // Copy before returning: the borrow is only valid for the call.
+        : Uint8List.fromList(payload.asTypedList(payloadLen));
+    onResponse(reqId, status, data);
+  });
 
   ffi.NativeCallable<rblue_event_cbFunction> _makeEventCallable(
     void Function(String) onEvent,
-  ) => ffi.NativeCallable<rblue_event_cbFunction>.listener(
-        (ffi.Pointer<ffi.Char> eventJson, ffi.Pointer<ffi.Void> userData) {
-          final json = eventJson.cast<Utf8>().toDartString();
-          _bindings.rblueFreeString(eventJson);
-          onEvent(json);
-        },
-      );
+  ) => ffi.NativeCallable<rblue_event_cbFunction>.listener((
+    ffi.Pointer<ffi.Char> eventJson,
+    ffi.Pointer<ffi.Void> userData,
+  ) {
+    final json = eventJson.cast<Utf8>().toDartString();
+    _bindings.rblueFreeString(eventJson);
+    onEvent(json);
+  });
 
   @override
   int send(
@@ -164,7 +175,14 @@ class RealNativeBridge implements NativeBridge {
       payloadPtr.asTypedList(payload.length).setAll(0, payload);
     }
     try {
-      return _bindings.rblueRequest(handle, reqId, methodPtr, paramsPtr, payloadPtr, payload.length);
+      return _bindings.rblueRequest(
+        handle,
+        reqId,
+        methodPtr,
+        paramsPtr,
+        payloadPtr,
+        payload.length,
+      );
     } finally {
       malloc.free(methodPtr);
       malloc.free(paramsPtr);
@@ -176,14 +194,18 @@ class RealNativeBridge implements NativeBridge {
 
   @override
   void dispose(ffi.Pointer<RblueHandle> handle) {
+    // The Rust contract guarantees that no callback can fire after
+    // rblue_free returns. Stop and join the native side before closing the
+    // cross-thread callables; doing this in the opposite order leaves a race
+    // where a worker calls a closed NativeCallable.
+    _bindings.rblueFree(handle);
     _responseCallable?.close();
     _eventCallable?.close();
     _responseCallable = null;
     _eventCallable = null;
-    _bindings.rblueFree(handle);
   }
 
   @override
-  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>? get freeFinalizer =>
-      _freePtr.cast();
+  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>?
+  get freeFinalizer => _freePtr.cast();
 }

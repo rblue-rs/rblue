@@ -1,0 +1,91 @@
+name: Flutter example
+
+# examples/flutter: Rust cross-builds (rblue-c) + Flutter analyze/test/build.
+# The Android native example has its own workflow; this one covers the
+# Flutter plugin and app on both platforms.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/flutter/**"
+      - "crates/rblue-c/**"
+      - "bindings/c/**"
+  pull_request:
+    paths:
+      - "examples/flutter/**"
+      - "crates/rblue-c/**"
+      - "bindings/c/**"
+
+env:
+  CARGO_TERM_COLOR: always
+  FLUTTER_VERSION: "3.41.7"
+
+jobs:
+  rust-tests:
+    name: rblue-c tests (host, mock backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p rblue-c
+      - run: cargo clippy -p rblue-c --all-targets --no-deps -- -D warnings
+
+  android:
+    name: Android (APK debug)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # NDK comes with the hosted runner; point the cross linker at its clang
+      # wrappers exactly like tools/build-libs.sh does locally.
+      - name: Cross-build rblue-c (.so per ABI)
+        run: examples/flutter/tools/build-libs.sh --android-only
+      - name: Verify generated Dart bindings are current
+        working-directory: examples/flutter
+        run: |
+          flutter pub get
+          dart run ffigen --config ffigen.yaml
+          git diff --exit-code -- rblue_flutter/lib/src/ffi_bindings.dart
+      - run: flutter analyze
+        working-directory: examples/flutter/rblue_flutter
+      - run: flutter test
+        working-directory: examples/flutter/rblue_flutter
+      - run: flutter analyze
+        working-directory: examples/flutter
+      - run: flutter test
+        working-directory: examples/flutter
+      - run: flutter build apk --debug
+        working-directory: examples/flutter
+
+  ios:
+    name: iOS (no codesign build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Cross-build rblue-c (staticlibs)
+        run: examples/flutter/tools/build-libs.sh --ios-only
+      - run: flutter analyze
+        working-directory: examples/flutter
+      - run: flutter build ios --no-codesign
+        working-directory: examples/flutter

@@ -27,8 +27,6 @@
 
 #![warn(missing_docs)]
 
-use rblue_api::{Adapter, Error};
-
 cfg_if::cfg_if! {
     // Automatic choice first: the backend native to the target OS, when its
     // feature is enabled.
@@ -128,8 +126,9 @@ cfg_if::cfg_if! {
 /// ```
 #[cfg(feature = "mock")]
 pub mod mock {
-    use super::{Adapter, Error};
     use std::sync::Arc;
+
+    use rblue_api::{Adapter, Error};
 
     pub use rblue_mock::MockAdapter;
 
@@ -216,8 +215,9 @@ pub mod web {
 /// feature), which owns the process-wide registry wired to ArkTS.
 #[cfg(feature = "ohos")]
 pub mod ohos {
-    use super::{Adapter, Error};
     use std::sync::Arc;
+
+    use rblue_api::{Adapter, Error};
 
     pub use rblue_ohos::{DriverRegistry, OhosAdapter, OhosPeripheral};
 

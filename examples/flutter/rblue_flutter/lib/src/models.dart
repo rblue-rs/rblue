@@ -28,9 +28,11 @@ enum PermissionReason {
   final String wire;
 
   /// Parses the serde form.
-  static PermissionReason fromJson(String name) => PermissionReason.values.firstWhere(
+  static PermissionReason fromJson(String name) =>
+      PermissionReason.values.firstWhere(
         (reason) => reason.wire == name,
-        orElse: () => throw RblueContractError('unknown PermissionReason: $name'),
+        orElse: () =>
+            throw RblueContractError('unknown PermissionReason: $name'),
       );
 
   /// The serde form.
@@ -129,8 +131,10 @@ class RblueException implements Exception {
     }
     final kindName = value.keys.single;
     final payload = value[kindName];
-    final kind = RblueErrorKind.values
-        .firstWhere((kind) => kind.wire == kindName, orElse: () => RblueErrorKind.backend);
+    final kind = RblueErrorKind.values.firstWhere(
+      (kind) => kind.wire == kindName,
+      orElse: () => RblueErrorKind.backend,
+    );
     String message = kindName;
     Object? device;
     AttError? att;
@@ -181,8 +185,11 @@ class RblueException implements Exception {
 
   /// A client-side failure (never a backend status): timed-out request or a
   /// synchronous rejection code of `rblue_request`.
-  factory RblueException.client(String message) =>
-      RblueException._(kind: RblueErrorKind.backend, message: message, rawJson: '');
+  factory RblueException.client(String message) => RblueException._(
+    kind: RblueErrorKind.backend,
+    message: message,
+    rawJson: '',
+  );
 
   const RblueException._({
     required this.kind,
@@ -195,12 +202,14 @@ class RblueException implements Exception {
   });
 
   /// True for the Android GATT status 133 connect-failure special case.
-  bool get isAndroidGattStatus133 => kind == RblueErrorKind.platform && platformCode == 133;
+  bool get isAndroidGattStatus133 =>
+      kind == RblueErrorKind.platform && platformCode == 133;
 
   @override
   String toString() => 'RblueException(${kind.name}): $message';
 
-  static Map<String, Object?> _map(Object? payload) => payload! as Map<String, Object?>;
+  static Map<String, Object?> _map(Object? payload) =>
+      payload! as Map<String, Object?>;
 }
 
 /// A value did not match the rblue-c JSON contract; always a bug on one side.
@@ -236,9 +245,9 @@ enum AddressType {
 
   /// Parses the serde form.
   static AddressType fromJson(String name) => AddressType.values.firstWhere(
-        (type) => type.wire == name,
-        orElse: () => throw RblueContractError('unknown AddressType: $name'),
-      );
+    (type) => type.wire == name,
+    orElse: () => throw RblueContractError('unknown AddressType: $name'),
+  );
 
   /// The serde form.
   String toJson() => wire;
@@ -259,8 +268,9 @@ class DeviceId {
   factory DeviceId.fromJson(Object json) => DeviceId._(json);
 
   /// A MAC identity, for tests and fixtures.
-  factory DeviceId.mac(List<int> bytes, AddressType type) =>
-      DeviceId._({'mac': [bytes, type.toJson()]});
+  factory DeviceId.mac(List<int> bytes, AddressType type) => DeviceId._({
+    'mac': [bytes, type.toJson()],
+  });
 
   /// A platform UUID identity, for tests and fixtures.
   factory DeviceId.uuid(String uuid) => DeviceId._({'uuid': uuid});
@@ -269,7 +279,8 @@ class DeviceId {
   factory DeviceId.web(String id) => DeviceId._({'web': id});
 
   /// True for MAC identities.
-  bool get isMac => json is Map<String, Object?> && (json as Map)['mac'] != null;
+  bool get isMac =>
+      json is Map<String, Object?> && (json as Map)['mac'] != null;
 
   /// The six MAC bytes for MAC identities, else null.
   List<int>? get macBytes {
@@ -295,7 +306,9 @@ class DeviceId {
   String get display {
     final bytes = macBytes;
     if (bytes != null) {
-      return bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase()).join(':');
+      return bytes
+          .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
+          .join(':');
     }
     final map = json;
     if (map is Map<String, Object?>) {
@@ -306,7 +319,8 @@ class DeviceId {
 
   @override
   bool operator ==(Object other) =>
-      other is DeviceId && const DeepCollectionEquality().equals(other.json, json);
+      other is DeviceId &&
+      const DeepCollectionEquality().equals(other.json, json);
 
   @override
   int get hashCode => const DeepCollectionEquality().hash(json);
@@ -329,7 +343,10 @@ class DeepCollectionEquality {
     }
     if (a is Map && b is Map) {
       return a.length == b.length &&
-          a.entries.every((entry) => b.containsKey(entry.key) && equals(entry.value, b[entry.key]));
+          a.entries.every(
+            (entry) =>
+                b.containsKey(entry.key) && equals(entry.value, b[entry.key]),
+          );
     }
     return a == b;
   }
@@ -340,7 +357,9 @@ class DeepCollectionEquality {
       return Object.hashAll(value.map(hash));
     }
     if (value is Map) {
-      return Object.hashAll(value.entries.map((entry) => Object.hash(entry.key, hash(entry.value))));
+      return Object.hashAll(
+        value.entries.map((entry) => Object.hash(entry.key, hash(entry.value))),
+      );
     }
     return value.hashCode;
   }
@@ -372,7 +391,10 @@ class AdvertisementData {
       rssi: json['rssi'] as int?,
       isConnectable: json['is_connectable'] as bool?,
       manufacturerData: manufacturer is List && manufacturer.isNotEmpty
-          ? (manufacturer[0]! as int, (manufacturer[1]! as List<Object?>).cast<int>())
+          ? (
+              manufacturer[0]! as int,
+              (manufacturer[1]! as List<Object?>).cast<int>(),
+            )
           : null,
     );
   }
@@ -395,7 +417,8 @@ class DiscoveredDevice {
   final AdvertisementData advertisement;
 
   /// Parses the serde form.
-  factory DiscoveredDevice.fromJson(Map<String, Object?> json) => DiscoveredDevice(
+  factory DiscoveredDevice.fromJson(Map<String, Object?> json) =>
+      DiscoveredDevice(
         id: DeviceId.fromJson(json['id']!),
         advertisement: AdvertisementData.fromJson(
           (json['advertisement']! as Map).cast<String, Object?>(),
@@ -432,9 +455,9 @@ enum AdapterState {
 
   /// Parses the serde form.
   static AdapterState fromJson(String name) => AdapterState.values.firstWhere(
-        (state) => state.wire == name,
-        orElse: () => throw RblueContractError('unknown AdapterState: $name'),
-      );
+    (state) => state.wire == name,
+    orElse: () => throw RblueContractError('unknown AdapterState: $name'),
+  );
 }
 
 /// Why a connection dropped (`rblue_api::DisconnectReason`).
@@ -520,9 +543,9 @@ class ServiceId {
 
   /// Parses the serde form.
   factory ServiceId.fromJson(Map<String, Object?> json) => ServiceId(
-        uuid: json['uuid']! as String,
-        instance: json['instance']! as int,
-      );
+    uuid: json['uuid']! as String,
+    instance: json['instance']! as int,
+  );
 
   const ServiceId({required this.uuid, required this.instance});
 
@@ -544,17 +567,27 @@ class CharacteristicId {
   final int instance;
 
   /// Parses the serde form.
-  factory CharacteristicId.fromJson(Map<String, Object?> json) => CharacteristicId(
-        service: ServiceId.fromJson((json['service']! as Map).cast<String, Object?>()),
+  factory CharacteristicId.fromJson(Map<String, Object?> json) =>
+      CharacteristicId(
+        service: ServiceId.fromJson(
+          (json['service']! as Map).cast<String, Object?>(),
+        ),
         uuid: json['uuid']! as String,
         instance: json['instance']! as int,
       );
 
-  const CharacteristicId({required this.service, required this.uuid, required this.instance});
+  const CharacteristicId({
+    required this.service,
+    required this.uuid,
+    required this.instance,
+  });
 
   /// The serde form (the `write`/`read`/`subscribe` parameter).
-  Map<String, Object?> toJson() =>
-      {'service': service.toJson(), 'uuid': uuid, 'instance': instance};
+  Map<String, Object?> toJson() => {
+    'service': service.toJson(),
+    'uuid': uuid,
+    'instance': instance,
+  };
 
   @override
   bool operator ==(Object other) =>
@@ -580,12 +613,18 @@ class Characteristic {
 
   /// Parses the serde form.
   factory Characteristic.fromJson(Map<String, Object?> json) => Characteristic(
-        uuid: json['uuid']! as String,
-        properties: CharacteristicProperties.fromJson(json['properties']! as String),
-        descriptors: (json['descriptors']! as List<Object?>).cast<String>(),
-      );
+    uuid: json['uuid']! as String,
+    properties: CharacteristicProperties.fromJson(
+      json['properties']! as String,
+    ),
+    descriptors: (json['descriptors']! as List<Object?>).cast<String>(),
+  );
 
-  const Characteristic({required this.uuid, required this.properties, required this.descriptors});
+  const Characteristic({
+    required this.uuid,
+    required this.properties,
+    required this.descriptors,
+  });
 
   /// True when the value may be read.
   bool get readable => properties & CharacteristicProperties.read != 0;
@@ -599,7 +638,10 @@ class Characteristic {
 
   /// True when the characteristic can deliver value updates.
   bool get notifiable =>
-      properties & (CharacteristicProperties.notify | CharacteristicProperties.indicate) != 0;
+      properties &
+          (CharacteristicProperties.notify |
+              CharacteristicProperties.indicate) !=
+      0;
 }
 
 /// One GATT service (`rblue_api::Service`).
@@ -615,14 +657,21 @@ class Service {
 
   /// Parses the serde form.
   factory Service.fromJson(Map<String, Object?> json) => Service(
-        uuid: json['uuid']! as String,
-        primary: json['primary']! as bool,
-        characteristics: (json['characteristics']! as List<Object?>)
-            .map((value) => Characteristic.fromJson((value! as Map).cast<String, Object?>()))
-            .toList(),
-      );
+    uuid: json['uuid']! as String,
+    primary: json['primary']! as bool,
+    characteristics: (json['characteristics']! as List<Object?>)
+        .map(
+          (value) =>
+              Characteristic.fromJson((value! as Map).cast<String, Object?>()),
+        )
+        .toList(),
+  );
 
-  const Service({required this.uuid, required this.primary, required this.characteristics});
+  const Service({
+    required this.uuid,
+    required this.primary,
+    required this.characteristics,
+  });
 }
 
 /// The discovered GATT tree of one connection (`rblue_api::ServiceSet`).
@@ -632,10 +681,12 @@ class ServiceSet {
 
   /// Parses the serde form.
   factory ServiceSet.fromJson(Map<String, Object?> json) => ServiceSet(
-        services: (json['services']! as List<Object?>)
-            .map((value) => Service.fromJson((value! as Map).cast<String, Object?>()))
-            .toList(),
-      );
+    services: (json['services']! as List<Object?>)
+        .map(
+          (value) => Service.fromJson((value! as Map).cast<String, Object?>()),
+        )
+        .toList(),
+  );
 
   const ServiceSet({required this.services});
 
@@ -646,7 +697,11 @@ class ServiceSet {
   /// The session id of the first characteristic with [uuid], if discovered.
   CharacteristicId? find(String uuid) {
     for (final service in services) {
-      for (var instance = 0; instance < service.characteristics.length; instance++) {
+      for (
+        var instance = 0;
+        instance < service.characteristics.length;
+        instance++
+      ) {
         if (service.characteristics[instance].uuid == uuid) {
           return CharacteristicId(
             service: ServiceId(uuid: service.uuid, instance: 0),
@@ -689,23 +744,30 @@ class DeviceNotification {
   final Uint8List data;
 
   /// Parses one `{"type":"notification",...}` envelope.
-  factory DeviceNotification.fromJson(Map<String, Object?> json) => DeviceNotification(
-        device: DeviceId.fromJson(json['device']!),
-        id: CharacteristicId.fromJson(
-          ((json['notification']! as Map)['id']! as Map).cast<String, Object?>(),
-        ),
-        data: Uint8List.fromList(
-          ((json['notification']! as Map)['data']! as List<Object?>).cast<int>(),
-        ),
-      );
+  factory DeviceNotification.fromJson(
+    Map<String, Object?> json,
+  ) => DeviceNotification(
+    device: DeviceId.fromJson(json['device']!),
+    id: CharacteristicId.fromJson(
+      ((json['notification']! as Map)['id']! as Map).cast<String, Object?>(),
+    ),
+    data: Uint8List.fromList(
+      ((json['notification']! as Map)['data']! as List<Object?>).cast<int>(),
+    ),
+  );
 
-  const DeviceNotification({required this.device, required this.id, required this.data});
+  const DeviceNotification({
+    required this.device,
+    required this.id,
+    required this.data,
+  });
 
   /// Value bytes as UTF-8 text, for display.
   String get dataAsText => utf8.decode(data, allowMalformed: true);
 
   /// Value bytes as hex, for display.
-  String get dataAsHex => data.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ');
+  String get dataAsHex =>
+      data.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ');
 }
 
 /// One adapter-level event, decoded from a tagged

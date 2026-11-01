@@ -17,11 +17,14 @@ void main() {
       expect(mac.addressType, AddressType.randomStatic);
       expect(mac.display, '02:00:00:CA:FE:01');
 
-      final uuid = DeviceId.fromJson(
-        const {'uuid': '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f'},
-      );
+      final uuid = DeviceId.fromJson(const {
+        'uuid': '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f',
+      });
       expect(uuid.display, '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f');
-      expect(DeviceId.fromJson(const {'web': 'device-42'}).display, 'device-42');
+      expect(
+        DeviceId.fromJson(const {'web': 'device-42'}).display,
+        'device-42',
+      );
     });
 
     test('json round-trips through the exact wire form', () {
@@ -39,60 +42,84 @@ void main() {
 
   group('AdapterEvent', () {
     test('decodes every variant of the rblue-c envelope', () {
-      final discovered = AdapterEvent.fromJson(const {
-        'device_discovered': {
-          'id': {
+      final discovered =
+          AdapterEvent.fromJson(const {
+                'device_discovered': {
+                  'id': {
+                    'mac': [
+                      [2, 0, 0, 0, 0, 1],
+                      'random_static',
+                    ],
+                  },
+                  'advertisement': {
+                    'local_name': 'sensor',
+                    'services': ['00000000-0000-0000-0000-00000000180f'],
+                    'service_data': [],
+                    'manufacturer_data': null,
+                    'tx_power': null,
+                    'adv_flags': null,
+                    'rssi': -40,
+                    'is_connectable': true,
+                  },
+                },
+              })
+              as AdapterDeviceDiscovered;
+      expect(discovered.device.advertisement.localName, 'sensor');
+      expect(
+        discovered.device.advertisement.services.single,
+        '00000000-0000-0000-0000-00000000180f',
+      );
+
+      const updated = {
+        'device_updated': [
+          {
             'mac': [
               [2, 0, 0, 0, 0, 1],
               'random_static',
             ],
           },
-          'advertisement': {
-            'local_name': 'sensor',
-            'services': ['00000000-0000-0000-0000-00000000180f'],
-            'service_data': [],
-            'manufacturer_data': null,
-            'tx_power': null,
-            'adv_flags': null,
-            'rssi': -40,
-            'is_connectable': true,
-          },
-        },
-      }) as AdapterDeviceDiscovered;
-      expect(discovered.device.advertisement.localName, 'sensor');
-      expect(discovered.device.advertisement.services.single,
-          '00000000-0000-0000-0000-00000000180f');
-
-      const updated = {'device_updated': [{'mac': [[2, 0, 0, 0, 0, 1], 'random_static']}, -55]};
+          -55,
+        ],
+      };
       final update = AdapterEvent.fromJson(updated) as AdapterDeviceUpdated;
       expect(update.rssi, -55);
 
       const disconnected = {
         'device_disconnected': [
-          {'mac': [[2, 0, 0, 0, 0, 1], 'random_static']},
+          {
+            'mac': [
+              [2, 0, 0, 0, 0, 1],
+              'random_static',
+            ],
+          },
           {'platform': 133},
         ],
       };
-      final drop = AdapterEvent.fromJson(disconnected) as AdapterDeviceDisconnected;
+      final drop =
+          AdapterEvent.fromJson(disconnected) as AdapterDeviceDisconnected;
       expect(drop.reason!.platformCode, 133);
       expect(drop.reason!.display, 'platform 133');
 
-      final connected = AdapterEvent.fromJson(const {
-        'device_connected': {
-          'uuid': '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f',
-        },
-      }) as AdapterDeviceConnected;
+      final connected =
+          AdapterEvent.fromJson(const {
+                'device_connected': {
+                  'uuid': '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f',
+                },
+              })
+              as AdapterDeviceConnected;
       expect(connected.id.display, '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f');
 
-      final stateChanged = AdapterEvent.fromJson(const {'state_changed': 'powered_on'})
-          as AdapterStateChanged;
+      final stateChanged =
+          AdapterEvent.fromJson(const {'state_changed': 'powered_on'})
+              as AdapterStateChanged;
       expect(stateChanged.state, AdapterState.poweredOn);
     });
   });
 
   group('ServiceSet', () {
     test('parses the exact rblue-c payload (bitflags string form)', () {
-      const payload = '{"services":[{"uuid":"00000000-0000-0000-0000-00000000180f",'
+      const payload =
+          '{"services":[{"uuid":"00000000-0000-0000-0000-00000000180f",'
           '"primary":true,"characteristics":[{"uuid":"00000000-0000-0000-0000-000000002a19",'
           '"properties":"READ | WRITE_WITHOUT_RESPONSE | WRITE | NOTIFY | INDICATE",'
           '"descriptors":[]}]}]}';
@@ -110,22 +137,33 @@ void main() {
 
   group('RblueException', () {
     test('parses Platform, InvalidLength, and InvalidArgument', () {
-      final platform = RblueException.fromJson('{"Platform":{"code":133,"message":"GATT_ERROR"}}');
+      final platform = RblueException.fromJson(
+        '{"Platform":{"code":133,"message":"GATT_ERROR"}}',
+      );
       expect(platform.kind, RblueErrorKind.platform);
       expect(platform.platformCode, 133);
       expect(platform.isAndroidGattStatus133, isTrue);
 
-      final length = RblueException.fromJson('{"InvalidLength":{"len":600,"max":514}}');
+      final length = RblueException.fromJson(
+        '{"InvalidLength":{"len":600,"max":514}}',
+      );
       expect(length.message, 'data length 600 exceeds max 514');
 
-      final argument = RblueException.fromJson('{"InvalidArgument":{"message":"bad"}}');
+      final argument = RblueException.fromJson(
+        '{"InvalidArgument":{"message":"bad"}}',
+      );
       expect(argument.message, 'bad');
 
       expect(
-        RblueException.fromJson('{"NotFound":{"mac":[[2,0,0,0,0,1],"random_static"]}}').kind,
+        RblueException.fromJson(
+          '{"NotFound":{"mac":[[2,0,0,0,0,1],"random_static"]}}',
+        ).kind,
         RblueErrorKind.notFound,
       );
-      expect(RblueException.fromJson('{"NotConnected":null}').kind, RblueErrorKind.notConnected);
+      expect(
+        RblueException.fromJson('{"NotConnected":null}').kind,
+        RblueErrorKind.notConnected,
+      );
     });
   });
 
@@ -141,7 +179,10 @@ void main() {
         },
         'notification': {
           'id': {
-            'service': {'uuid': '00000000-0000-0000-0000-00000000180f', 'instance': 0},
+            'service': {
+              'uuid': '00000000-0000-0000-0000-00000000180f',
+              'instance': 0,
+            },
             'uuid': '00000000-0000-0000-0000-000000002a19',
             'instance': 0,
           },

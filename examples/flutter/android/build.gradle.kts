@@ -2,6 +2,11 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // Fallback mirrors tried after the canonical repositories fail; some
+        // networks answer repo.maven.apache.org with 403. CI (GitHub-hosted)
+        // never reaches them.
+        maven("https://maven.aliyun.com/repository/public")
+        maven("https://maven.aliyun.com/repository/google")
     }
 }
 

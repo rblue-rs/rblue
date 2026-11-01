@@ -31,6 +31,9 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/android/build/
+/rblue_flutter/android/build/
+/rblue_flutter/ios/Pods/
 /coverage/
 
 # Symbolication related

@@ -53,7 +53,9 @@ void main() {
     expect(state.sortedDevices().single.displayName, 'simulated-sensor');
     expect(state.rssiOf(DeviceId.fromJson(id)), -50);
 
-    bridge.emitEvent('{"type":"adapter_event","event":{"device_connected":$idJson}}');
+    bridge.emitEvent(
+      '{"type":"adapter_event","event":{"device_connected":$idJson}}',
+    );
     await Future<void>.delayed(Duration.zero);
     expect(state.isConnected(DeviceId.fromJson(id)), isTrue);
 

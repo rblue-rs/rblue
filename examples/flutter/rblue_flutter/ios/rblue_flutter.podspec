@@ -19,6 +19,11 @@ simulator slices) and exposes the rblue C ABI to Dart via dart:ffi.
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*'
   s.dependency 'Flutter'
+  # CocoaPods turns these into -framework/-l flags on every consuming target
+  # (including Runner, where the final link of the force_load-ed static slice
+  # happens) - raw OTHER_LDFLAGS on the pod target alone do not reach it.
+  s.frameworks      = 'CoreBluetooth', 'Foundation'
+  s.libraries       = 'c++', 'objc'
   # 15.0: the minimum deployment target current Xcode toolchains accept
   # (Flutter 3.41 era); the Rust static slice itself only needs 13+.
   s.platform         = :ios, '15.0'
@@ -35,10 +40,10 @@ simulator slices) and exposes the rblue C ABI to Dart via dart:ffi.
     # (backend) and the ObjC runtime; those must resolve at this link step.
     # SDK-qualified keys replace (not merge with) the unqualified value, so
     # the framework flags are repeated in each variant.
-    'OTHER_LDFLAGS[sdk=iphoneos*]' => '$(inherited) -framework CoreBluetooth'
-      ' -framework Foundation -lobjc -force_load $(PODS_TARGET_SRCROOT)/Libs/ios/librblue_c.a',
-    'OTHER_LDFLAGS[sdk=iphonesimulator*]' => '$(inherited) -framework CoreBluetooth'
-      ' -framework Foundation -lobjc -force_load $(PODS_TARGET_SRCROOT)/Libs/ios-sim/librblue_c.a',
+    'OTHER_LDFLAGS[sdk=iphoneos*]' =>
+      '$(inherited) -framework CoreBluetooth -framework Foundation -lobjc -force_load $(PODS_TARGET_SRCROOT)/Libs/ios/librblue_c.a',
+    'OTHER_LDFLAGS[sdk=iphonesimulator*]' =>
+      '$(inherited) -framework CoreBluetooth -framework Foundation -lobjc -force_load $(PODS_TARGET_SRCROOT)/Libs/ios-sim/librblue_c.a',
   }
 
   s.prepare_command = <<-CMD

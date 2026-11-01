@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:rblue_flutter/rblue_flutter.dart';
 
 import '../app_state.dart';
+import '../reconnect_policy.dart';
 import 'scan_page.dart' show MaterialBannerTile;
 
 /// Reconnect tab: connects to a device and, when the link drops, retries with
-/// a visible exponential backoff (1s, 2s, 4s, ... capped at 10s). On real
-/// hardware you trigger the drop by powering the peripheral off; the demo
-/// watches the adapter's `DeviceDisconnected` event.
+/// a visible exponential backoff (500 ms ×2, capped at 30 seconds, ±20%
+/// jitter). On real hardware you trigger the drop by powering the peripheral
+/// off; the demo watches the adapter's `DeviceDisconnected` event.
 ///
 /// Automatic reconnect lives on the host side by design: the Rust supervisor
 /// is not exported through the FFI surface (see examples/README.md), so the
@@ -61,9 +62,11 @@ class _ReconnectPageState extends State<ReconnectPage> {
     if (selected == null || state.client == null) return;
     _eventsSub?.cancel();
     _eventsSub = state.client!.events.listen((event) {
-      if (event is AdapterDeviceDisconnected && event.id.json == selected.id.json) {
+      if (event is AdapterDeviceDisconnected &&
+          event.id.json == selected.id.json) {
         controller?.onDisconnected();
-      } else if (event is AdapterDeviceConnected && event.id.json == selected.id.json) {
+      } else if (event is AdapterDeviceConnected &&
+          event.id.json == selected.id.json) {
         controller?.onConnected();
       }
     });
@@ -142,7 +145,9 @@ class _ReconnectPageState extends State<ReconnectPage> {
                         ListTile(
                           dense: true,
                           leading: Icon(
-                            entry.isError ? Icons.warning_amber : Icons.check_circle_outline,
+                            entry.isError
+                                ? Icons.warning_amber
+                                : Icons.check_circle_outline,
                             size: 18,
                           ),
                           title: Text(entry.text),
@@ -160,15 +165,15 @@ class _ReconnectPageState extends State<ReconnectPage> {
 /// The reconnect state machine: connect, wait for the disconnect event, then
 /// retry with exponential backoff until the link is back.
 class ReconnectController {
-  /// Backoff schedule in milliseconds.
-  static const backoffSteps = [1000, 2000, 4000, 8000, 10000];
+  /// Reconnect policy: 500 ms ×2, 30-second cap, ±20% jitter.
+  static const policy = ReconnectPolicy();
 
   ReconnectController({
     required this.client,
     required this.device,
     required void Function() onLog,
-  })  : _onLog = onLog,
-        _startedAt = DateTime.now();
+  }) : _onLog = onLog,
+       _startedAt = DateTime.now();
 
   final RblueClient client;
   final DiscoveredDevice device;
@@ -177,6 +182,7 @@ class ReconnectController {
   final log = <LogEntry>[];
   Timer? _timer;
   var _attempt = 0;
+  Duration? _pendingDelay;
   var _connecting = false;
   var stopped = false;
   String? lastError;
@@ -185,7 +191,9 @@ class ReconnectController {
   String get statusText {
     if (_connecting) return 'connecting (attempt ${_attempt + 1})...';
     if (_timer != null) {
-      return 'link down - retrying in ${backoffSteps[_attempt.clamp(0, backoffSteps.length - 1)] ~/ 1000}s';
+      final milliseconds = _pendingDelay?.inMilliseconds ?? 0;
+      final seconds = (milliseconds / 1000).toStringAsFixed(1);
+      return 'link down - retrying in ${seconds}s';
     }
     return 'connected - watching for drops';
   }
@@ -201,6 +209,7 @@ class ReconnectController {
     stopped = true;
     _timer?.cancel();
     _timer = null;
+    _pendingDelay = null;
   }
 
   /// Called by the page when `DeviceDisconnected` arrives.
@@ -216,8 +225,23 @@ class ReconnectController {
     if (stopped) return;
     _timer?.cancel();
     _timer = null;
+    _pendingDelay = null;
     _connecting = false;
-    _log('link re-established; re-run discoverServices for fresh ids');
+    _attempt = 0;
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    try {
+      await client.discoverServices(device.id);
+      _log(
+        'link re-established; services rediscovered; restore app subscriptions here',
+      );
+    } on RblueException catch (error) {
+      lastError =
+          'reconnected, but service rediscovery failed: ${error.message}';
+      _log(lastError!, isError: true);
+    }
   }
 
   Future<void> _connect() async {
@@ -238,25 +262,33 @@ class ReconnectController {
       } else {
         lastError = error.message;
       }
-      _log('connect failed: ${error.message} (code ${error.platformCode ?? "n/a"})',
-          isError: true);
+      _log(
+        'connect failed: ${error.message} (code ${error.platformCode ?? "n/a"})',
+        isError: true,
+      );
       _scheduleRetry();
     }
   }
 
   void _scheduleRetry() {
     if (stopped) return;
-    final delay = backoffSteps[_attempt.clamp(0, backoffSteps.length - 1)];
+    final delay = policy.delayForAttempt(_attempt);
     _attempt += 1;
     _timer?.cancel();
-    _timer = Timer(Duration(milliseconds: delay), () {
+    _pendingDelay = delay;
+    _timer = Timer(delay, () {
+      _timer = null;
+      _pendingDelay = null;
       if (!stopped) _connect();
     });
     _onLog();
   }
 
   void _log(String text, {bool isError = false}) {
-    log.insert(0, LogEntry(DateTime.now().difference(_startedAt), text, isError: isError));
+    log.insert(
+      0,
+      LogEntry(DateTime.now().difference(_startedAt), text, isError: isError),
+    );
     if (log.length > 50) {
       log.removeLast();
     }

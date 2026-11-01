@@ -76,37 +76,43 @@ class _PlatformPageState extends State<PlatformPage> {
         Text('Platform notes', style: Theme.of(context).textTheme.titleMedium),
         const _NoteCard(
           title: 'No Bluetooth on simulators',
-          text: 'The Android emulator and the iOS simulator have no Bluetooth '
+          text:
+              'The Android emulator and the iOS simulator have no Bluetooth '
               'radio. Run on real hardware; the build itself works anywhere.',
         ),
         const _NoteCard(
           title: 'Android permissions',
-          text: 'API 31+ needs BLUETOOTH_SCAN and BLUETOOTH_CONNECT at '
+          text:
+              'API 31+ needs BLUETOOTH_SCAN and BLUETOOTH_CONNECT at '
               'runtime; API 30 and below need location permission for '
               'scanning. The example requests them before initialize().',
         ),
         const _NoteCard(
           title: 'Android GATT status 133',
-          text: 'The leading connect-failure cause. rblue preserves the raw '
+          text:
+              'The leading connect-failure cause. rblue preserves the raw '
               'code (Error::Platform); the reconnect demo special-cases the '
               'copy for it.',
         ),
         const _NoteCard(
           title: 'iOS specifics',
-          text: 'Info.plist carries NSBluetoothAlwaysUsageDescription. iOS '
+          text:
+              'Info.plist carries NSBluetoothAlwaysUsageDescription. iOS '
               'never exposes a MAC address; identities are platform UUIDs '
               'that change when the app is reinstalled. The ATT MTU is '
               'system-managed.',
         ),
         const _NoteCard(
           title: 'Write semantics',
-          text: 'Oversize writes always fail with InvalidLength - values are '
+          text:
+              'Oversize writes always fail with InvalidLength - values are '
               'never silently truncated (iOS native behavior) and never '
               'hiddenly chunked.',
         ),
         const _NoteCard(
           title: 'Initialization order',
-          text: 'On Android the plugin runs the JNI init '
+          text:
+              'On Android the plugin runs the JNI init '
               '(com.rblue.RblueNative.nativeInit) before the first FFI call; '
               'iOS needs no such step. See the plugin README.',
         ),

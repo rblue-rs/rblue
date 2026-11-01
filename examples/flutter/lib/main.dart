@@ -35,11 +35,7 @@ class _HomePageState extends State<HomePage> {
   late final AppState state;
   var tab = 0;
 
-  static const pages = [
-    ScanPage(),
-    ReconnectPage(),
-    PlatformPage(),
-  ];
+  static const pages = [ScanPage(), ReconnectPage(), PlatformPage()];
 
   @override
   void initState() {
@@ -79,7 +75,10 @@ class _HomePageState extends State<HomePage> {
             destinations: const [
               NavigationDestination(icon: Icon(Icons.radar), label: 'Scan'),
               NavigationDestination(icon: Icon(Icons.link), label: 'Reconnect'),
-              NavigationDestination(icon: Icon(Icons.info_outline), label: 'Platform'),
+              NavigationDestination(
+                icon: Icon(Icons.info_outline),
+                label: 'Platform',
+              ),
             ],
           ),
         ),

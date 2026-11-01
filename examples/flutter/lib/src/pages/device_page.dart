@@ -10,7 +10,11 @@ import 'scan_page.dart' show MaterialBannerTile;
 /// watch the notification console. Also demonstrates the unified write
 /// semantics (an oversize write fails with `InvalidLength`, never truncates).
 class DeviceDetailPage extends StatefulWidget {
-  const DeviceDetailPage({super.key, required this.state, required this.device});
+  const DeviceDetailPage({
+    super.key,
+    required this.state,
+    required this.device,
+  });
 
   final AppState state;
   final DiscoveredDevice device;
@@ -66,9 +70,9 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   }
 
   Future<void> _read(CharacteristicId characteristic) => _guarded(() async {
-        final value = await client.read(device.id, characteristic);
-        _console.insert(0, 'read ${characteristic.uuid}: ${_format(value)}');
-      });
+    final value = await client.read(device.id, characteristic);
+    _console.insert(0, 'read ${characteristic.uuid}: ${_format(value)}');
+  });
 
   Future<void> _write(CharacteristicId characteristic, Characteristic meta) =>
       _guarded(() async {
@@ -77,23 +81,27 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
           device.id,
           characteristic,
           data,
-          mode: meta.writable ? WriteMode.withResponse : WriteMode.withoutResponse,
+          mode: meta.writable
+              ? WriteMode.withResponse
+              : WriteMode.withoutResponse,
         );
         _console.insert(0, 'write ${characteristic.uuid}: ${_format(data)}');
       });
 
-  Future<void> _writeOversize(CharacteristicId characteristic, Characteristic meta) =>
-      _guarded(() async {
-        // The unified write semantics: oversize is rejected with
-        // InvalidLength - never truncated, never chunked.
-        await client.write(
-          device.id,
-          characteristic,
-          List.filled(oversizePayload, 0x41),
-          mode: meta.writable ? WriteMode.withResponse : WriteMode.withoutResponse,
-        );
-        _console.insert(0, 'oversize write accepted?!');
-      });
+  Future<void> _writeOversize(
+    CharacteristicId characteristic,
+    Characteristic meta,
+  ) => _guarded(() async {
+    // The unified write semantics: oversize is rejected with
+    // InvalidLength - never truncated, never chunked.
+    await client.write(
+      device.id,
+      characteristic,
+      List.filled(oversizePayload, 0x41),
+      mode: meta.writable ? WriteMode.withResponse : WriteMode.withoutResponse,
+    );
+    _console.insert(0, 'oversize write accepted?!');
+  });
 
   Future<void> _toggleSubscription(CharacteristicId characteristic) =>
       _guarded(() async {
@@ -137,8 +145,11 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
 
   String _format(List<int> data) {
     final text = String.fromCharCodes(data);
-    final printable = data.isNotEmpty && data.every((byte) => byte >= 0x20 && byte < 0x7F);
-    final hex = data.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(' ');
+    final printable =
+        data.isNotEmpty && data.every((byte) => byte >= 0x20 && byte < 0x7F);
+    final hex = data
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join(' ');
     return printable ? '$hex ("$text")' : hex;
   }
 
@@ -146,9 +157,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   Widget build(BuildContext context) {
     final connectedNow = widget.state.isConnected(device.id);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(device.displayName),
-      ),
+      appBar: AppBar(title: Text(device.displayName)),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
@@ -156,7 +165,8 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
             '${device.id.display} - ${connectedNow ? "connected" : "not connected"}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          if (connecting) const Padding(
+          if (connecting)
+            const Padding(
               padding: EdgeInsets.all(12),
               child: Center(child: CircularProgressIndicator()),
             ),
@@ -182,28 +192,33 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   List<Widget> _serviceCards(BuildContext context) {
     final result = <Widget>[];
     for (final service in services!.services) {
-      result.add(Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${service.primary ? "primary" : "secondary"} service',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-              Text(service.uuid, style: Theme.of(context).textTheme.titleSmall),
-              const Divider(),
-              for (final characteristic in service.characteristics)
-                _CharacteristicTile(
-                  parent: this,
-                  serviceUuid: service.uuid,
-                  characteristic: characteristic,
+      result.add(
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${service.primary ? "primary" : "secondary"} service',
+                  style: Theme.of(context).textTheme.labelSmall,
                 ),
-            ],
+                Text(
+                  service.uuid,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const Divider(),
+                for (final characteristic in service.characteristics)
+                  _CharacteristicTile(
+                    parent: this,
+                    serviceUuid: service.uuid,
+                    characteristic: characteristic,
+                  ),
+              ],
+            ),
           ),
         ),
-      ));
+      );
     }
     return result;
   }
@@ -234,7 +249,10 @@ class _CharacteristicTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(characteristic.uuid, style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            characteristic.uuid,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           Wrap(
             spacing: 4,
             children: [

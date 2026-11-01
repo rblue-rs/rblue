@@ -37,7 +37,9 @@ class RbluePluginChannel {
   /// API 31+, ACCESS_FINE_LOCATION on API 30 and below). Returns true when
   /// every requested permission was granted; on iOS always true.
   Future<bool> requestBlePermissions() async {
-    final granted = await methodChannel.invokeMethod<bool>('requestBlePermissions');
+    final granted = await methodChannel.invokeMethod<bool>(
+      'requestBlePermissions',
+    );
     return granted ?? false;
   }
 }

@@ -17,9 +17,10 @@ class AppState extends ChangeNotifier {
   AppState({
     ClientFactory? clientFactory,
     Future<bool> Function()? permissionRequester,
-  })  : _clientFactory = clientFactory ?? _defaultClientFactory,
-        _permissionRequester =
-            permissionRequester ?? RbluePluginChannel.instance.requestBlePermissions;
+  }) : _clientFactory = clientFactory ?? _defaultClientFactory,
+       _permissionRequester =
+           permissionRequester ??
+           RbluePluginChannel.instance.requestBlePermissions;
 
   static Future<RblueClient> _defaultClientFactory() => RblueClient.create();
 
@@ -63,8 +64,8 @@ class AppState extends ChangeNotifier {
   String get runtimeLabel => ready
       ? (adapterState == AdapterState.unknown ? 'ready' : adapterState.name)
       : starting
-          ? 'starting'
-          : 'offline';
+      ? 'starting'
+      : 'offline';
 
   /// Canonical key for a device identity.
   String deviceKey(DeviceId device) => jsonEncode(device.json);
@@ -126,7 +127,8 @@ class AppState extends ChangeNotifier {
   bool isConnected(DeviceId device) => connected.contains(deviceKey(device));
 
   /// Current RSSI of a known device, when seen.
-  int? rssiOf(DeviceId device) => devices[deviceKey(device)]?.advertisement.rssi;
+  int? rssiOf(DeviceId device) =>
+      devices[deviceKey(device)]?.advertisement.rssi;
 
   void _onEvent(AdapterEvent event) {
     switch (event) {
@@ -184,7 +186,11 @@ class AppState extends ChangeNotifier {
 /// Exposes the [AppState] below the home page; pages read it with
 /// `AppStateScope.of(context)` and rebuild on notifications.
 class AppStateScope extends InheritedNotifier<AppState> {
-  const AppStateScope({super.key, required AppState super.notifier, required super.child});
+  const AppStateScope({
+    super.key,
+    required AppState super.notifier,
+    required super.child,
+  });
 
   /// The shared state.
   static AppState of(BuildContext context) =>
