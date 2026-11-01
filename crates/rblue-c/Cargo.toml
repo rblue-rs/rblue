@@ -1,0 +1,51 @@
+[package]
+name = "rblue-c"
+description = "Message-passing C ABI over the rblue BLE facade: one request/response and one event callback, JSON contracts shared with rblue-api"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/rblue-rs/rblue"
+keywords = ["bluetooth", "ble", "ffi"]
+categories = ["hardware-support", "external-ffi-bindings"]
+
+# Member of the root workspace (registered by the coordinator once the
+# Flutter example track landed; dependencies are pinned explicitly so the
+# crate also builds standalone from this directory).
+
+# The FFI surface ships as a shared library (Android/Flutter jniLibs) and a
+# static library (iOS/Flutter podspec). Unit tests compile the crate directly,
+# so no `rlib` entry is needed.
+[lib]
+name = "rblue_c"
+crate-type = ["cdylib", "staticlib"]
+
+# Feature set mirrors the aggregate `rblue` crate exactly; each flag is
+# forwarded so `--no-default-features --features android` builds the same
+# backend selection there. `mock` is the default so host tests and doctests
+# run without Bluetooth hardware.
+[features]
+default = ["mock"]
+mock = ["rblue/mock"]
+winrt = ["rblue/winrt"]
+corebluetooth = ["rblue/corebluetooth"]
+bluez = ["rblue/bluez"]
+android = ["rblue/android"]
+web = ["rblue/web"]
+ohos = ["rblue/ohos"]
+
+[dependencies]
+futures = "0.3"
+rblue = { path = "../rblue", version = "0.0.1", default-features = false }
+# The JSON request/response and event contracts are the serde forms of the
+# rblue-api types (same origin as the rblue-ffi facade).
+rblue-api = { path = "../rblue-api", version = "0.1.0", features = ["serde"] }
+serde = "1"
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time"] }
+tracing = "0.1"
+
+[dev-dependencies]
+async-trait = "0.1"
+rblue-mock = { path = "../rblue-mock", version = "0.1.0" }
+uuid = { version = "1", features = ["v4"] }

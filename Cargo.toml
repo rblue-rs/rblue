@@ -13,6 +13,7 @@ members = [
     "crates/rblue-ohos",
     "crates/rblue-ffi",
     "crates/rblue-driver",
+    "crates/rblue-c",
 ]
 
 [workspace.package]

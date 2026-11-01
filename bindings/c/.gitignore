@@ -1,0 +1,6 @@
+# Build artifacts of the rblue C ABI (rebuild with
+# examples/flutter/tools/build-libs.sh). Only the handwritten header in
+# include/ is tracked.
+android/
+ios/
+ios-sim/

@@ -1,0 +1,40 @@
+# ffigen configuration for the rblue C ABI.
+#
+# Regenerate from the repository root's examples/flutter directory:
+#
+#   cd examples/flutter && fvm dart run ffigen
+#
+# Input:  bindings/c/include/rblue.h (handwritten, authoritative ABI doc)
+# Output: rblue_flutter/lib/src/ffi_bindings.dart (checked in, never
+# hand-edited)
+#
+# The generated functions resolve symbols through `DynamicLibrary.process()`,
+# which works for the iOS static library but not for Android's
+# `librblue_c.so` (loaded via System.loadLibrary / DynamicLibrary.open). The
+# plugin therefore keeps the generated type definitions and resolves the seven
+# entry points itself in `rblue_flutter/lib/src/native.dart` using the
+# generated `NativeFunction` typedefs - see that file for the rationale.
+name: RblueFfiBindings
+description: Bindings for the rblue C ABI (bindings/c/include/rblue.h).
+output: rblue_flutter/lib/src/ffi_bindings.dart
+headers:
+  entry-points:
+    - ../../bindings/c/include/rblue.h
+  include-directives:
+    - ../../bindings/c/include/rblue.h
+compiler-opts:
+  - -I../../bindings/c/include
+# Xcode ships libclang; a Homebrew LLVM also works and is tried first if
+# installed.
+llvm-path:
+  - /opt/homebrew/opt/llvm
+  - /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/
+functions:
+  rename:
+    rblue_new: rblueNew
+    rblue_free: rblueFree
+    rblue_free_string: rblueFreeString
+    rblue_request: rblueRequest
+    rblue_set_response_callback: rblueSetResponseCallback
+    rblue_set_event_callback: rblueSetEventCallback
+sort: true

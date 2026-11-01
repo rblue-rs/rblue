@@ -1,0 +1,154 @@
+//! Registered host callbacks and their invocation.
+//!
+//! The C ABI stores raw function pointer + opaque `user_data` pairs. The
+//! pointers are opaque pass-through values: this crate never dereferences
+//! `user_data`, it only forwards it, so soundness reduces to the documented
+//! embedder contract - `user_data` must outlive the registration and tolerate
+//! calls from Rust worker threads (Dart `NativeCallable.listener` state
+//! qualifies: the listener hands the arguments to the owning isolate).
+
+use std::ffi::CString;
+use std::os::raw::c_void;
+use std::sync::Mutex;
+
+/// Response callback: one completed [`super::ffi::rblue_request`].
+///
+/// `status_json` is null on success and otherwise an owned, rblue-c allocated
+/// JSON string the callee must release with
+/// [`super::ffi::rblue_free_string`]. `payload` is a transient borrow valid
+/// only until the callback returns (null when `payload_len` is 0).
+pub type RblueResponseCallback = unsafe extern "C" fn(
+    req_id: u64,
+    status_json: *const std::os::raw::c_char,
+    payload: *const u8,
+    payload_len: usize,
+    user_data: *mut c_void,
+);
+
+/// Event callback: one adapter event or GATT notification envelope.
+///
+/// `event_json` is an owned, rblue-c allocated JSON string the callee must
+/// release with [`super::ffi::rblue_free_string`].
+pub type RblueEventCallback =
+    unsafe extern "C" fn(event_json: *const std::os::raw::c_char, user_data: *mut c_void);
+
+/// A registered response or event callback.
+struct Registered<F> {
+    function: F,
+    user_data: *mut c_void,
+}
+
+// SAFETY: `user_data` is an opaque pointer owned by the embedder. rblue-c
+// only stores and passes it through; the embedder contract (crate docs)
+// requires it to stay valid for the registration's lifetime and to be
+// callable from Rust worker threads.
+unsafe impl<F> Send for Registered<F> {}
+// SAFETY: see the `Send` impl; the callback itself is a plain function
+// pointer, and the shared state it points to is the embedder's contract.
+unsafe impl<F> Sync for Registered<F> {}
+
+/// The two callback slots of one facade handle.
+#[derive(Default)]
+pub(crate) struct Callbacks {
+    response: Mutex<Option<Registered<RblueResponseCallback>>>,
+    event: Mutex<Option<Registered<RblueEventCallback>>>,
+}
+
+impl Callbacks {
+    /// Registers (or with `None` clears) the response callback.
+    pub(crate) fn set_response(
+        &self,
+        function: Option<RblueResponseCallback>,
+        user_data: *mut c_void,
+    ) {
+        *self.lock_response() = function.map(|function| Registered {
+            function,
+            user_data,
+        });
+    }
+
+    /// Registers (or with `None` clears) the event callback.
+    pub(crate) fn set_event(&self, function: Option<RblueEventCallback>, user_data: *mut c_void) {
+        *self.lock_event() = function.map(|function| Registered {
+            function,
+            user_data,
+        });
+    }
+
+    /// Snapshots the registered response callback, if any.
+    fn response(&self) -> Option<(RblueResponseCallback, *mut c_void)> {
+        self.lock_response()
+            .as_ref()
+            .map(|registered| (registered.function, registered.user_data))
+    }
+
+    /// Snapshots the registered event callback, if any.
+    fn event(&self) -> Option<(RblueEventCallback, *mut c_void)> {
+        self.lock_event()
+            .as_ref()
+            .map(|registered| (registered.function, registered.user_data))
+    }
+
+    /// Delivers one response: takes ownership of `status_json` (already
+    /// `into_raw`, released by the callee via `rblue_free_string`) and of
+    /// `payload`, whose bytes are borrowed for the call. Without a registered
+    /// callback the response is dropped, which frees the string here.
+    pub(crate) fn deliver_response(
+        &self,
+        req_id: u64,
+        status_json: Option<CString>,
+        payload: Vec<u8>,
+    ) {
+        let Some((function, user_data)) = self.response() else {
+            return;
+        };
+        let status_ptr = status_json
+            .map(|status| status.into_raw())
+            .unwrap_or(std::ptr::null_mut());
+        let (payload_ptr, payload_len) = split_payload(&payload);
+        // SAFETY: `function` came from the embedder through
+        // `rblue_set_response_callback`; `status_ptr` is either null or a
+        // valid `CString::into_raw` allocation whose ownership the callee
+        // takes over, and `payload_ptr`/`payload_len` describe a live byte
+        // buffer that outlives the synchronous call.
+        unsafe { function(req_id, status_ptr, payload_ptr, payload_len, user_data) };
+    }
+
+    /// Delivers one event: takes ownership of `event_json` (already
+    /// `into_raw`, released by the callee via `rblue_free_string`). Without a
+    /// registered callback the event is dropped, which frees the string here.
+    pub(crate) fn deliver_event(&self, event_json: CString) {
+        let Some((function, user_data)) = self.event() else {
+            return;
+        };
+        let event_ptr = event_json.into_raw();
+        // SAFETY: `function` came from the embedder through
+        // `rblue_set_event_callback`; `event_ptr` is a valid
+        // `CString::into_raw` allocation whose ownership the callee takes
+        // over.
+        unsafe { function(event_ptr, user_data) };
+    }
+
+    fn lock_response(
+        &self,
+    ) -> std::sync::MutexGuard<'_, Option<Registered<RblueResponseCallback>>> {
+        self.response
+            .lock()
+            .expect("response callback state must not be poisoned")
+    }
+
+    fn lock_event(&self) -> std::sync::MutexGuard<'_, Option<Registered<RblueEventCallback>>> {
+        self.event
+            .lock()
+            .expect("event callback state must not be poisoned")
+    }
+}
+
+/// Null-when-empty view of a response payload, per the ABI contract.
+fn split_payload(payload: &[u8]) -> (*const u8, usize) {
+    if payload.is_empty() {
+        (std::ptr::null(), 0)
+    } else {
+        (payload.as_ptr(), payload.len())
+    }
+}

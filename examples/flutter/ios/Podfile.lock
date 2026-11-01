@@ -1,0 +1,22 @@
+PODS:
+  - Flutter (1.0.0)
+  - rblue_flutter (0.1.0):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - rblue_flutter (from `.symlinks/plugins/rblue_flutter/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  rblue_flutter:
+    :path: ".symlinks/plugins/rblue_flutter/ios"
+
+SPEC CHECKSUMS:
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  rblue_flutter: b579946ca85c2ef8259068fc390b173a5f603b9d
+
+PODFILE CHECKSUM: 22af84b2b6ab5366f953714f168b0bcf43bb46f3
+
+COCOAPODS: 1.16.2
