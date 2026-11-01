@@ -62,6 +62,35 @@ final class DeviceDetailModel: ObservableObject {
 
     // MARK: - Discovery
 
+    /// Ensures the link is connected before discovering the session-scoped
+    /// GATT tree. Opening a device row uses this path on real hardware and in
+    /// the simulator demo.
+    func prepare() async {
+        if !isConnected {
+            await client.connect(device)
+            for _ in 0..<200 where !isConnected {
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+        }
+        await discover()
+        if RblueClient.demoDetailEnabled {
+            await runDemoActions()
+        }
+    }
+
+    /// Demo-only: read, subscribe, and write Echo so the details screen shows
+    /// data and a notification without desktop UI automation permissions.
+    private func runDemoActions() async {
+        guard
+            let node = services
+                .flatMap(\.characteristics)
+                .first(where: { $0.uuid == DemoRblueFacade.echoCharacteristic })
+        else { return }
+        await read(node)
+        await toggleSubscription(node)
+        await write(node, payload: Data("Ping from simulator".utf8), withResponse: true)
+    }
+
     /// Discovers the full GATT tree (CoreBluetooth has no filtered
     /// discovery; the facade filters in software when service UUIDs are
     /// given - the demo always discovers everything), reads the connected

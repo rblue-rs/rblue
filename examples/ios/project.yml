@@ -12,6 +12,8 @@ settings:
     # Swift 5 language mode: UniFFI 0.32 generated code is not yet
     # Swift-6-strict-concurrency clean; migrating is tracked in KNOWN-GAPS.md.
     SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
 targets:
   RblueExample:
     type: application
@@ -62,3 +64,11 @@ schemes:
       config: Debug
       targets:
         - RblueExampleTests
+  RblueExampleDemo:
+    build:
+      targets:
+        RblueExample: all
+    run:
+      config: Debug
+      commandLineArguments:
+        --demo: true

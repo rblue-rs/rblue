@@ -1821,8 +1821,9 @@ enum RblueError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
          * Raw platform status code (e.g. Android `BluetoothGatt` status).
          */code: Int32, 
         /**
-         * Human-readable context for the code.
-         */message: String
+         * Human-readable context for the code. Named `detail` because foreign
+         * exception classes already inherit a `message` property.
+         */detail: String
     )
     /**
      * Unified write semantics: the payload exceeded `max_write_len` and was
@@ -1846,7 +1847,7 @@ enum RblueError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
     case InvalidState(
         /**
          * What state was expected vs. found.
-         */message: String
+         */detail: String
     )
     /**
      * Backend failure with no structured status code. When a numeric
@@ -1855,7 +1856,7 @@ enum RblueError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
     case Backend(
         /**
          * Free-form backend detail.
-         */message: String
+         */detail: String
     )
     /**
      * A method argument could not be parsed (malformed JSON for a
@@ -1865,7 +1866,7 @@ enum RblueError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
     case InvalidArgument(
         /**
          * What failed to parse and why.
-         */message: String
+         */detail: String
     )
 
     
@@ -1917,7 +1918,7 @@ public struct FfiConverterTypeRblueError: FfiConverterRustBuffer {
             )
         case 8: return .Platform(
             code: try FfiConverterInt32.read(from: &buf), 
-            message: try FfiConverterString.read(from: &buf)
+            detail: try FfiConverterString.read(from: &buf)
             )
         case 9: return .InvalidLength(
             len: try FfiConverterUInt64.read(from: &buf), 
@@ -1925,13 +1926,13 @@ public struct FfiConverterTypeRblueError: FfiConverterRustBuffer {
             )
         case 10: return .Disconnected
         case 11: return .InvalidState(
-            message: try FfiConverterString.read(from: &buf)
+            detail: try FfiConverterString.read(from: &buf)
             )
         case 12: return .Backend(
-            message: try FfiConverterString.read(from: &buf)
+            detail: try FfiConverterString.read(from: &buf)
             )
         case 13: return .InvalidArgument(
-            message: try FfiConverterString.read(from: &buf)
+            detail: try FfiConverterString.read(from: &buf)
             )
 
          default: throw UniffiInternalError.unexpectedEnumCase
@@ -1980,10 +1981,10 @@ public struct FfiConverterTypeRblueError: FfiConverterRustBuffer {
             FfiConverterOptionUInt16.write(handle, into: &buf)
             
         
-        case let .Platform(code,message):
+        case let .Platform(code,detail):
             writeInt(&buf, Int32(8))
             FfiConverterInt32.write(code, into: &buf)
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(detail, into: &buf)
             
         
         case let .InvalidLength(len,max):
@@ -1996,19 +1997,19 @@ public struct FfiConverterTypeRblueError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(10))
         
         
-        case let .InvalidState(message):
+        case let .InvalidState(detail):
             writeInt(&buf, Int32(11))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(detail, into: &buf)
             
         
-        case let .Backend(message):
+        case let .Backend(detail):
             writeInt(&buf, Int32(12))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(detail, into: &buf)
             
         
-        case let .InvalidArgument(message):
+        case let .InvalidArgument(detail):
             writeInt(&buf, Int32(13))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(detail, into: &buf)
             
         }
     }

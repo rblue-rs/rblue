@@ -15,7 +15,7 @@ examples/ios/
 │   ├── RblueExampleApp.swift    # 入口
 │   ├── Client/
 │   │   ├── Events.swift         # JSON 契约 ↔ Codable(serde snake_case)
-│   │   ├── EventPump.swift      # EventSink → AsyncStream(.bufferingNewest(1))
+│   │   ├── EventPump.swift      # EventSink → AsyncStream(.bufferingNewest(64))
 │   │   ├── RblueFacade.swift    # 门面子集协议(测试注入用)
 │   │   ├── RblueClient.swift    # 状态机:扫描/连接/通知日志/自动重连
 │   │   ├── ReconnectPolicy.swift# 500ms×2 封顶 30s,±20% 抖动(同 Android)
@@ -90,8 +90,19 @@ xcodebuild -project RblueExample.xcodeproj -scheme RblueExample \
 
 ## 运行与验收
 
-**iOS 模拟器没有蓝牙硬件。** 模拟器路径下 App 不启动真实后端,首屏展示
-`Unsupported` 的结构化错误;CI 只做构建与 mock 层单测。
+**iOS 模拟器没有蓝牙硬件。** 普通模拟器启动不创建真实后端,首屏展示
+`Unsupported` 的结构化错误。为了预览完整扫描/GATT UI,运行共享 scheme
+`RblueExampleDemo`(等价于给 App 传 `--demo`):它使用明确标注的内存假设备,
+不会伪装成真实蓝牙。
+
+```bash
+# Xcode:选择 RblueExampleDemo scheme;或用 simctl:
+xcrun simctl launch --terminate-running-process <UDID> \
+  rs.rblue.examples.RblueExample --demo
+```
+
+Demo 会自动扫描出 Echo Sensor 和 Battery Tag,支持连接、服务树、读写、
+`InvalidLength` 与通知演示。CI 仍只把真实后端视为链接级验证。
 
 真机验收(本地执行,CI 不含此步):
 
@@ -127,6 +138,15 @@ xcodebuild -project RblueExample.xcodeproj -scheme RblueExample \
 客户端事件流:假门面 + 手动回放事件),不触碰真实蓝牙。CI
 (`.github/workflows/example-ios.yml`)在 macos runner 上跑:构建流水线 →
 生成工程 → 模拟器构建(双片链接)→ 上述单测。
+
+## GitHub Release 资产
+
+`examples-v*` tag 触发 `.github/workflows/release-examples.yml`,发布:
+
+- Apple Silicon 模拟器 `.app.zip`(可用 `simctl install` 安装);
+- unsigned arm64 真机 `.app.zip`(构建产物,不是可安装 IPA);
+- `Rblue.xcframework.zip`;
+- 含 Package.swift、Swift 绑定、XCFramework 与双许可证的 Swift SDK zip。
 
 ## 已知限制
 

@@ -60,17 +60,34 @@ final class RblueClient: ObservableObject {
 
     private static let decoder = JSONDecoder()
 
+    /// `true` only for the explicit simulator showcase launch. A normal
+    /// simulator launch continues to expose the truthful no-radio error.
+    nonisolated static var demoModeEnabled: Bool {
+        #if targetEnvironment(simulator)
+            ProcessInfo.processInfo.arguments.contains("--demo")
+        #else
+            false
+        #endif
+    }
+
+    /// Automatically opens and exercises Echo Sensor for screenshot/demo runs.
+    nonisolated static var demoDetailEnabled: Bool {
+        demoModeEnabled && ProcessInfo.processInfo.arguments.contains("--demo-detail")
+    }
+
     /// The default facade factory.
     ///
-    /// The iOS Simulator has no Bluetooth radio; booting the real backend
-    /// there would only yield "radio unavailable" noise (and CI runs unit
-    /// tests against the simulator), so on the simulator the client starts
-    /// without a facade and the UI shows the real-device hint instead.
+    /// The iOS Simulator has no Bluetooth radio. With the explicit `--demo`
+    /// launch argument it uses an in-process facade that speaks the exact
+    /// rblue JSON/error contracts; otherwise it reports the platform fact.
     /// `nonisolated` because default argument expressions are evaluated
     /// outside the actor.
     nonisolated static var defaultFacadeFactory: () throws -> any RblueFacade {
         #if targetEnvironment(simulator)
             {
+                if demoModeEnabled {
+                    return DemoRblueFacade()
+                }
                 throw RblueError.Unsupported(
                     platform: "ios-simulator",
                     feature: "Bluetooth radio (simulators have no BLE hardware)"

@@ -1,0 +1,8 @@
+# Gradle build outputs and IDE state for the example root.
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.DS_Store

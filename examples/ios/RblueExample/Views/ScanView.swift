@@ -8,9 +8,10 @@ struct ScanView: View {
     @State private var serviceUuid = ""
     @State private var rssiThreshold = ""
     @State private var thresholdInvalid = false
+    @State private var path: [DeviceId] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 adapterSection
                 filterSection
@@ -30,6 +31,13 @@ struct ScanView: View {
                     .disabled(client.activeFacade == nil)
                 }
             }
+            .onChange(of: client.scan.entries.count) { _ in
+                guard RblueClient.demoDetailEnabled, path.isEmpty else { return }
+                let echo = DeviceId.uuid(DemoRblueFacade.echoDevice)
+                if client.scan.entries[echo] != nil {
+                    path.append(echo)
+                }
+            }
         }
     }
 
@@ -43,10 +51,17 @@ struct ScanView: View {
                 }
             }
             #if targetEnvironment(simulator)
-                Label(
-                    "iOS 模拟器没有蓝牙硬件;本示例的运行验收必须在真机上完成。",
-                    systemImage: "exclamationmark.triangle"
-                )
+                if RblueClient.demoModeEnabled {
+                    Label(
+                        "Demo 模式:内存假设备,用于预览扫描/GATT UI;不代表模拟器具备蓝牙硬件。",
+                        systemImage: "sparkles"
+                    )
+                } else {
+                    Label(
+                        "iOS 模拟器没有蓝牙硬件;本示例的运行验收必须在真机上完成。",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                }
             #endif
         }
     }

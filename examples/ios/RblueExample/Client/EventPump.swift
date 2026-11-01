@@ -8,8 +8,9 @@ import Rblue
 /// the Rust pump invokes the sink from worker threads; implementations must
 /// not block and must not throw. Yielding into an `AsyncStream` satisfies
 /// both. Buffering follows the binding guidance for Swift:
-/// `.bufferingNewest` (drop-oldest, capacity 1) - a stalled consumer
-/// back-pressures by dropping the oldest values instead of growing memory.
+/// `.bufferingNewest` (drop-oldest, capacity 64) - bounded memory while
+/// preserving ordinary scan bursts and notification batches. A stalled
+/// consumer drops the oldest values instead of growing memory.
 /// `AsyncStream` does not report drop counts, so the demo cannot surface
 /// them (recorded in `examples/ios/KNOWN-GAPS.md`).
 final class EventPump: EventSink {
@@ -25,8 +26,8 @@ final class EventPump: EventSink {
     init() {
         var eventsContinuation: AsyncStream<String>.Continuation!
         var notificationsContinuation: AsyncStream<String>.Continuation!
-        events = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { eventsContinuation = $0 }
-        notifications = AsyncStream(bufferingPolicy: .bufferingNewest(1)) {
+        events = AsyncStream(bufferingPolicy: .bufferingNewest(64)) { eventsContinuation = $0 }
+        notifications = AsyncStream(bufferingPolicy: .bufferingNewest(64)) {
             notificationsContinuation = $0
         }
         eventContinuation = eventsContinuation

@@ -134,12 +134,13 @@ pub enum RblueError {
     /// The platform returned a structured status code that must be preserved
     /// verbatim - Android GATT status 133, OHOS error codes, and so on.
     /// Retry policies match on the raw code; it is never demoted to a string.
-    #[error("platform error {code}: {message}")]
+    #[error("platform error {code}: {detail}")]
     Platform {
         /// Raw platform status code (e.g. Android `BluetoothGatt` status).
         code: i32,
-        /// Human-readable context for the code.
-        message: String,
+        /// Human-readable context for the code. Named `detail` because foreign
+        /// exception classes already inherit a `message` property.
+        detail: String,
     },
     /// Unified write semantics: the payload exceeded `max_write_len` and was
     /// rejected - never truncated, never chunked.
@@ -154,25 +155,25 @@ pub enum RblueError {
     #[error("device disconnected during operation")]
     Disconnected,
     /// The adapter or peripheral is in a state that forbids the operation.
-    #[error("invalid state: {message}")]
+    #[error("invalid state: {detail}")]
     InvalidState {
         /// What state was expected vs. found.
-        message: String,
+        detail: String,
     },
     /// Backend failure with no structured status code. When a numeric
     /// platform code exists it arrives as [`RblueError::Platform`] instead.
-    #[error("backend error: {message}")]
+    #[error("backend error: {detail}")]
     Backend {
         /// Free-form backend detail.
-        message: String,
+        detail: String,
     },
     /// A method argument could not be parsed (malformed JSON for a
     /// `DeviceId` / `ScanFilter` / `CharacteristicId` / options payload, or a
     /// malformed UUID). The operation never reached the backend.
-    #[error("invalid argument: {message}")]
+    #[error("invalid argument: {detail}")]
     InvalidArgument {
         /// What failed to parse and why.
-        message: String,
+        detail: String,
     },
 }
 
@@ -198,14 +199,17 @@ impl From<Error> for RblueError {
                 code: att.code,
                 handle: att.handle,
             },
-            ApiError::Platform { code, message } => Self::Platform { code, message },
+            ApiError::Platform { code, message } => Self::Platform {
+                code,
+                detail: message,
+            },
             ApiError::InvalidLength { len, max } => Self::InvalidLength {
                 len: len as u64,
                 max: max as u64,
             },
             ApiError::Disconnected => Self::Disconnected,
-            ApiError::InvalidState(message) => Self::InvalidState { message },
-            ApiError::Backend(message) => Self::Backend { message },
+            ApiError::InvalidState(message) => Self::InvalidState { detail: message },
+            ApiError::Backend(message) => Self::Backend { detail: message },
         }
     }
 }

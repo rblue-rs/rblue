@@ -108,7 +108,7 @@ fn pump_runtime() -> &'static tokio::runtime::Runtime {
 /// for `T`.
 fn parse_json<T: DeserializeOwned>(json: &str, what: &str) -> Result<T, RblueError> {
     serde_json::from_str(json).map_err(|error| RblueError::InvalidArgument {
-        message: format!("invalid {what}: {error}"),
+        detail: format!("invalid {what}: {error}"),
     })
 }
 
@@ -138,7 +138,7 @@ where
         (_, value) => value,
     };
     serde_json::from_value(merged).map_err(|error| RblueError::InvalidArgument {
-        message: format!("invalid {what}: {error}"),
+        detail: format!("invalid {what}: {error}"),
     })
 }
 
@@ -173,7 +173,7 @@ fn parse_characteristic_id(characteristic_json: &str) -> Result<CharacteristicId
 /// [`RblueError::InvalidArgument`] for a malformed UUID.
 fn parse_uuid(uuid: &str) -> Result<Uuid, RblueError> {
     Uuid::parse_str(uuid).map_err(|error| RblueError::InvalidArgument {
-        message: format!("invalid service UUID {uuid:?}: {error}"),
+        detail: format!("invalid service UUID {uuid:?}: {error}"),
     })
 }
 

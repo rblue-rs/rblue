@@ -45,6 +45,9 @@ post_install do |installer|
       if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.0
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
       end
+      # rblue-c has an aarch64-apple-ios-sim static slice; do not ask pod
+      # targets for an x86_64 slice the Rust toolchain did not build.
+      config.build_settings['ARCHS[sdk=iphonesimulator*]'] = 'arm64'
     end
   end
 end

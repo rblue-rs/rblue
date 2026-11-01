@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vector launcher icon (works on every API level >= minSdk; no bitmaps
+     needed for a demo app). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#0B57D0"
+        android:pathData="M4,0h16c2.2,0 4,1.8 4,4v16c0,2.2 -1.8,4 -4,4H4c-2.2,0 -4,-1.8 -4,-4V4C0,1.8 1.8,0 4,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M14.88,16.29L13,18.17v-3.76l1.88,1.88zM13,5.83l1.88,1.88L13,9.47V5.83zM16.71,7.71L12,3h-1v7.59L6.41,6 5,7.41 10.59,13 5,18.59 6.41,20 11,15.41V23h1l4.71,-4.71 -3.54,-3.54 3.54,-3.54L16.71,7.71z" />
+</vector>

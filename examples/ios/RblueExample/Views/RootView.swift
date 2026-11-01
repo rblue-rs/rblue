@@ -16,6 +16,13 @@ struct RootView: View {
             // state event is missed.
             client.start()
             await client.initializeAdapter()
+            if RblueClient.demoModeEnabled {
+                await client.startScan(
+                    namePrefix: nil,
+                    serviceUuid: nil,
+                    rssiThreshold: nil
+                )
+            }
         }
         .alert(
             client.presentedError?.title ?? "",

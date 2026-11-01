@@ -22,7 +22,7 @@ struct DeviceDetailView: View {
             if model == nil {
                 model = DeviceDetailModel(device: device, client: client)
             }
-            await model?.discover()
+            await model?.prepare()
         }
         .onDisappear {
             Task { await model?.unsubscribeAll() }
@@ -133,7 +133,7 @@ struct DeviceDetailView: View {
 private struct ServiceDisclosure: View {
     let service: DeviceDetailModel.ServiceNode
     @ObservedObject var model: DeviceDetailModel
-    @State private var expanded = false
+    @State private var expanded = RblueClient.demoDetailEnabled
 
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
@@ -161,9 +161,9 @@ private struct CharacteristicRow: View {
     @ObservedObject var model: DeviceDetailModel
     @EnvironmentObject private var client: RblueClient
 
-    @State private var writeText = ""
+    @State private var writeText = RblueClient.demoDetailEnabled ? "Ping from simulator" : ""
     @State private var withResponse = true
-    @State private var expanded = false
+    @State private var expanded = RblueClient.demoDetailEnabled
 
     private var busy: Bool {
         model.busyCharacteristicIds.contains(node.id)

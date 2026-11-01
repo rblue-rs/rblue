@@ -1,0 +1,10 @@
+# Build outputs and IDE state.
+build/
+.gradle/
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Native libraries are build artifacts (see AGENTS.md: never commit .so).
+rblue/src/*/jniLibs/*/*.so

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Activity-level theme only bootstraps the window; all styling is
+         Material 3 through Compose (see ui/RootView.kt). -->
+    <style name="Theme.RblueExample" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

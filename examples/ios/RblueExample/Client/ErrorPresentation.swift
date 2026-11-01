@@ -68,10 +68,10 @@ struct PresentedError: Identifiable, Equatable {
                 detail: "ATT 错误码 0x\(String(code, radix: 16))\(handleText)。0x01-0x7F 为协议定义码,更高为应用/Profile 码。",
                 structured: structured
             )
-        case .Platform(let code, let message):
+        case .Platform(let code, let detail):
             return PresentedError(
                 title: "平台错误",
-                detail: "原始状态码 \(code) 原样保留(重试策略应匹配原始码,不应降级为字符串):\(message)",
+                detail: "原始状态码 \(code) 原样保留(重试策略应匹配原始码,不应降级为字符串):\(detail)",
                 structured: structured
             )
         case .InvalidLength(let len, let max):
@@ -86,22 +86,22 @@ struct PresentedError: Identifiable, Equatable {
                 detail: "操作执行期间设备断开了连接。",
                 structured: structured
             )
-        case .InvalidState(let message):
+        case .InvalidState(let detail):
             return PresentedError(
                 title: "状态不允许",
-                detail: message,
+                detail: detail,
                 structured: structured
             )
-        case .Backend(let message):
+        case .Backend(let detail):
             return PresentedError(
                 title: "后端错误",
-                detail: message,
+                detail: detail,
                 structured: structured
             )
-        case .InvalidArgument(let message):
+        case .InvalidArgument(let detail):
             return PresentedError(
                 title: "参数无效",
-                detail: "\(message)(例如 service UUID 必须是标准连字符形式)。",
+                detail: "\(detail)(例如 service UUID 必须是标准连字符形式)。",
                 structured: structured
             )
         }

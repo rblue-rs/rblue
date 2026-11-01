@@ -98,7 +98,7 @@ fi
 build_android_abi() {
   local triple="$1" abi="$2" linker_triple="$3"
   export CARGO_TARGET_"$(echo "$triple" | tr 'a-z-' 'A-Z_')"_LINKER="$NDK_BIN/$linker_triple-clang"
-  cargo build --release --manifest-path "$CRATE_DIR/Cargo.toml" \
+  cargo build --locked --release --manifest-path "$CRATE_DIR/Cargo.toml" \
     --target "$triple" --no-default-features --features android
   mkdir -p "$OUT_DIR/android/$abi" "$PLUGIN_ANDROID_JNILIBS/$abi"
   cp "$TARGET_DIR/$triple/release/librblue_c.so" "$OUT_DIR/android/$abi/"
@@ -116,7 +116,7 @@ fi
 
 build_ios_slice() {
   local triple="$1" dir="$2"
-  cargo build --release --manifest-path "$CRATE_DIR/Cargo.toml" \
+  cargo build --locked --release --manifest-path "$CRATE_DIR/Cargo.toml" \
     --target "$triple" --no-default-features --features corebluetooth
   mkdir -p "$OUT_DIR/$dir" "$PLUGIN_IOS_LIBS/$dir"
   cp "$TARGET_DIR/$triple/release/librblue_c.a" "$OUT_DIR/$dir/"

@@ -14,10 +14,13 @@ class PlatformPage extends StatefulWidget {
 class _PlatformPageState extends State<PlatformPage> {
   String? backendVersion;
   String? error;
+  bool _startedLoading = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_startedLoading) return;
+    _startedLoading = true;
     _loadVersion();
   }
 

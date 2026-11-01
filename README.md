@@ -7,16 +7,18 @@ Pronounced **"R-blue"**. Member of the Blue* family: BlueZ, bluer, bluest … rb
 
 ## Status
 
-🚧 **Implemented through milestone M1** (of the implementation plan): the
-unified API, the core value-add layer, the mock backend, and all six platform
-backends build and pass the contract test suite. Published on crates.io as
-[`rblue`](https://crates.io/crates/rblue) (v0.0.1, name-reservation release).
+🚧 **Implemented through milestone M1, with M2 example packaging in place**:
+the unified API, the core value-add layer, the mock backend, and all six
+platform backends build and pass the contract test suite. Native Android/iOS
+and Flutter Android/iOS example projects now exercise the binding and package
+pipelines. Published on crates.io as [`rblue`](https://crates.io/crates/rblue)
+(v0.0.1, name-reservation release).
 Source lives at [`rblue-rs/rblue`](https://github.com/rblue-rs/rblue)
 (the exact-name `rblue` namespace is held by an inactive 2014 account, which
 GitHub does not release).
 
-Not yet landed: native binding packaging (AAR/XCFramework/npm/HAR — M2/M3/M4),
-real-hardware test runs, and GATT server / advertising (Phase 2).
+Not yet landed: signed store-distribution packages, real-hardware test runs,
+HarmonyOS HAR/npm publication, and GATT server / advertising (Phase 2).
 
 ## Workspace
 
@@ -57,5 +59,5 @@ first; GATT server and advertising planned.
 
 ## License
 
-TBD (MIT / Apache-2.0 dual license is the working default, consistent with the
-Rust ecosystem).
+Dual-licensed under MIT or Apache-2.0, at your option. See
+[`LICENSE-MIT`](LICENSE-MIT) and [`LICENSE-APACHE`](LICENSE-APACHE).

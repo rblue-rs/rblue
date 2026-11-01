@@ -66,7 +66,7 @@ staticlib() {
 build_slice() {
   local triple="$1"
   echo "==> cargo build --release -p rblue-ffi --lib --features $FEATURE --target $triple"
-  (cd "$ROOT" && cargo build --release -p rblue-ffi --lib --features "$FEATURE" --target "$triple")
+  (cd "$ROOT" && cargo build --locked --release -p rblue-ffi --lib --features "$FEATURE" --target "$triple")
   if [[ ! -f "$(staticlib "$triple")" ]]; then
     echo "error: static library was not produced at $(staticlib "$triple")" >&2
     exit 1
@@ -78,7 +78,7 @@ build_slice "$SIM_TRIPLE"
 
 echo "==> uniffi-bindgen generate --language swift --out-dir bindings/swift/generated"
 rm -rf "$GENERATED"
-(cd "$ROOT" && cargo run -q -p rblue-ffi --bin uniffi-bindgen -- \
+(cd "$ROOT" && cargo run --locked -q -p rblue-ffi --bin uniffi-bindgen -- \
   generate --library "$(staticlib "$IOS_TRIPLE")" \
   --language swift \
   --out-dir "$GENERATED")

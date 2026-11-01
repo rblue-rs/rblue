@@ -18,7 +18,7 @@ final class ErrorPresentationTests: XCTestCase {
 
     func testPlatformCodeShownVerbatim() {
         let presented = PresentedError.from(
-            RblueError.Platform(code: 133, message: "simulated GATT failure")
+            RblueError.Platform(code: 133, detail: "simulated GATT failure")
         )
         XCTAssertTrue(presented.title.contains("平台错误"))
         XCTAssertTrue(presented.detail.contains("133"))

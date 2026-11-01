@@ -79,6 +79,18 @@ On iOS, `NSBluetoothAlwaysUsageDescription` is present. The static Rust library
 is force-loaded by the podspec, which also links CoreBluetooth, Foundation,
 `libobjc`, and `libc++` into the consuming Runner target.
 
+## GitHub Release assets
+
+An `examples-v*` tag runs `.github/workflows/release-examples.yml` and publishes:
+
+- a debug-signed Android APK;
+- an Apple Silicon iOS simulator `.app.zip`;
+- an unsigned arm64 device `.app.zip` (a build artifact, not an installable IPA).
+
+The Android debug key may change between GitHub runners; uninstall the previous
+example if an in-place upgrade is rejected. Signed store distribution is out of
+scope for the example workflow.
+
 ## Physical-device acceptance
 
 1. Install the app on a phone and grant Bluetooth permissions.

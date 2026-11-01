@@ -129,7 +129,7 @@ fn platform_codes_survive_the_error_mapping() {
         mapped,
         RblueError::Platform {
             code: 133,
-            message: "GATT_ERROR".to_owned()
+            detail: "GATT_ERROR".to_owned()
         }
     );
 }

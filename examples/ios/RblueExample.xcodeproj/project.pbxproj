@@ -14,6 +14,8 @@
 		202DE37486375DBB1316F3B2 /* PlatformNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC965108BDC2F787762676A2 /* PlatformNotesView.swift */; };
 		245D8ABD704F68A90D2FCD0E /* ErrorPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBF6185927F8D64BB8969D3D /* ErrorPresentation.swift */; };
 		2C224695280476E22A31E2D8 /* ErrorPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECE317CE045FA8DA4B03A28 /* ErrorPresentationTests.swift */; };
+		37B25F832E93D0D0DCBB3066 /* DemoRblueFacade.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7FBBC058527D243F4C1B134 /* DemoRblueFacade.swift */; };
+		4E345151AB7478D0AD6EB89A /* DemoRblueFacadeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D464D6D0541CC72F4CE0D0B /* DemoRblueFacadeTests.swift */; };
 		4FB603C5AD79D058C9EAB0F1 /* Rblue in Frameworks */ = {isa = PBXBuildFile; productRef = 453D147154D23B7E62EB02D6 /* Rblue */; };
 		578700DF1199E135AB6687E9 /* TestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1C7CF435895DFD2CD11EA9 /* TestJSON.swift */; };
 		6F03DCDCAFB7387D980C99FC /* DeviceDetailModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F715ACA2C283E823AF505A8D /* DeviceDetailModel.swift */; };
@@ -48,6 +50,7 @@
 		4DDFB283C1EF3F9AC492E4B7 /* EventsJsonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsJsonTests.swift; sourceTree = "<group>"; };
 		644E9BD3E958A0479C4F5F1E /* RblueFacade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RblueFacade.swift; sourceTree = "<group>"; };
 		7160020B27E1691F37B8CCAC /* ReconnectPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconnectPolicyTests.swift; sourceTree = "<group>"; };
+		7D464D6D0541CC72F4CE0D0B /* DemoRblueFacadeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRblueFacadeTests.swift; sourceTree = "<group>"; };
 		7E177B24EF8A652BB7E1C00E /* Events.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Events.swift; sourceTree = "<group>"; };
 		8BF71BBEFBDAC0CE3875DC6E /* RblueExample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RblueExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9DADEA6E8E5BF6192265F9D5 /* ScanListModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanListModel.swift; sourceTree = "<group>"; };
@@ -56,6 +59,7 @@
 		A61F749B8366F5360D4A2A03 /* EventPump.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventPump.swift; sourceTree = "<group>"; };
 		AC0724379C39D57606CB176B /* ScanListModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanListModelTests.swift; sourceTree = "<group>"; };
 		B5EBB2BAC5D16F30709DFE88 /* RblueExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RblueExampleApp.swift; sourceTree = "<group>"; };
+		C7FBBC058527D243F4C1B134 /* DemoRblueFacade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRblueFacade.swift; sourceTree = "<group>"; };
 		CA1C7CF435895DFD2CD11EA9 /* TestJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestJSON.swift; sourceTree = "<group>"; };
 		D2F48DBE9D2AA35D1AF6EA98 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		EBF6185927F8D64BB8969D3D /* ErrorPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorPresentation.swift; sourceTree = "<group>"; };
@@ -80,6 +84,7 @@
 		0B5892C4C9163FB6B7A5B45F /* Client */ = {
 			isa = PBXGroup;
 			children = (
+				C7FBBC058527D243F4C1B134 /* DemoRblueFacade.swift */,
 				EBF6185927F8D64BB8969D3D /* ErrorPresentation.swift */,
 				A61F749B8366F5360D4A2A03 /* EventPump.swift */,
 				7E177B24EF8A652BB7E1C00E /* Events.swift */,
@@ -124,6 +129,7 @@
 			isa = PBXGroup;
 			children = (
 				090EE5EFC95FB3A1527EB0CF /* ClientFlowTests.swift */,
+				7D464D6D0541CC72F4CE0D0B /* DemoRblueFacadeTests.swift */,
 				EECE317CE045FA8DA4B03A28 /* ErrorPresentationTests.swift */,
 				4DDFB283C1EF3F9AC492E4B7 /* EventsJsonTests.swift */,
 				7160020B27E1691F37B8CCAC /* ReconnectPolicyTests.swift */,
@@ -241,6 +247,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				37B25F832E93D0D0DCBB3066 /* DemoRblueFacade.swift in Sources */,
 				6F03DCDCAFB7387D980C99FC /* DeviceDetailModel.swift in Sources */,
 				F5C3757CC649819194CF4BAB /* DeviceDetailView.swift in Sources */,
 				245D8ABD704F68A90D2FCD0E /* ErrorPresentation.swift in Sources */,
@@ -262,6 +269,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E76595528839F42298D15FC4 /* ClientFlowTests.swift in Sources */,
+				4E345151AB7478D0AD6EB89A /* DemoRblueFacadeTests.swift in Sources */,
 				2C224695280476E22A31E2D8 /* ErrorPresentationTests.swift in Sources */,
 				9A8E55B861F2E447216172DF /* EventsJsonTests.swift in Sources */,
 				15730DCC285FDEFB0B495608 /* ReconnectPolicyTests.swift in Sources */,
@@ -347,6 +355,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -359,6 +368,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -439,6 +449,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -457,6 +468,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

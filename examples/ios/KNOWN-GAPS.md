@@ -22,7 +22,7 @@ iOS 示例实施中发现的面缺口与限制。门面侧(`crates/rblue-ffi` �
 ## 示例侧已知限制(已文档化,非缺口)
 
 1. **AsyncStream 不暴露丢弃计数。** 门面文档要求绑定层「surface the drop
-   count」;`AsyncStream(bufferingPolicy: .bufferingNewest(1))` 无计数 API,
+   count」;`AsyncStream(bufferingPolicy: .bufferingNewest(64))` 无计数 API,
    演示未上报丢弃数。高吞吐通知场景应改用自定义缓冲或消费 Rust 聚合流。
 
 2. **用户断开与在途重连尝试存在竞态。** `disconnect()` 先取消重连任务再调
@@ -44,6 +44,7 @@ iOS 示例实施中发现的面缺口与限制。门面侧(`crates/rblue-ffi` �
 6. **后台扫描不在示例范围。** iOS 需 `bluetooth-central` 后台模式 + 服务
    UUID 过滤(否则静默空结果);示例仅前台扫描,「平台说明」页有说明。
 
-7. **模拟器路径不启动真实后端。** `RblueClient.defaultFacadeFactory` 在
-   `targetEnvironment(simulator)` 下抛 `Unsupported`,避免无蓝牙环境产生
-   假故障;因此 CI/模拟器对真实后端只有「链接级」验证,行为级验收在真机。
+7. **模拟器普通路径不启动真实后端。** `RblueClient.defaultFacadeFactory` 在
+   `targetEnvironment(simulator)` 下默认抛 `Unsupported`,避免无蓝牙环境产生
+   假故障;传入 `--demo` 时使用明确标注的内存假设备 façade 预览完整 UI。
+   CI/模拟器对真实后端仍只有「链接级」验证,行为级验收在真机。

@@ -178,7 +178,7 @@ final class ClientFlowTests: XCTestCase {
         fake.connectHandler = { _ in
             connectCalls += 1
             if connectCalls == 2 {
-                throw RblueError.Platform(code: 133, message: "simulated link failure")
+                throw RblueError.Platform(code: 133, detail: "simulated link failure")
             }
         }
         let client = RblueClient(facadeFactory: { fake }, reconnectBaseMilliseconds: 300)
@@ -231,7 +231,7 @@ final class ClientFlowTests: XCTestCase {
         fake.connectHandler = { _ in
             connectCalls += 1
             if connectCalls == 2 {
-                throw RblueError.Platform(code: 133, message: "simulated link failure")
+                throw RblueError.Platform(code: 133, detail: "simulated link failure")
             }
         }
         let client = RblueClient(facadeFactory: { fake }, reconnectBaseMilliseconds: 5)
