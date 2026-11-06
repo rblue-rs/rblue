@@ -4,6 +4,40 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rblue_flutter/src/models.dart';
 
 void main() {
+  test('characteristic instances count only matching UUIDs', () {
+    const a = Characteristic(uuid: 'a', properties: 0, descriptors: []);
+    const b = Characteristic(uuid: 'b', properties: 0, descriptors: []);
+    const set = ServiceSet(
+      services: [
+        Service(uuid: 'service', primary: true, characteristics: [a, b, a]),
+        Service(uuid: 'other', primary: true, characteristics: [b]),
+        Service(uuid: 'service', primary: true, characteristics: [a]),
+      ],
+    );
+    final ids = set.identifiedCharacteristics.map((entry) => entry.$1).toList();
+    expect(ids.map((id) => id.instance), [0, 0, 1, 0, 0]);
+    expect(ids.map((id) => id.service.instance), [0, 0, 0, 0, 1]);
+    expect(set.find('b'), ids[1]);
+  });
+
+  test('advertisement retains service data and optional radio fields', () {
+    final data = AdvertisementData.fromJson(const {
+      'services': <String>[],
+      'service_data': [
+        [
+          '180f',
+          [1, 2],
+        ],
+      ],
+      'tx_power': -4,
+      'adv_flags': 6,
+    });
+    expect(data.serviceData.single.$1, '180f');
+    expect(data.serviceData.single.$2, [1, 2]);
+    expect(data.txPower, -4);
+    expect(data.flags, 6);
+  });
+
   group('DeviceId', () {
     test('parses all three serde variants', () {
       final mac = DeviceId.fromJson(const {

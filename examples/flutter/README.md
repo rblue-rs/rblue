@@ -11,6 +11,9 @@ C ABI. It demonstrates:
 - visible host-side reconnect backoff, including Android GATT status 133;
 - platform capability and privacy notes.
 
+Use `fvm flutter` / `fvm dart` from `examples/flutter`; `.fvmrc` pins the SDK
+without changing the global Flutter installation. VS Code uses `.fvm/flutter_sdk`.
+
 The app talks to the local `rblue_flutter` plugin. The plugin uses ffigen bindings
 over [`bindings/c/include/rblue.h`](../../bindings/c/include/rblue.h) and packages
 prebuilt `rblue-c` libraries for four Android ABIs plus iOS device/simulator.
@@ -18,7 +21,7 @@ prebuilt `rblue-c` libraries for four Android ABIs plus iOS device/simulator.
 ## Prerequisites
 
 - Rust stable and the mobile targets listed below;
-- Flutter 3.41.7 or newer;
+- FVM with the project-pinned Flutter 3.47.9 (Dart 3.13.7);
 - Android SDK + NDK 27/28 and Java 17;
 - Xcode on macOS for iOS builds;
 - a physical Android/iOS device for Bluetooth testing (simulators do not expose
@@ -52,21 +55,41 @@ When the C header changes, regenerate the checked-in Dart binding:
 
 ```bash
 cd examples/flutter
-flutter pub get
-dart run ffigen --config ffigen.yaml
+fvm flutter pub get
+fvm dart run ffigen --config ffigen.yaml
 ```
 
 Never edit `rblue_flutter/lib/src/ffi_bindings.dart` by hand.
+
+## Mobile M3 Expressive UI
+
+The native Flutter UI implements the mobile prototype: five persistent destinations
+(设备 / 数据流 / 重连 / 环境 / 日志), device drill-in with search state retained,
+light/dark ColorScheme roles, selective emphasized typography, spring-driven button
+shape changes and adjacent-button squish. Reduced-motion preferences apply changes
+without a spring delay; large text uses independent stacked actions.
+
+Scan, connect, GATT discovery, HEX / UTF-8 writes, RSSI / MTU / max-write-length
+queries, notifications and reconnect use the existing rblue-c client. There are no
+hardcoded demo devices or simulated GATT errors in the application. Reconnection
+can restore the subscriptions captured when monitoring starts, matching fresh IDs
+from the rediscovered service tree.
+
+Notifications retain 200 packets and operations retain 300 logs. **复制会话 JSON**
+exports a snapshot through the system clipboard (not a saved file). The snapshot
+may include device identifiers and payloads; storage is in memory only.
 
 ## Run and test
 
 ```bash
 cd examples/flutter
-flutter analyze
-flutter test
-flutter run                    # choose a connected physical device
-flutter build apk --debug
-flutter build ios --no-codesign
+fvm use 3.47.9
+fvm flutter --version
+fvm flutter analyze
+fvm flutter test
+fvm flutter run                    # choose a connected physical device
+fvm flutter build apk --debug
+fvm flutter build ios --no-codesign
 ```
 
 On Android, the plugin calls `com.rblue.RblueNative.nativeInit()` from the
@@ -96,7 +119,7 @@ scope for the example workflow.
 1. Install the app on a phone and grant Bluetooth permissions.
 2. Start a scan and confirm discoveries are RSSI-sorted without duplicate ids.
 3. Open a device, connect, discover its services, and read a readable value.
-4. Write a normal payload, then run the 600-byte write demonstration and verify
+4. Write a normal payload, then run the oversize write validation (max write length + 1 when available) and verify
    it reports `InvalidLength` rather than truncating.
 5. Subscribe and verify notifications appear in the console.
 6. Open **Reconnect**, power the peripheral off/on, and observe exponential

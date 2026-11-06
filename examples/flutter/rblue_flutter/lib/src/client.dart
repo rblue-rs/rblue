@@ -88,6 +88,34 @@ class RblueClient implements ffi.Finalizable {
     decode: (payload) => jsonDecode(utf8.decode(payload))! as String,
   );
 
+  /// Backend capability bitmask, using the rblue Capability bit positions.
+  Future<int> capabilities() => _request('capabilities', decode: _decodeInt);
+
+  /// Reads the connected device RSSI when supported by the backend.
+  Future<int> readRssi(DeviceId device) =>
+      _request('rssi', params: {'device': device.json}, decode: _decodeInt);
+
+  /// Returns the current ATT MTU when supported by the backend.
+  Future<int> mtu(DeviceId device) =>
+      _request('mtu', params: {'device': device.json}, decode: _decodeInt);
+
+  /// Maximum payload accepted for a characteristic and write mode.
+  Future<int> maxWriteLength(
+    DeviceId device,
+    CharacteristicId characteristic, {
+    WriteMode mode = WriteMode.withResponse,
+  }) => _request(
+    'max_write_len',
+    params: {
+      ..._characteristicParams(device, characteristic),
+      'mode': mode.toJson(),
+    },
+    decode: _decodeInt,
+  );
+
+  static int _decodeInt(Uint8List payload) =>
+      jsonDecode(utf8.decode(payload)) as int;
+
   /// Opens the adapter; on some platforms the permission prompt happens here.
   Future<void> initialize() => _request('initialize', decode: _noPayload);
 
@@ -100,13 +128,12 @@ class RblueClient implements ffi.Finalizable {
   Future<void> stopScan() => _request('stop_scan', decode: _noPayload);
 
   /// Snapshot of the devices known to the adapter.
-  Future<List<DiscoveredDevice>> peripherals() => _request(
+  Future<List<PeripheralInfo>> peripherals() => _request(
     'peripherals',
     decode: (payload) => (jsonDecode(utf8.decode(payload))! as List<Object?>)
         .map(
-          (value) => DiscoveredDevice.fromJson(
-            (value! as Map).cast<String, Object?>(),
-          ),
+          (value) =>
+              PeripheralInfo.fromJson((value! as Map).cast<String, Object?>()),
         )
         .toList(),
   );
@@ -312,6 +339,12 @@ class ScanFilter {
   /// universally hardware-pushed-down filter).
   final List<String> services;
 
+  /// Bluetooth SIG company ID for manufacturer-data filtering.
+  final int? manufacturerId;
+
+  /// Required prefix for the manufacturer data.
+  final List<int> manufacturerDataPrefix;
+
   /// Minimum RSSI in dBm.
   final int? rssiThreshold;
 
@@ -320,12 +353,25 @@ class ScanFilter {
     this.namePrefix,
     this.services = const [],
     this.rssiThreshold,
+    this.manufacturerId,
+    this.manufacturerDataPrefix = const [],
   });
 
   /// The serde form; absent optional fields are serialized as null.
-  Map<String, Object?> toJson() => {
-    'name_prefix': namePrefix,
-    'services': services,
-    'rssi_threshold': rssiThreshold,
-  };
+  Map<String, Object?> toJson() {
+    if (manufacturerId == null && manufacturerDataPrefix.isNotEmpty) {
+      throw ArgumentError('manufacturerDataPrefix requires manufacturerId');
+    }
+    return {
+      'name_prefix': namePrefix,
+      'services': services,
+      'rssi_threshold': rssiThreshold,
+      'manufacturer_data': manufacturerId == null
+          ? null
+          : {
+              'company_id': manufacturerId,
+              'data_prefix': manufacturerDataPrefix,
+            },
+    };
+  }
 }

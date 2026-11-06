@@ -13,13 +13,14 @@ class PlatformPage extends StatefulWidget {
 
 class _PlatformPageState extends State<PlatformPage> {
   String? backendVersion;
+  int? capabilities;
   String? error;
   bool _startedLoading = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_startedLoading) return;
+    if (_startedLoading || !AppStateScope.of(context).ready) return;
     _startedLoading = true;
     _loadVersion();
   }
@@ -27,19 +28,18 @@ class _PlatformPageState extends State<PlatformPage> {
   Future<void> _loadVersion() async {
     final state = AppStateScope.of(context);
     final client = state.client;
-    if (client == null || !state.ready) {
-      // start() is still in flight; try again once it completes.
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      if (mounted && AppStateScope.of(context).ready) {
-        await _loadVersion();
-      }
-      return;
-    }
+    if (client == null) return;
     try {
       final version = await client.backendVersion();
-      setState(() => backendVersion = version);
+      final bits = await client.capabilities();
+      if (mounted) {
+        setState(() {
+          backendVersion = version;
+          capabilities = bits;
+        });
+      }
     } catch (e) {
-      setState(() => error = e.toString());
+      if (mounted) setState(() => error = e.toString());
     }
   }
 
@@ -49,11 +49,19 @@ class _PlatformPageState extends State<PlatformPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Runtime', style: Theme.of(context).textTheme.titleMedium),
+        Text('能力与环境', style: Theme.of(context).textTheme.titleMedium),
         ListTile(
           leading: const Icon(Icons.memory),
           title: const Text('rblue backend'),
           subtitle: Text(backendVersion ?? error ?? 'loading...'),
+        ),
+        ListTile(
+          title: const Text('Backend capabilities'),
+          subtitle: Text(
+            capabilities == null
+                ? '尚未读取'
+                : '0x${capabilities!.toRadixString(16)}',
+          ),
         ),
         ListTile(
           leading: const Icon(Icons.radio_button_checked),
@@ -111,6 +119,10 @@ class _PlatformPageState extends State<PlatformPage> {
               'Oversize writes always fail with InvalidLength - values are '
               'never silently truncated (iOS native behavior) and never '
               'hiddenly chunked.',
+        ),
+        const _NoteCard(
+          title: '当前门面边界',
+          text: '主动 MTU 协商、配对、描述符读写尚未暴露；能力位只是后端声明，实际操作仍需处理 Unsupported。',
         ),
         const _NoteCard(
           title: 'Initialization order',

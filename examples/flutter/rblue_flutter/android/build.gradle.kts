@@ -63,11 +63,17 @@ android {
     sourceSets {
         getByName("main") {
             java.srcDirs("src/main/kotlin")
+            // Rust resolves these shared helper classes by name through JNI.
+            java.srcDir("../../../../bindings/kotlin/btleplug-java/src/main/java")
         }
     }
 
     defaultConfig {
         // rblue-android requires API 24+.
         minSdk = 24
+        consumerProguardFiles(
+            "consumer-rules.pro",
+            "../../../../bindings/kotlin/btleplug-java/consumer-rules.pro",
+        )
     }
 }

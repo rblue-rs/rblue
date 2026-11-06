@@ -115,6 +115,7 @@ pub(crate) async fn execute(
 ) -> Result<Vec<u8>, RequestFailure> {
     match method.as_str() {
         "backend_version" => Ok(json_payload(rblue::platform::backend_version())),
+        "capabilities" => Ok(json_payload(&core.adapter().capabilities().bits())),
         "initialize" => {
             core.adapter().initialize().await?;
             Ok(Vec::new())
@@ -207,6 +208,29 @@ pub(crate) async fn execute(
             core.detach_subscriber(&device, &characteristic);
             result?;
             Ok(Vec::new())
+        }
+        "rssi" | "mtu" => {
+            let DeviceParams { device } = parse_params(&params)?;
+            let peripheral = core.peripheral(&device).await?;
+            if method == "rssi" {
+                Ok(json_payload(&peripheral.rssi().await?))
+            } else {
+                Ok(json_payload(&peripheral.mtu().await?))
+            }
+        }
+        "max_write_len" => {
+            let WriteParams {
+                device,
+                characteristic,
+                mode,
+            } = parse_params(&params)?;
+            Ok(json_payload(
+                &core
+                    .peripheral(&device)
+                    .await?
+                    .max_write_len(&characteristic, mode)
+                    .await?,
+            ))
         }
         "is_connected" => {
             let DeviceParams { device } = parse_params(&params)?;
@@ -349,6 +373,26 @@ mod tests {
             }
         };
         assert!(scripted_update.contains("device_updated"));
+    }
+
+    #[tokio::test]
+    async fn metrics_are_returned_as_json_and_require_a_connection() {
+        let mut fixture = Fixture::new().await;
+        let (status, _) = roundtrip(&mut fixture, 1, "rssi", &device_params(), &[]).await;
+        assert!(status.is_some());
+        let (status, capabilities) = roundtrip(&mut fixture, 2, "capabilities", "{}", &[]).await;
+        assert!(status.is_none());
+        assert!(serde_json::from_slice::<u16>(&capabilities).unwrap() > 0);
+        roundtrip(&mut fixture, 3, "connect", &device_params(), &[]).await;
+        for (id, method, params) in [
+            (4, "rssi", device_params()),
+            (5, "mtu", device_params()),
+            (6, "max_write_len", characteristic_params()),
+        ] {
+            let (status, value) = roundtrip(&mut fixture, id, method, &params, &[]).await;
+            assert!(status.is_none(), "{method}: {status:?}");
+            assert!(serde_json::from_slice::<i64>(&value).is_ok());
+        }
     }
 
     #[tokio::test]

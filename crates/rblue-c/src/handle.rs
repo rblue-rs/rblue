@@ -409,6 +409,9 @@ impl Core {
             .state
             .as_ref()
             .expect("facade state lives until teardown");
+        // Host FFI threads do not have a Tokio reactor. The pump must belong
+        // to this facade, even if registration happens inside another runtime.
+        let _runtime = state.rt.enter();
         state.inner.register_event_callback(callback, user_data);
     }
 
@@ -446,5 +449,32 @@ impl Drop for Core {
         } else {
             drop(state);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Core;
+    use crate::testing::Recorder;
+    use std::sync::Arc;
+
+    #[test]
+    fn callback_registration_without_host_runtime_uses_facade_runtime() {
+        assert!(tokio::runtime::Handle::try_current().is_err());
+        let adapter = Arc::new(rblue_mock::MockAdapter::new());
+        let peripheral = adapter.add_device(crate::testing::device_id(), "fixture");
+        peripheral.advertise();
+        let core = Core::with_adapter(adapter);
+        let mut recorder = Recorder::attach(&core);
+        // Drive only the recorder on a separate runtime, just as a host event
+        // loop awaits callbacks while the facade's own workers run the pump.
+        let observer = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test observer runtime must start");
+        observer.block_on(async {
+            let event = recorder.next_event().await;
+            assert!(event.contains("device_discovered"), "{event}");
+        });
     }
 }

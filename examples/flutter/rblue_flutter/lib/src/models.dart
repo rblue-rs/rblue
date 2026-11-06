@@ -373,6 +373,15 @@ class AdvertisementData {
   /// Service UUIDs advertised.
   final List<String> services;
 
+  /// Service UUID and advertised service data bytes.
+  final List<(String, List<int>)> serviceData;
+
+  /// Advertised transmit power, when supplied.
+  final int? txPower;
+
+  /// Advertisement flags, when supplied.
+  final int? flags;
+
   /// Signal strength of this sighting in dBm.
   final int? rssi;
 
@@ -388,6 +397,12 @@ class AdvertisementData {
     return AdvertisementData(
       localName: json['local_name'] as String?,
       services: (json['services']! as List<Object?>).cast<String>(),
+      serviceData: ((json['service_data'] as List<Object?>?) ?? []).map((item) {
+        final pair = item! as List<Object?>;
+        return (pair[0]! as String, (pair[1]! as List<Object?>).cast<int>());
+      }).toList(),
+      txPower: json['tx_power'] as int?,
+      flags: json['adv_flags'] as int?,
       rssi: json['rssi'] as int?,
       isConnectable: json['is_connectable'] as bool?,
       manufacturerData: manufacturer is List && manufacturer.isNotEmpty
@@ -405,6 +420,9 @@ class AdvertisementData {
     required this.rssi,
     required this.isConnectable,
     required this.manufacturerData,
+    this.serviceData = const [],
+    this.txPower,
+    this.flags,
   });
 }
 
@@ -429,6 +447,19 @@ class DiscoveredDevice {
 
   /// Best display name: advertised name, else the identifier.
   String get displayName => advertisement.localName ?? id.display;
+}
+
+/// A peripheral known to the adapter; advertisement data may not be available.
+class PeripheralInfo {
+  final DeviceId id;
+  final String? name;
+
+  const PeripheralInfo({required this.id, this.name});
+
+  factory PeripheralInfo.fromJson(Map<String, Object?> json) => PeripheralInfo(
+    id: DeviceId.fromJson(json['id']!),
+    name: json['name'] as String?,
+  );
 }
 
 /// Radio/permission state (`rblue_api::AdapterState`).
@@ -551,6 +582,13 @@ class ServiceId {
 
   /// The serde form.
   Map<String, Object?> toJson() => {'uuid': uuid, 'instance': instance};
+
+  @override
+  bool operator ==(Object other) =>
+      other is ServiceId && other.uuid == uuid && other.instance == instance;
+
+  @override
+  int get hashCode => Object.hash(uuid, instance);
 }
 
 /// Identity of a characteristic within one connected session
@@ -694,22 +732,39 @@ class ServiceSet {
   Iterable<Characteristic> get allCharacteristics =>
       services.expand((service) => service.characteristics);
 
+  /// All characteristic IDs paired with their metadata in discovery order.
+  Iterable<(CharacteristicId, Characteristic)>
+  get identifiedCharacteristics sync* {
+    final serviceCounts = <String, int>{};
+    for (final service in services) {
+      final serviceInstance = serviceCounts.update(
+        service.uuid,
+        (n) => n + 1,
+        ifAbsent: () => 0,
+      );
+      final characteristicCounts = <String, int>{};
+      for (final characteristic in service.characteristics) {
+        final instance = characteristicCounts.update(
+          characteristic.uuid,
+          (n) => n + 1,
+          ifAbsent: () => 0,
+        );
+        yield (
+          CharacteristicId(
+            service: ServiceId(uuid: service.uuid, instance: serviceInstance),
+            uuid: characteristic.uuid,
+            instance: instance,
+          ),
+          characteristic,
+        );
+      }
+    }
+  }
+
   /// The session id of the first characteristic with [uuid], if discovered.
   CharacteristicId? find(String uuid) {
-    for (final service in services) {
-      for (
-        var instance = 0;
-        instance < service.characteristics.length;
-        instance++
-      ) {
-        if (service.characteristics[instance].uuid == uuid) {
-          return CharacteristicId(
-            service: ServiceId(uuid: service.uuid, instance: 0),
-            uuid: uuid,
-            instance: instance,
-          );
-        }
-      }
+    for (final (id, _) in identifiedCharacteristics) {
+      if (id.uuid == uuid) return id;
     }
     return null;
   }

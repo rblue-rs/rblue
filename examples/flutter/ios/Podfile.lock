@@ -14,7 +14,7 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/rblue_flutter/ios"
 
 SPEC CHECKSUMS:
-  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
   rblue_flutter: 61440d3e13e1621752f6509ca1c3fb2e3258d1b1
 
 PODFILE CHECKSUM: 840610d57031864ebe718ba1523ff5a73b5c4d45

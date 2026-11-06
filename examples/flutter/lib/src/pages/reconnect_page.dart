@@ -5,6 +5,7 @@ import 'package:rblue_flutter/rblue_flutter.dart';
 
 import '../app_state.dart';
 import '../reconnect_policy.dart';
+import '../widgets/expressive_button.dart';
 import 'scan_page.dart' show MaterialBannerTile;
 
 /// Reconnect tab: connects to a device and, when the link drops, retries with
@@ -37,8 +38,10 @@ class LogEntry {
 }
 
 class _ReconnectPageState extends State<ReconnectPage> {
+  DeviceId? selectedId;
   DiscoveredDevice? device;
   ReconnectController? controller;
+  bool restoreNotifications = true;
   StreamSubscription<AdapterEvent>? _eventsSub;
 
   @override
@@ -50,7 +53,9 @@ class _ReconnectPageState extends State<ReconnectPage> {
 
   void _select(DiscoveredDevice selected) {
     setState(() {
+      selectedId = selected.id;
       device = selected;
+      _eventsSub?.cancel();
       controller?.stop();
       controller = null;
     });
@@ -62,19 +67,50 @@ class _ReconnectPageState extends State<ReconnectPage> {
     if (selected == null || state.client == null) return;
     _eventsSub?.cancel();
     _eventsSub = state.client!.events.listen((event) {
-      if (event is AdapterDeviceDisconnected &&
-          event.id.json == selected.id.json) {
+      if (event is AdapterDeviceDisconnected && event.id == selected.id) {
         controller?.onDisconnected();
-      } else if (event is AdapterDeviceConnected &&
-          event.id.json == selected.id.json) {
+      } else if (event is AdapterDeviceConnected && event.id == selected.id) {
         controller?.onConnected();
       }
     });
+    controller?.stop();
+    final wanted = restoreNotifications
+        ? state.subscriptions
+              .where((entry) => entry.$1 == selected.id)
+              .map((entry) => entry.$2)
+              .toList()
+        : <CharacteristicId>[];
     setState(() {
       controller = ReconnectController(
         client: state.client!,
         device: selected,
-        onLog: () => setState(() {}),
+        onSessionRestored: (services) async {
+          state.invalidateSubscriptions(selected.id);
+          for (final id in wanted) {
+            if (!mounted || controller == null || controller!.stopped) return;
+            final fresh = services.identifiedCharacteristics
+                .where((entry) => entry.$1 == id && entry.$2.notifiable)
+                .firstOrNull;
+            if (fresh != null) {
+              await state.setSubscription(selected.id, fresh.$1, true);
+            } else {
+              state.record(
+                'reconnect.subscription',
+                '特征已不存在: ${id.uuid} #${id.instance}',
+                isError: true,
+              );
+            }
+          }
+        },
+        onLog: () {
+          if (!mounted) return;
+          setState(() {});
+          final current = controller;
+          if (current != null && current.log.isNotEmpty) {
+            final entry = current.log.first;
+            state.record('reconnect', entry.text, isError: entry.isError);
+          }
+        },
       )..start();
     });
   }
@@ -82,82 +118,110 @@ class _ReconnectPageState extends State<ReconnectPage> {
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Pick a device, connect, then power the peripheral off and on. '
-            'The demo retries with a visible backoff and survives Android '
-            'GATT status 133.',
-          ),
-          const SizedBox(height: 12),
-          DropdownButton<DiscoveredDevice>(
-            isExpanded: true,
-            hint: const Text('choose a device'),
-            value: device,
-            items: [
-              for (final candidate in state.sortedDevices())
-                DropdownMenuItem(
-                  value: candidate,
-                  child: Text(candidate.displayName),
-                ),
-            ],
-            onChanged: (candidate) => _select(candidate!),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              FilledButton(
-                onPressed: device == null ? null : _startDemo,
-                child: const Text('Connect + watch'),
-              ),
-              const SizedBox(width: 8),
-              if (controller != null)
-                OutlinedButton(
-                  onPressed: () => setState(() {
-                    controller?.stop();
-                    controller = null;
-                  }),
-                  child: const Text('Stop'),
-                ),
-            ],
-          ),
-          if (controller != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'status: ${controller!.statusText}',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ],
-          Expanded(
-            child: controller == null || controller!.log.isEmpty
-                ? const SizedBox.shrink()
-                : ListView(
-                    children: [
-                      if (controller!.lastError != null)
-                        MaterialBannerTile(
-                          icon: Icons.error_outline,
-                          text: controller!.lastError!,
+    return ListView(
+      key: const PageStorageKey('reconnect'),
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('复现断连，验证恢复。', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        const Text(
+          '选择可连接设备并开始监听。将真实外设关闭再开启，观察退避、重试与服务重发现。此处不会注入虚构的 GATT 133 错误。',
+        ),
+        const SizedBox(height: 20),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<DeviceId>(
+                  initialValue: selectedId,
+                  decoration: const InputDecoration(labelText: '选择设备'),
+                  isExpanded: true,
+                  items: [
+                    for (final candidate in state.sortedDevices().where(
+                      (d) => d.advertisement.isConnectable != false,
+                    ))
+                      DropdownMenuItem(
+                        value: candidate.id,
+                        child: Text(
+                          candidate.displayName,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      for (final entry in controller!.log)
-                        ListTile(
-                          dense: true,
-                          leading: Icon(
-                            entry.isError
-                                ? Icons.warning_amber
-                                : Icons.check_circle_outline,
-                            size: 18,
-                          ),
-                          title: Text(entry.text),
-                          subtitle: Text('+${entry.sinceStart.inSeconds}s'),
-                        ),
-                    ],
+                      ),
+                  ],
+                  onChanged: state.ready
+                      ? (id) {
+                          if (id != null) {
+                            _select(state.devices[state.deviceKey(id)]!);
+                          }
+                        }
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('恢复开始监听时已有的通知订阅'),
+                  value: restoreNotifications,
+                  onChanged: controller != null
+                      ? null
+                      : (value) =>
+                            setState(() => restoreNotifications = value!),
+                ),
+                const SizedBox(height: 16),
+                SquishButtonGroup(
+                  actions: [
+                    (
+                      label: '连接并监听',
+                      tonal: false,
+                      onPressed:
+                          device == null || !state.ready || controller != null
+                          ? null
+                          : _startDemo,
+                    ),
+                    (
+                      label: '停止监听',
+                      tonal: true,
+                      onPressed: controller == null
+                          ? null
+                          : () => setState(() {
+                              controller?.stop();
+                              controller = null;
+                              _eventsSub?.cancel();
+                            }),
+                    ),
+                  ],
+                ),
+                if (controller != null) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    controller!.statusText,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
+                ],
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          '宿主层重连 · 500ms 起始退避，30s 上限，±20% jitter。重发现后旧特征实例失效；按新服务树匹配并恢复监听开始时的订阅。',
+        ),
+        const SizedBox(height: 16),
+        if (controller?.lastError != null)
+          MaterialBannerTile(
+            icon: Icons.error_outline,
+            text: controller!.lastError!,
+          ),
+        for (final entry in controller?.log ?? <LogEntry>[])
+          ListTile(
+            leading: Icon(
+              entry.isError ? Icons.warning_amber : Icons.check_circle_outline,
+            ),
+            title: Text(entry.text),
+            subtitle: Text('+${entry.sinceStart.inMilliseconds} ms'),
+          ),
+      ],
     );
   }
 }
@@ -171,13 +235,14 @@ class ReconnectController {
   ReconnectController({
     required this.client,
     required this.device,
-    required void Function() onLog,
-  }) : _onLog = onLog,
-       _startedAt = DateTime.now();
+    required this.onLog,
+    required this.onSessionRestored,
+  }) : _startedAt = DateTime.now();
 
   final RblueClient client;
   final DiscoveredDevice device;
-  final void Function() _onLog;
+  final void Function() onLog;
+  final Future<void> Function(ServiceSet services) onSessionRestored;
   final DateTime _startedAt;
   final log = <LogEntry>[];
   Timer? _timer;
@@ -214,7 +279,7 @@ class ReconnectController {
 
   /// Called by the page when `DeviceDisconnected` arrives.
   void onDisconnected() {
-    if (stopped) return;
+    if (stopped || _timer != null || _connecting) return;
     _attempt = 0;
     _log('link dropped - starting backoff retries', isError: true);
     _scheduleRetry();
@@ -233,11 +298,15 @@ class ReconnectController {
 
   Future<void> _restoreSession() async {
     try {
-      await client.discoverServices(device.id);
+      final services = await client.discoverServices(device.id);
+      if (stopped) return;
+      await onSessionRestored(services);
+      if (stopped) return;
       _log(
-        'link re-established; services rediscovered; restore app subscriptions here',
+        'link re-established; services rediscovered; subscription restoration completed',
       );
     } on RblueException catch (error) {
+      if (stopped) return;
       lastError =
           'reconnected, but service rediscovery failed: ${error.message}';
       _log(lastError!, isError: true);
@@ -247,13 +316,15 @@ class ReconnectController {
   Future<void> _connect() async {
     if (stopped) return;
     _connecting = true;
-    _onLog();
+    onLog();
     try {
       await client.connect(device.id);
       _connecting = false;
+      if (stopped) return;
       _log('connected');
     } on RblueException catch (error) {
       _connecting = false;
+      if (stopped) return;
       if (error.isAndroidGattStatus133) {
         lastError =
             'Platform status 133 (GATT_ERROR): the classic Android connect '
@@ -281,7 +352,7 @@ class ReconnectController {
       _pendingDelay = null;
       if (!stopped) _connect();
     });
-    _onLog();
+    onLog();
   }
 
   void _log(String text, {bool isError = false}) {
@@ -292,6 +363,6 @@ class ReconnectController {
     if (log.length > 50) {
       log.removeLast();
     }
-    _onLog();
+    onLog();
   }
 }

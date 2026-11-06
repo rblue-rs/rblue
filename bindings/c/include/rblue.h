@@ -44,6 +44,9 @@
  *   peripherals        {}                              -> [{"id":..,"name":..}]
  *   connect            {"device": <DeviceId>}          -> (empty)
  *   disconnect         {"device": <DeviceId>}          -> (empty)
+ *   capabilities       {} -> capability bitmask JSON
+ *   rssi / mtu         {"device": <DeviceId>} -> integer JSON
+ *   max_write_len      {"device":..,"characteristic":..,"mode":..} -> integer JSON
  *   discover_services  {"device": <DeviceId>}          -> ServiceSet JSON
  *   read               {"device":..,"characteristic":..} -> raw value bytes
  *   write              {"device":..,"characteristic":..,"mode":..} + payload -> (empty)

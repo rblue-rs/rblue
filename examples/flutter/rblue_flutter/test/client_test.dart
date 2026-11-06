@@ -32,6 +32,56 @@ Future<void> quiet(Future<void> future) async {
 }
 
 void main() {
+  test(
+    'peripherals decodes the native summary and manufacturer filter',
+    () async {
+      final bridge = FakeNativeBridge();
+      final client = RblueClient.forBridge(bridge, bridge.create()!);
+      final pending = client.peripherals();
+      bridge.respondTo(
+        bridge.sent.last.reqId,
+        '[{"id":{"uuid":"device"},"name":"sensor"}]'.codeUnits,
+      );
+      final result = await pending;
+      expect(result.single.name, 'sensor');
+      expect(result.single.id.display, 'device');
+      final scan = client.startScan(
+        filter: const ScanFilter(
+          manufacturerId: 42,
+          manufacturerDataPrefix: [1, 2],
+        ),
+      );
+      expect(bridge.sent.last.params, contains('"company_id":42'));
+      bridge.respondTo(bridge.sent.last.reqId);
+      await scan;
+      client.dispose();
+    },
+  );
+
+  test('device metrics use the native request protocol', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.uuid('00000000-0000-0000-0000-00000000180f');
+    final futures = [
+      client.capabilities(),
+      client.readRssi(device),
+      client.mtu(device),
+      client.maxWriteLength(device, _characteristic()),
+    ];
+    expect(bridge.sent.map((call) => call.method), [
+      'capabilities',
+      'rssi',
+      'mtu',
+      'max_write_len',
+    ]);
+    expect(bridge.sent.last.params, contains('with_response'));
+    for (var i = 0; i < futures.length; i++) {
+      bridge.respondTo(bridge.sent[i].reqId, [49, 50, 51]);
+    }
+    expect(await Future.wait(futures), [123, 123, 123, 123]);
+    client.dispose();
+  });
+
   test('responses are correlated by req_id, even out of order', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);
