@@ -709,6 +709,56 @@ impl Adapter for CoreBluetoothAdapter {
             .collect())
     }
 
+    async fn system_connected_peripherals(
+        &self,
+        services: &[Uuid],
+    ) -> Result<Vec<Arc<dyn Peripheral>>, Error> {
+        if services.is_empty() {
+            return Err(Error::InvalidState(
+                "at least one service UUID is required".into(),
+            ));
+        }
+        let adapter = self.initialized_adapter().await?;
+        let peripherals = adapter
+            .retrieve_peripherals(RetrievePeripheralsOptions {
+                identifiers: None,
+                services: Some(services.to_vec()),
+            })
+            .await
+            .map_err(map_btleplug_error)?;
+        let mut results: Vec<Arc<dyn Peripheral>> = Vec::with_capacity(peripherals.len());
+        for peripheral in peripherals {
+            let Some(uuid) = peripheral_uuid(&peripheral.id()) else {
+                continue;
+            };
+            let advertisement = peripheral
+                .properties()
+                .await
+                .map_err(map_btleplug_error)?
+                .as_ref()
+                .map(advertisement_from_properties)
+                .unwrap_or_default();
+            let mut inner = self.shared.lock_state();
+            let entry = if let Some(entry) = inner.find(uuid) {
+                if !entry.connected.load(Ordering::Acquire) {
+                    entry.set_handle(peripheral);
+                }
+                entry
+            } else {
+                let entry = Arc::new(DeviceEntry::new(
+                    uuid,
+                    adapter.clone(),
+                    peripheral,
+                    advertisement,
+                ));
+                inner.devices.push(entry.clone());
+                entry
+            };
+            results.push(Arc::new(CoreBluetoothPeripheral::new(entry)));
+        }
+        Ok(results)
+    }
+
     async fn peripheral(&self, id: &DeviceId) -> Result<Arc<dyn Peripheral>, Error> {
         let DeviceId::Uuid(uuid) = id else {
             // CoreBluetooth devices are only ever identified by UUID.

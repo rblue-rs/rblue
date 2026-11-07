@@ -15,12 +15,10 @@ class DeviceDetailPage extends StatefulWidget {
     super.key,
     required this.state,
     required this.device,
-    required this.onOpenNotifications,
   });
 
   final AppState state;
   final DiscoveredDevice device;
-  final VoidCallback onOpenNotifications;
 
   @override
   State<DeviceDetailPage> createState() => _DeviceDetailPageState();
@@ -155,6 +153,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   void _select((CharacteristicId, Characteristic) value) {
     setState(() {
       _selected = value;
+      _result = '选择特征后执行操作。';
       _maximum = null;
       _error = null;
       _mode = value.$2.writable
@@ -198,8 +197,21 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
       'read.result / ${device.display} / ${id.service.uuid} #${id.service.instance} / ${id.uuid} #${id.instance}',
       _format(data),
     );
-    _result =
-        '${_format(data)}\nUTF-8: ${utf8.decode(data, allowMalformed: true)}';
+    final hex =
+        '${data.length} B · HEX: ${data.isEmpty ? "（空）" : _format(data)}';
+    try {
+      final text = utf8.decode(data);
+      final printable = text.runes.every(
+        (rune) =>
+            rune == 9 ||
+            rune == 10 ||
+            rune == 13 ||
+            (rune >= 32 && (rune < 127 || rune > 159)),
+      );
+      _result = text.isNotEmpty && printable ? '$hex\nUTF-8: $text' : hex;
+    } on FormatException {
+      _result = hex;
+    }
   }
 
   Future<void> _write({bool oversize = false}) async {
@@ -233,6 +245,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
     final colors = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final linked = state.isConnected(device);
+    final systemManagedMtu = Theme.of(context).platform == TargetPlatform.iOS;
     final characteristic = _selected?.$2;
     final writable =
         characteristic != null &&
@@ -511,10 +524,6 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                       ),
                       const SizedBox(height: 12),
                       SelectableText(_result, style: text.bodyMedium),
-                      TextButton(
-                        onPressed: widget.onOpenNotifications,
-                        child: const Text('查看通知数据流'),
-                      ),
                     ],
                   ),
                 ),
@@ -557,7 +566,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'RSSI: ${_rssi ?? "—"} dBm\nATT MTU: ${_mtu ?? "—"} bytes',
+                      'RSSI: ${_rssi ?? "—"} dBm\nATT MTU: ${systemManagedMtu ? "由系统管理" : "${_mtu ?? "—"} bytes"}',
                     ),
                     const SizedBox(height: 12),
                     SquishButtonGroup(
@@ -575,19 +584,20 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                                   if (mounted) _rssi = value;
                                 }),
                         ),
-                        (
-                          label: '查询 MTU',
-                          tonal: true,
-                          onPressed: !linked || _busy
-                              ? null
-                              : () => _run(() async {
-                                  final value = await state.operation(
-                                    'query_mtu',
-                                    () => client.mtu(device),
-                                  );
-                                  if (mounted) _mtu = value;
-                                }),
-                        ),
+                        if (!systemManagedMtu)
+                          (
+                            label: '查询 MTU',
+                            tonal: true,
+                            onPressed: !linked || _busy
+                                ? null
+                                : () => _run(() async {
+                                    final value = await state.operation(
+                                      'query_mtu',
+                                      () => client.mtu(device),
+                                    );
+                                    if (mounted) _mtu = value;
+                                  }),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 12),

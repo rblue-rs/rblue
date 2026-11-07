@@ -1,21 +1,20 @@
-# rblue_flutter iOS packaging: the device and simulator static slices of the
-# rblue C ABI are force_load-ed into the Runner binary, so the Dart FFI finds
-# the symbols through DynamicLibrary.process() at runtime.
+# rblue_flutter iOS packaging: the published package contains arm64 device and
+# Apple Silicon simulator static slices. They are force_load-ed into the Runner
+# binary so Dart FFI resolves the C ABI through DynamicLibrary.process().
 #
-# The slices under Libs/ are build artifacts produced by
-# examples/flutter/tools/build-libs.sh; prepare_command fails with instructions
-# when they are missing.
+# Reproducible source, build commands, checksums, and license inventory live in
+# native/BUILDING.md and THIRD_PARTY_NOTICES.md.
 Pod::Spec.new do |s|
   s.name             = 'rblue_flutter'
-  s.version          = '0.1.0'
-  s.summary          = 'rblue BLE example plugin: prebuilt rblue-c static library plus Flutter glue.'
+  s.version          = '0.0.1-dev.1'
+  s.summary          = 'Experimental Flutter BLE plugin backed by the rblue Rust C ABI.'
   s.description      = <<-DESC
-Local plugin of the rblue Flutter example. Packages librblue_c.a (device and
-simulator slices) and exposes the rblue C ABI to Dart via dart:ffi.
+Early experimental Flutter binding for rblue. Packages prebuilt rblue-c native
+libraries for Android and arm64 iOS device/Apple Silicon simulator targets.
                        DESC
   s.homepage         = 'https://github.com/rblue-rs/rblue'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'rblue contributors' => 'rblue@example.com' }
+  s.author           = { 'rblue contributors' => 'https://github.com/rblue-rs/rblue' }
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*'
   s.dependency 'Flutter'
@@ -48,10 +47,8 @@ simulator slices) and exposes the rblue C ABI to Dart via dart:ffi.
 
   s.prepare_command = <<-CMD
     test -f Libs/ios/librblue_c.a || { \\
-      echo "rblue_flutter: missing Libs/ios/librblue_c.a - run" \\
-           "examples/flutter/tools/build-libs.sh first"; exit 1; }
+      echo "rblue_flutter: published package is missing the iOS device library; reinstall it or report a packaging bug"; exit 1; }
     test -f Libs/ios-sim/librblue_c.a || { \\
-      echo "rblue_flutter: missing Libs/ios-sim/librblue_c.a - run" \\
-           "examples/flutter/tools/build-libs.sh first"; exit 1; }
+      echo "rblue_flutter: published package is missing the iOS simulator library; reinstall it or report a packaging bug"; exit 1; }
   CMD
 end

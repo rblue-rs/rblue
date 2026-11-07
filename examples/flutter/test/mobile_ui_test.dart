@@ -2,11 +2,17 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rblue_flutter/rblue_flutter.dart';
 import 'package:rblue_flutter_example/main.dart';
 import 'package:rblue_flutter_example/src/widgets/expressive_button.dart';
 import 'package:rblue_flutter_example/src/payload.dart';
 
 import 'ui_fixture.dart';
+
+Finder destination(String label) => find.descendant(
+  of: find.byKey(const Key('bottom-toolbar')),
+  matching: find.text(label),
+);
 
 void main() {
   test('payload parsing preserves UTF-8 and rejects invalid hex', () {
@@ -30,13 +36,16 @@ void main() {
       await tester.pumpAndSettle();
       fixture.bridge.discover();
       await tester.pumpAndSettle();
-      expect(find.byType(NavigationDestination), findsNWidgets(5));
-      await tester.enterText(find.byKey(const Key('device-search')), 'Sensor');
+      expect(find.byKey(const Key('bottom-toolbar')), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const PageStorageKey('device-search')),
+        'Sensor',
+      );
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Test Sensor'));
       await tester.tap(find.text('Test Sensor'));
       await tester.pumpAndSettle();
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byKey(const Key('bottom-toolbar')), findsOneWidget);
       await tester.tap(find.text('连接设备'));
       await tester.pumpAndSettle();
       expect(fixture.state.connected, hasLength(1));
@@ -77,15 +86,15 @@ void main() {
       expect(fixture.state.subscriptions, hasLength(1));
       fixture.bridge.notify();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('数据流'));
+      await tester.tap(destination('数据流'));
       await tester.pumpAndSettle();
       expect(find.text('T=24'), findsOneWidget);
-      await tester.tap(find.text('暂停显示'));
+      await tester.tap(find.byTooltip('暂停显示'));
       fixture.bridge.notify([65]);
       await tester.pumpAndSettle();
       expect(fixture.state.notificationCount, 2);
       expect(find.text('A'), findsNothing);
-      await tester.tap(find.text('继续显示'));
+      await tester.tap(find.byTooltip('继续显示'));
       await tester.pumpAndSettle();
       expect(find.text('A'), findsOneWidget);
       await tester.tap(find.text('设备'));
@@ -94,7 +103,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-                .widget<TextField>(find.byKey(const Key('device-search')))
+                .widget<TextField>(
+                  find.byKey(const PageStorageKey('device-search')),
+                )
                 .controller
                 ?.text ??
             'Sensor',
@@ -103,6 +114,128 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
+  );
+
+  testWidgets(
+    'environment shows notes for the current platform',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final fixture = createUiFixture();
+      addTearDown(fixture.state.dispose);
+      await tester.pumpWidget(RblueExampleApp(state: fixture.state));
+      await tester.pumpAndSettle();
+      await tester.tap(destination('环境'));
+      await tester.pumpAndSettle();
+
+      final ios =
+          Theme.of(tester.element(find.text('平台说明'))).platform ==
+          TargetPlatform.iOS;
+      expect(find.text(ios ? 'iOS 蓝牙连接' : 'Android 蓝牙权限'), findsOneWidget);
+      expect(find.text(ios ? 'Android 蓝牙权限' : 'iOS 蓝牙连接'), findsNothing);
+      expect(find.text('写入行为'), findsOneWidget);
+      expect(find.text('能力与环境'), findsNothing);
+
+      final platformCard = find.ancestor(
+        of: find.text(ios ? 'iOS 写入长度' : 'Android GATT 133'),
+        matching: find.byType(Card),
+      );
+      final writeCard = find.ancestor(
+        of: find.text('写入行为'),
+        matching: find.byType(Card),
+      );
+      expect(
+        tester.getTopLeft(writeCard).dy - tester.getBottomLeft(platformCard).dy,
+        greaterThanOrEqualTo(8),
+      );
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+    }),
+  );
+
+  testWidgets('iOS finds system devices without typing a UUID', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final fixture = createUiFixture();
+    addTearDown(fixture.state.dispose);
+    await tester.pumpWidget(RblueExampleApp(state: fixture.state));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('设备选项'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('查找系统已连接设备'));
+    await tester.pumpAndSettle();
+
+    final request = fixture.bridge.sent.singleWhere(
+      (call) => call.method == 'system_connected_peripherals',
+    );
+    expect(jsonDecode(request.params)['services'], hasLength(3));
+    expect(find.text('System Sensor'), findsOneWidget);
+  }, variant: const TargetPlatformVariant({TargetPlatform.iOS}));
+
+  testWidgets(
+    'small scan screen prioritizes results and retains a UUID draft',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 640);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final fixture = createUiFixture();
+      addTearDown(fixture.state.dispose);
+      await tester.pumpWidget(RblueExampleApp(state: fixture.state));
+      await tester.pumpAndSettle();
+      for (var index = 0; index < 20; index++) {
+        fixture.bridge.discover(
+          DeviceId.uuid(
+            'C0EA7291-4C8A-40F2-A8F4-${index.toString().padLeft(12, '0')}',
+          ),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('Test Sensor').first.hitTestable(), findsOneWidget);
+      expect(find.text('查找系统已连接设备'), findsNothing);
+      expect(find.text('全部设备'), findsNothing);
+      await tester.tap(find.byTooltip('设备选项'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('按自定义服务查找'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'GATT 服务 UUID'),
+        '180F',
+      );
+      Navigator.of(tester.element(find.text('设备选项'))).pop();
+      await tester.pumpAndSettle();
+      final scan = find.byKey(const PageStorageKey('scan'));
+      final list = find
+          .descendant(of: scan, matching: find.byType(Scrollable))
+          .first;
+      final position = tester.state<ScrollableState>(list).position;
+      position.jumpTo(position.maxScrollExtent);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('设备选项'), findsNothing);
+      position.jumpTo(0);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('设备选项'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('按自定义服务查找'));
+      await tester.pumpAndSettle();
+      expect(find.text('180F'), findsOneWidget);
+      await tester.tap(find.text('查找设备'));
+      await tester.pumpAndSettle();
+      final request = fixture.bridge.sent.singleWhere(
+        (call) => call.method == 'system_connected_peripherals',
+      );
+      expect(jsonDecode(request.params)['services'], [
+        '0000180f-0000-1000-8000-00805f9b34fb',
+      ]);
+      expect(tester.takeException(), isNull);
+    },
+    variant: const TargetPlatformVariant({TargetPlatform.iOS}),
   );
 
   testWidgets('all destinations fit small screens and large text', (
@@ -124,7 +257,7 @@ void main() {
       tester.view.physicalSize = size;
       await tester.pumpAndSettle();
       for (final label in ['设备', '数据流', '重连', '环境', '日志']) {
-        await tester.tap(find.text(label));
+        await tester.tap(destination(label));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '$size / $label');
       }
@@ -134,7 +267,7 @@ void main() {
     tester.view.physicalSize = const Size(390, 844);
     await tester.pumpAndSettle();
     for (final label in ['设备', '数据流', '重连', '环境', '日志']) {
-      await tester.tap(find.text(label));
+      await tester.tap(destination(label));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: '2x text / $label');
     }

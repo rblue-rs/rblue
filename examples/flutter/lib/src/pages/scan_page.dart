@@ -16,6 +16,143 @@ class ScanPage extends StatefulWidget {
 class _ScanPageState extends State<ScanPage> {
   String query = '';
   int filter = 0;
+  static const _commonServices = [
+    '0000180a-0000-1000-8000-00805f9b34fb', // Device Information
+    '0000180f-0000-1000-8000-00805f9b34fb', // Battery Service
+    '8327ad99-2d87-4a22-a8ce-6dd7971c0437', // RingConn data service
+  ];
+
+  String serviceQuery = '';
+  String? lookupStatus;
+  bool lookupPending = false;
+
+  String? _serviceUuid(String value) {
+    var uuid = value.trim().toLowerCase();
+    if (RegExp(r'^[0-9a-f]{4}$').hasMatch(uuid)) uuid = '0000$uuid';
+    if (RegExp(r'^[0-9a-f]{8}$').hasMatch(uuid)) {
+      uuid = '$uuid-0000-1000-8000-00805f9b34fb';
+    }
+    if (!RegExp(r'^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+        .hasMatch(uuid)) {
+      return null;
+    }
+    return uuid;
+  }
+
+  Future<void> _findSystemConnected(
+    AppState state,
+    List<String> services,
+  ) async {
+    if (lookupPending) return;
+    setState(() {
+      lookupPending = true;
+      lookupStatus = null;
+    });
+    try {
+      final count = await state.findSystemConnected(services);
+      if (!mounted) return;
+      setState(() {
+        lookupStatus = count == 0
+            ? '未找到匹配设备。可尝试自定义服务或普通扫描。'
+            : '找到 $count 台。请选择设备并在本 App 中连接。';
+      });
+    } on RblueException catch (error) {
+      if (mounted) setState(() => lookupStatus = error.message);
+    } finally {
+      if (mounted) setState(() => lookupPending = false);
+    }
+  }
+
+  static const _filters = ['全部设备', '可连接', '强信号 > -60'];
+
+  Future<void> _showOptions(AppState state, bool supportsLookup) async {
+    final form = GlobalKey<FormState>();
+    final selection = await showModalBottomSheet<Object>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            0,
+            20,
+            20 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('设备选项', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              const Text('筛选附近设备'),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final (index, label) in _filters.indexed)
+                    FilterChip(
+                      label: Text(label),
+                      selected: filter == index,
+                      onSelected: (_) => Navigator.pop(context, index),
+                    ),
+                ],
+              ),
+              if (supportsLookup) ...[
+                const Divider(height: 24),
+                FilledButton.tonalIcon(
+                  onPressed: state.ready && !lookupPending
+                      ? () => Navigator.pop(context, _commonServices)
+                      : null,
+                  icon: const Icon(Icons.bluetooth_connected),
+                  label: const Text('查找系统已连接设备'),
+                ),
+                const Text('按设备信息、电池和 RingConn 服务查找。'),
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('按自定义服务查找'),
+                  maintainState: true,
+                  children: [
+                    Form(
+                      key: form,
+                      child: TextFormField(
+                        initialValue: serviceQuery,
+                        decoration: const InputDecoration(
+                          labelText: 'GATT 服务 UUID',
+                          hintText: '180F 或完整 UUID',
+                        ),
+                        autocorrect: false,
+                        onChanged: (value) => serviceQuery = value,
+                        validator: (value) => _serviceUuid(value ?? '') == null
+                            ? '请输入有效的 GATT 服务 UUID'
+                            : null,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: state.ready && !lookupPending
+                          ? () {
+                              if (form.currentState!.validate()) {
+                                Navigator.pop(context, [
+                                  _serviceUuid(serviceQuery)!,
+                                ]);
+                              }
+                            }
+                          : null,
+                      child: const Text('查找设备'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (selection is int) setState(() => filter = selection);
+    if (selection is List<String>) await _findSystemConnected(state, selection);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,120 +180,95 @@ class _ScanPageState extends State<ScanPage> {
             children: [
               _Banner(state: state),
               Container(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(24),
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'RBLUE / BLE CENTRAL',
-                      style: text.labelSmall?.copyWith(
+                      '蓝牙扫描',
+                      style: text.titleLarge?.copyWith(
                         color: colors.onPrimaryContainer,
-                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${state.devices.length} 台已发现 · ${state.connected.length} 台已连接',
+                      style: text.bodySmall?.copyWith(
+                        color: colors.onPrimaryContainer,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      '连接，清晰可见。',
-                      style: text.headlineLarge?.copyWith(
-                        color: colors.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '发现设备，探索服务，读懂每一个字节。',
-                      style: text.bodyMedium?.copyWith(
-                        color: colors.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ExpressiveButton(
-                        key: const Key('scan-toggle'),
-                        label: state.starting
-                            ? '初始化中'
-                            : state.scanPending
-                            ? '处理中'
-                            : state.scanning
-                            ? '停止扫描'
-                            : '开始扫描',
-                        icon: state.scanning
-                            ? Icons.stop_rounded
-                            : Icons.radar_rounded,
-                        selected: state.scanning,
-                        onPressed:
-                            state.ready &&
-                                !state.scanPending &&
-                                state.permissionsGranted &&
-                                state.adapterState != AdapterState.poweredOff
-                            ? state.toggleScan
-                            : null,
-                      ),
+                    ExpressiveButton(
+                      key: const Key('scan-toggle'),
+                      height: 48,
+                      label: state.starting
+                          ? '初始化中'
+                          : state.scanPending
+                          ? '处理中'
+                          : state.scanning
+                          ? '停止扫描'
+                          : '开始扫描',
+                      icon: state.scanning
+                          ? Icons.stop_rounded
+                          : Icons.radar_rounded,
+                      selected: state.scanning,
+                      onPressed:
+                          state.ready &&
+                              !state.scanPending &&
+                              state.permissionsGranted &&
+                              state.adapterState != AdapterState.poweredOff
+                          ? state.toggleScan
+                          : null,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: colors.tertiaryContainer,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Wrap(
-                  spacing: 16,
-                  runSpacing: 4,
-                  children: [
-                    Text(
-                      '${state.connected.length} 台已连接',
-                      style: TextStyle(color: colors.onTertiaryContainer),
-                    ),
-                    Text(
-                      '${state.devices.length} 台已发现 · ${state.notificationCount} RX',
-                      style: TextStyle(color: colors.onTertiaryContainer),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(child: Text('附近设备', style: text.titleMedium)),
-                  Text(
-                    state.scanning ? '扫描中' : '扫描已停止',
-                    style: text.labelMedium,
+                  IconButton(
+                    tooltip: filter == 0
+                        ? '设备选项'
+                        : '设备选项 · ${_filters[filter]}',
+                    icon: Badge(
+                      isLabelVisible: filter != 0,
+                      child: const Icon(Icons.tune),
+                    ),
+                    onPressed: () => _showOptions(
+                      state,
+                      Theme.of(context).platform == TargetPlatform.iOS,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              if (filter != 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '筛选 · ${_filters[filter]}',
+                    style: text.labelMedium,
+                  ),
+                ),
+              if (lookupPending || lookupStatus != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(lookupPending ? '正在查找系统已连接设备…' : lookupStatus!),
+                  ),
+                ),
               TextField(
-                key: const Key('device-search'),
+                key: const PageStorageKey('device-search'),
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search),
                   labelText: '搜索名称 / 设备标识',
                 ),
                 onChanged: (value) => setState(() => query = value),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final (index, label) in [
-                    '全部设备',
-                    '可连接',
-                    '强信号 > -60',
-                  ].indexed)
-                    FilterChip(
-                      label: Text(label),
-                      selected: filter == index,
-                      onSelected: (_) => setState(() => filter = index),
-                    ),
-                ],
               ),
               const SizedBox(height: 12),
               if (devices.isEmpty)

@@ -126,11 +126,15 @@ class RblueException implements Exception {
   /// facade-only `InvalidArgument` extension).
   factory RblueException.fromJson(String statusJson) {
     final value = jsonDecode(statusJson);
-    if (value is! Map<String, Object?> || value.isEmpty) {
-      throw RblueContractError('malformed status JSON: $statusJson');
-    }
-    final kindName = value.keys.single;
-    final payload = value[kindName];
+    // Serde emits variants without fields as JSON strings.
+    final (kindName, payload) = switch (value) {
+      'NotConnected' || 'Timeout' || 'Disconnected' => (value as String, null),
+      final Map<String, Object?> map when map.length == 1 => (
+        map.keys.single,
+        map.values.single,
+      ),
+      _ => throw RblueContractError('malformed status JSON: $statusJson'),
+    };
     final kind = RblueErrorKind.values.firstWhere(
       (kind) => kind.wire == kindName,
       orElse: () => RblueErrorKind.backend,

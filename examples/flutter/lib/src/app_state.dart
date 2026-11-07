@@ -256,6 +256,32 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Imports the matching system-connected peripherals into the device list.
+  Future<int> findSystemConnected(List<String> services) async {
+    final client = _client;
+    if (!ready || client == null) return 0;
+    final matches = await client.systemConnectedPeripherals(services);
+    if (_disposed || !identical(client, _client)) return 0;
+    for (final device in matches) {
+      devices.putIfAbsent(
+        deviceKey(device.id),
+        () => DiscoveredDevice(
+          id: device.id,
+          advertisement: AdvertisementData(
+            localName: device.name,
+            services: const [],
+            rssi: null,
+            isConnectable: null,
+            manufacturerData: null,
+          ),
+        ),
+      );
+    }
+    record('system_connected.lookup', '找到 ${matches.length} 台系统已连接设备');
+    notifyListeners();
+    return matches.length;
+  }
+
   /// The connection state of one device.
   bool isConnected(DeviceId device) => connected.contains(deviceKey(device));
 

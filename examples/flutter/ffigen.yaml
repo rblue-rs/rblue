@@ -34,6 +34,8 @@ functions:
     rblue_new: rblueNew
     rblue_free: rblueFree
     rblue_free_string: rblueFreeString
+    rblue_free_payload: rblueFreePayload
+    rblue_set_owned_response_callback: rblueSetOwnedResponseCallback
     rblue_request: rblueRequest
     rblue_set_response_callback: rblueSetResponseCallback
     rblue_set_event_callback: rblueSetEventCallback

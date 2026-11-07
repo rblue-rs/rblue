@@ -32,26 +32,15 @@ class _LogsPageState extends State<LogsPage> {
       key: const PageStorageKey('logs'),
       padding: const EdgeInsets.all(16),
       children: [
-        Text('把一次调试，整理成证据。', style: Theme.of(context).textTheme.headlineSmall),
+        const Text('最近 300 条事件 · 会话导出包含设备标识和通知内容'),
         const SizedBox(height: 12),
-        const Text('本地保留最近 300 条事件。复制的会话可能包含设备标识与通知内容。'),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            FilterChip(
-              label: const Text('仅错误'),
-              selected: errorsOnly,
-              onSelected: (value) => setState(() => errorsOnly = value),
-            ),
-            TextButton(onPressed: state.clearLogs, child: const Text('清空日志')),
-            FilledButton.tonal(
-              onPressed: () => copySession(context, state),
-              child: const Text('复制会话 JSON'),
-            ),
-          ],
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: FilterChip(
+            label: const Text('仅错误'),
+            selected: errorsOnly,
+            onSelected: (value) => setState(() => errorsOnly = value),
+          ),
         ),
         const SizedBox(height: 12),
         if (entries.isEmpty)

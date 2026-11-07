@@ -128,8 +128,20 @@ class RblueClient implements ffi.Finalizable {
   Future<void> stopScan() => _request('stop_scan', decode: _noPayload);
 
   /// Snapshot of the devices known to the adapter.
-  Future<List<PeripheralInfo>> peripherals() => _request(
-    'peripherals',
+  Future<List<PeripheralInfo>> peripherals() => _peripheralList('peripherals');
+
+  /// Finds BLE devices already connected to the system by GATT service UUID.
+  /// On iOS, call [connect] before discovering or reading GATT services.
+  Future<List<PeripheralInfo>> systemConnectedPeripherals(
+    List<String> services,
+  ) => _peripheralList('system_connected_peripherals', {'services': services});
+
+  Future<List<PeripheralInfo>> _peripheralList(
+    String method, [
+    Map<String, Object?>? params,
+  ]) => _request(
+    method,
+    params: params,
     decode: (payload) => (jsonDecode(utf8.decode(payload))! as List<Object?>)
         .map(
           (value) =>

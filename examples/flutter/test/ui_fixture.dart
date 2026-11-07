@@ -64,6 +64,10 @@ class UiBridge extends FakeNativeBridge {
               },
             }),
           );
+        case 'system_connected_peripherals':
+          response = [
+            {'id': testDeviceId.json, 'name': 'System Sensor'},
+          ];
         case 'discover_services':
           response = {
             'services': [
@@ -94,12 +98,12 @@ class UiBridge extends FakeNativeBridge {
     return result;
   }
 
-  void discover() => emitEvent(
+  void discover([DeviceId? id]) => emitEvent(
     jsonEncode({
       'type': 'adapter_event',
       'event': {
         'device_discovered': {
-          'id': testDeviceId.json,
+          'id': (id ?? testDeviceId).json,
           'advertisement': {
             'local_name': 'Test Sensor',
             'services': [testService],

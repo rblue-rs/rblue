@@ -26,8 +26,9 @@ plugins {
     id("kotlin-android")
 }
 
-// The prebuilt C ABI libraries live in src/main/jniLibs/<abi>/librblue_c.so;
-// they are build artifacts, refreshed by examples/flutter/tools/build-libs.sh.
+// Prebuilt rblue-c libraries are part of the published package. Their exact
+// source, build command, checksums, and license inventory are documented in
+// native/BUILDING.md and THIRD_PARTY_NOTICES.md.
 val rblueAbis = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
 
 val checkRblueLibs by tasks.registering {
@@ -37,8 +38,8 @@ val checkRblueLibs by tasks.registering {
         }
         if (missing.isNotEmpty()) {
             throw GradleException(
-                "rblue_flutter: missing librblue_c.so for $missing. " +
-                    "Run examples/flutter/tools/build-libs.sh to cross-build them.",
+                "rblue_flutter: published package is missing librblue_c.so " +
+                    "for $missing; reinstall the package or report a packaging bug.",
             )
         }
     }
@@ -62,18 +63,13 @@ android {
 
     sourceSets {
         getByName("main") {
-            java.srcDirs("src/main/kotlin")
-            // Rust resolves these shared helper classes by name through JNI.
-            java.srcDir("../../../../bindings/kotlin/btleplug-java/src/main/java")
+            java.srcDirs("src/main/kotlin", "src/main/java")
         }
     }
 
     defaultConfig {
         // rblue-android requires API 24+.
         minSdk = 24
-        consumerProguardFiles(
-            "consumer-rules.pro",
-            "../../../../bindings/kotlin/btleplug-java/consumer-rules.pro",
-        )
+        consumerProguardFiles("consumer-rules.pro")
     }
 }

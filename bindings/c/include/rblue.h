@@ -41,6 +41,7 @@
  *   initialize         {}                              -> (empty)
  *   start_scan         ScanFilter JSON                 -> (empty)
  *   stop_scan          {}                              -> (empty)
+ *   system_connected_peripherals {"services":[<UUID>,...]} -> [{ "id":..,"name":.. }] (CoreBluetooth)
  *   peripherals        {}                              -> [{"id":..,"name":..}]
  *   connect            {"device": <DeviceId>}          -> (empty)
  *   disconnect         {"device": <DeviceId>}          -> (empty)
@@ -62,7 +63,8 @@
  *   from inside a callback.
  * - `status_json` / `event_json` strings are OWNED by the callee: copy them,
  *   then release with `rblue_free_string`.
- * - `payload` is a TRANSIENT borrow, valid only until the callback returns.
+ * - The default response callback borrows `payload` only for the call.
+ *   Async listeners must register with `rblue_set_owned_response_callback`.
  * - `rblue_request` copies all inputs before returning.
  * - `rblue_free` shuts down deterministically: no callback fires after it
  *   returns; the handle must not be used afterwards and must not be freed
@@ -152,6 +154,15 @@ int32_t rblue_request(RblueHandle* handle,
 
 /** Releases a string rblue-c handed to a callback (returns ownership). */
 void rblue_free_string(char* string);
+
+/* Async callback variant. Each nonempty payload remains valid until released
+ * with rblue_free_payload, including after the callback returns. */
+int32_t rblue_set_owned_response_callback(RblueHandle* handle,
+                                         rblue_response_cb callback,
+                                         void* user_data);
+
+/* Release a payload from the owned response callback with its original length. */
+void rblue_free_payload(const uint8_t* payload, size_t len);
 
 #ifdef __cplusplus
 }

@@ -23,7 +23,7 @@ class RblueExampleApp extends StatefulWidget {
 }
 
 class _RblueExampleAppState extends State<RblueExampleApp> {
-  ThemeMode mode = ThemeMode.system;
+  ThemeMode mode = ThemeMode.dark;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -55,6 +55,7 @@ class _HomePageState extends State<HomePage> {
   late final state = widget.state ?? AppState();
   int tab = 0;
   DiscoveredDevice? selected;
+  List<ReceivedPacket>? frozenPackets;
 
   @override
   void initState() {
@@ -75,6 +76,7 @@ class _HomePageState extends State<HomePage> {
       listenable: state,
       builder: (context, _) {
         final inspector = tab == 0 && selected != null;
+        final dark = Theme.of(context).brightness == Brightness.dark;
         return PopScope(
           canPop: !inspector,
           onPopInvokedWithResult: (didPop, _) {
@@ -83,13 +85,14 @@ class _HomePageState extends State<HomePage> {
           child: Scaffold(
             appBar: AppBar(
               title: Text(
-                inspector ? '设备详情' : 'rblue.',
-                style: inspector
-                    ? null
-                    : const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                      ),
+                inspector
+                    ? '设备详情'
+                    : tab == 0
+                    ? 'rblue.'
+                    : _BottomToolbar.destinations[tab].$2,
+                style: tab == 0 && !inspector
+                    ? const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)
+                    : null,
               ),
               leading: inspector
                   ? IconButton(
@@ -99,22 +102,57 @@ class _HomePageState extends State<HomePage> {
                     )
                   : null,
               actions: [
-                IconButton(
-                  tooltip: '复制会话 JSON',
-                  onPressed: () => copySession(context, state),
-                  icon: const Icon(Icons.ios_share),
-                ),
-                IconButton(
-                  tooltip: '切换浅色 / 深色',
-                  icon: Icon(
-                    Theme.of(context).brightness == Brightness.dark
-                        ? Icons.light_mode_outlined
-                        : Icons.dark_mode_outlined,
+                if (!inspector && (tab == 0 || tab == 3))
+                  IconButton(
+                    tooltip: dark ? '切换浅色' : '切换深色',
+                    icon: Icon(
+                      dark
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                    ),
+                    onPressed: () => widget.onToggleTheme(!dark),
                   ),
-                  onPressed: () => widget.onToggleTheme(
-                    Theme.of(context).brightness != Brightness.dark,
+                if (inspector)
+                  IconButton(
+                    tooltip: '查看通知数据流',
+                    icon: const Icon(Icons.graphic_eq),
+                    onPressed: () => setState(() => tab = 1),
                   ),
-                ),
+                if (tab == 1) ...[
+                  IconButton(
+                    tooltip: frozenPackets == null ? '暂停显示' : '继续显示',
+                    icon: Icon(
+                      frozenPackets == null ? Icons.pause : Icons.play_arrow,
+                    ),
+                    onPressed: () => setState(() {
+                      frozenPackets = frozenPackets == null
+                          ? state.packets.toList()
+                          : null;
+                    }),
+                  ),
+                  IconButton(
+                    tooltip: '清空数据',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () {
+                      state.clearPackets();
+                      if (frozenPackets != null) {
+                        setState(() => frozenPackets = []);
+                      }
+                    },
+                  ),
+                ],
+                if (tab == 4) ...[
+                  IconButton(
+                    tooltip: '复制会话 JSON',
+                    icon: const Icon(Icons.copy_outlined),
+                    onPressed: () => copySession(context, state),
+                  ),
+                  IconButton(
+                    tooltip: '清空日志',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: state.clearLogs,
+                  ),
+                ],
               ],
             ),
             body: SafeArea(
@@ -138,11 +176,10 @@ class _HomePageState extends State<HomePage> {
                             key: ValueKey(selected!.id),
                             state: state,
                             device: selected!,
-                            onOpenNotifications: () => setState(() => tab = 1),
                           ),
                       ],
                     ),
-                    const NotificationsPage(),
+                    NotificationsPage(frozenPackets: frozenPackets),
                     const ReconnectPage(),
                     const PlatformPage(),
                     const LogsPage(),
@@ -150,40 +187,112 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            bottomNavigationBar: NavigationBar(
-              selectedIndex: tab,
-              onDestinationSelected: (index) => setState(() => tab = index),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.radar_outlined),
-                  selectedIcon: Icon(Icons.radar),
-                  label: '设备',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.graphic_eq_outlined),
-                  selectedIcon: Icon(Icons.graphic_eq),
-                  label: '数据流',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.link_outlined),
-                  selectedIcon: Icon(Icons.link),
-                  label: '重连',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.layers_outlined),
-                  selectedIcon: Icon(Icons.layers),
-                  label: '环境',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.terminal_outlined),
-                  selectedIcon: Icon(Icons.terminal),
-                  label: '日志',
-                ),
-              ],
+            bottomNavigationBar: _BottomToolbar(
+              selected: tab,
+              onSelect: (index) => setState(() => tab = index),
             ),
           ),
         );
       },
     ),
   );
+}
+
+/// Floating toolbar for the example's five persistent destinations.
+class _BottomToolbar extends StatelessWidget {
+  const _BottomToolbar({required this.selected, required this.onSelect});
+
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  static const destinations = [
+    (Icons.radar, '设备'),
+    (Icons.graphic_eq, '数据流'),
+    (Icons.link, '重连'),
+    (Icons.layers_outlined, '环境'),
+    (Icons.terminal, '日志'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 160);
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Material(
+            key: const Key('bottom-toolbar'),
+            color: colors.surfaceContainerLow,
+            shape: const StadiumBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Row(
+                children: [
+                  for (final (index, (icon, label)) in destinations.indexed)
+                    Expanded(
+                      child: Semantics(
+                        selected: index == selected,
+                        button: true,
+                        child: Material(
+                          animationDuration: duration,
+                          color: index == selected
+                              ? colors.primary
+                              : Colors.transparent,
+                          shape: const StadiumBorder(),
+                          child: InkWell(
+                            customBorder: const StadiumBorder(),
+                            onTap: () => onSelect(index),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 56),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      icon,
+                                      size: 22,
+                                      color: index == selected
+                                          ? colors.onPrimary
+                                          : colors.onSurfaceVariant,
+                                    ),
+                                    Text(
+                                      label,
+                                      textAlign: TextAlign.center,
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            color: index == selected
+                                                ? colors.onPrimary
+                                                : colors.onSurfaceVariant,
+                                            fontWeight: index == selected
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

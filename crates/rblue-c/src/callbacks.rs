@@ -16,7 +16,8 @@ use std::sync::Mutex;
 /// `status_json` is null on success and otherwise an owned, rblue-c allocated
 /// JSON string the callee must release with
 /// [`super::ffi::rblue_free_string`]. `payload` is a transient borrow valid
-/// only until the callback returns (null when `payload_len` is 0).
+/// only until the callback returns unless registered with the owned variant
+/// (null when `payload_len` is 0).
 pub type RblueResponseCallback = unsafe extern "C" fn(
     req_id: u64,
     status_json: *const std::os::raw::c_char,
@@ -50,7 +51,7 @@ unsafe impl<F> Sync for Registered<F> {}
 /// The two callback slots of one facade handle.
 #[derive(Default)]
 pub(crate) struct Callbacks {
-    response: Mutex<Option<Registered<RblueResponseCallback>>>,
+    response: Mutex<Option<(Registered<RblueResponseCallback>, bool)>>,
     event: Mutex<Option<Registered<RblueEventCallback>>>,
 }
 
@@ -60,10 +61,16 @@ impl Callbacks {
         &self,
         function: Option<RblueResponseCallback>,
         user_data: *mut c_void,
+        owned_payload: bool,
     ) {
-        *self.lock_response() = function.map(|function| Registered {
-            function,
-            user_data,
+        *self.lock_response() = function.map(|function| {
+            (
+                Registered {
+                    function,
+                    user_data,
+                },
+                owned_payload,
+            )
         });
     }
 
@@ -76,10 +83,10 @@ impl Callbacks {
     }
 
     /// Snapshots the registered response callback, if any.
-    fn response(&self) -> Option<(RblueResponseCallback, *mut c_void)> {
+    fn response(&self) -> Option<(RblueResponseCallback, *mut c_void, bool)> {
         self.lock_response()
             .as_ref()
-            .map(|registered| (registered.function, registered.user_data))
+            .map(|(registered, owned)| (registered.function, registered.user_data, *owned))
     }
 
     /// Snapshots the registered event callback, if any.
@@ -99,18 +106,28 @@ impl Callbacks {
         status_json: Option<CString>,
         payload: Vec<u8>,
     ) {
-        let Some((function, user_data)) = self.response() else {
+        let Some((function, user_data, owned_payload)) = self.response() else {
             return;
         };
         let status_ptr = status_json
             .map(|status| status.into_raw())
             .unwrap_or(std::ptr::null_mut());
-        let (payload_ptr, payload_len) = split_payload(&payload);
+        let (payload_ptr, payload_len) = if owned_payload && !payload.is_empty() {
+            let len = payload.len();
+            (
+                Box::into_raw(payload.into_boxed_slice())
+                    .cast::<u8>()
+                    .cast_const(),
+                len,
+            )
+        } else {
+            split_payload(&payload)
+        };
         // SAFETY: `function` came from the embedder through
         // `rblue_set_response_callback`; `status_ptr` is either null or a
         // valid `CString::into_raw` allocation whose ownership the callee
         // takes over, and `payload_ptr`/`payload_len` describe a live byte
-        // buffer that outlives the synchronous call.
+        // buffer valid during the call, or owned by the receiver when requested.
         unsafe { function(req_id, status_ptr, payload_ptr, payload_len, user_data) };
     }
 
@@ -131,7 +148,7 @@ impl Callbacks {
 
     fn lock_response(
         &self,
-    ) -> std::sync::MutexGuard<'_, Option<Registered<RblueResponseCallback>>> {
+    ) -> std::sync::MutexGuard<'_, Option<(Registered<RblueResponseCallback>, bool)>> {
         self.response
             .lock()
             .expect("response callback state must not be poisoned")
@@ -150,5 +167,40 @@ fn split_payload(payload: &[u8]) -> (*const u8, usize) {
         (std::ptr::null(), 0)
     } else {
         (payload.as_ptr(), payload.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owned_payload_survives_callback_return() {
+        unsafe extern "C" fn capture(
+            _req_id: u64,
+            _status: *const std::os::raw::c_char,
+            payload: *const u8,
+            len: usize,
+            user_data: *mut c_void,
+        ) {
+            // SAFETY: the test passes a live, exclusively borrowed slot.
+            unsafe { *user_data.cast::<(*const u8, usize)>() = (payload, len) };
+        }
+
+        let callbacks = Callbacks::default();
+        let mut captured = (std::ptr::null::<u8>(), 0usize);
+        callbacks.set_response(
+            Some(capture),
+            std::ptr::from_mut(&mut captured).cast(),
+            true,
+        );
+        callbacks.deliver_response(1, None, vec![0, 0xff, 0x80, 0x41]);
+
+        let (payload, len) = captured;
+        assert!(!payload.is_null());
+        // SAFETY: ownership of the payload was transferred to this callback.
+        let bytes = unsafe { std::slice::from_raw_parts(payload, len) }.to_vec();
+        unsafe { crate::rblue_free_payload(payload, len) };
+        assert_eq!(bytes, [0, 0xff, 0x80, 0x41]);
     }
 }

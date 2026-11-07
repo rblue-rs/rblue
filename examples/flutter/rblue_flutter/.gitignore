@@ -32,6 +32,6 @@ migrate_working_dir/
 /build/
 /coverage/
 
-# staged rblue-c artifacts (build-libs.sh)
-android/src/main/jniLibs/
-ios/Libs/
+# Generated native build caches. The release libraries under android/src/main/
+# jniLibs and ios/Libs are intentionally versioned and published.
+native/source/target/

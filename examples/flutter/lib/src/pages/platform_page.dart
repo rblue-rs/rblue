@@ -46,10 +46,10 @@ class _PlatformPageState extends State<PlatformPage> {
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
+    final platform = Theme.of(context).platform;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('能力与环境', style: Theme.of(context).textTheme.titleMedium),
         ListTile(
           leading: const Icon(Icons.memory),
           title: const Text('rblue backend'),
@@ -84,52 +84,30 @@ class _PlatformPageState extends State<PlatformPage> {
                 ),
         ),
         const SizedBox(height: 16),
-        Text('Platform notes', style: Theme.of(context).textTheme.titleMedium),
+        Text('平台说明', style: Theme.of(context).textTheme.titleMedium),
+        if (platform == TargetPlatform.iOS) ...[
+          const _NoteCard(
+            title: 'iOS 蓝牙连接',
+            text: '设备以 UUID 标识。按 GATT 服务 UUID 查找系统已连接的外设后，仍需在本 App 中连接才能读写。',
+          ),
+          const _NoteCard(
+            title: 'iOS 写入长度',
+            text: 'ATT MTU 由系统管理。写入时以当前特征和写入方式显示的最大长度为准。',
+          ),
+        ],
+        if (platform == TargetPlatform.android) ...[
+          const _NoteCard(
+            title: 'Android 蓝牙权限',
+            text: 'Android 12 及以上需要附近设备权限，较早版本扫描时需要位置权限。',
+          ),
+          const _NoteCard(
+            title: 'Android GATT 133',
+            text: '连接失败时可在日志里查看后端返回的原始状态码。',
+          ),
+        ],
         const _NoteCard(
-          title: 'No Bluetooth on simulators',
-          text:
-              'The Android emulator and the iOS simulator have no Bluetooth '
-              'radio. Run on real hardware; the build itself works anywhere.',
-        ),
-        const _NoteCard(
-          title: 'Android permissions',
-          text:
-              'API 31+ needs BLUETOOTH_SCAN and BLUETOOTH_CONNECT at '
-              'runtime; API 30 and below need location permission for '
-              'scanning. The example requests them before initialize().',
-        ),
-        const _NoteCard(
-          title: 'Android GATT status 133',
-          text:
-              'The leading connect-failure cause. rblue preserves the raw '
-              'code (Error::Platform); the reconnect demo special-cases the '
-              'copy for it.',
-        ),
-        const _NoteCard(
-          title: 'iOS specifics',
-          text:
-              'Info.plist carries NSBluetoothAlwaysUsageDescription. iOS '
-              'never exposes a MAC address; identities are platform UUIDs '
-              'that change when the app is reinstalled. The ATT MTU is '
-              'system-managed.',
-        ),
-        const _NoteCard(
-          title: 'Write semantics',
-          text:
-              'Oversize writes always fail with InvalidLength - values are '
-              'never silently truncated (iOS native behavior) and never '
-              'hiddenly chunked.',
-        ),
-        const _NoteCard(
-          title: '当前门面边界',
-          text: '主动 MTU 协商、配对、描述符读写尚未暴露；能力位只是后端声明，实际操作仍需处理 Unsupported。',
-        ),
-        const _NoteCard(
-          title: 'Initialization order',
-          text:
-              'On Android the plugin runs the JNI init '
-              '(com.rblue.RblueNative.nativeInit) before the first FFI call; '
-              'iOS needs no such step. See the plugin README.',
+          title: '写入行为',
+          text: '超出单次写入上限时，应用会提示错误。需要分包时，请按外设协议拆分数据。',
         ),
       ],
     );
@@ -144,16 +122,19 @@ class _NoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 4),
-            Text(text),
-          ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(text),
+            ],
+          ),
         ),
       ),
     );

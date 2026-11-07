@@ -116,6 +116,20 @@ pub trait Adapter: Send + Sync {
     /// as [`Error::Platform`].
     async fn peripherals(&self) -> Result<Vec<Arc<dyn Peripheral>>, Error>;
 
+    /// Retrieves system-connected BLE peripherals matching any of `services`.
+    ///
+    /// The list must be nonempty. The caller still needs to connect locally
+    /// before GATT operations. Returns [`Error::Unsupported`] on other backends.
+    async fn system_connected_peripherals(
+        &self,
+        _services: &[uuid::Uuid],
+    ) -> Result<Vec<Arc<dyn Peripheral>>, Error> {
+        Err(Error::Unsupported {
+            platform: std::env::consts::OS,
+            feature: "system_connected_peripherals",
+        })
+    }
+
     /// Returns the peripheral handle for a known device.
     ///
     /// # Errors

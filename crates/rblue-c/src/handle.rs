@@ -391,12 +391,16 @@ impl Core {
         &self,
         callback: Option<crate::callbacks::RblueResponseCallback>,
         user_data: *mut std::os::raw::c_void,
+        owned_payload: bool,
     ) {
         let state = self
             .state
             .as_ref()
             .expect("facade state lives until teardown");
-        state.inner.callbacks.set_response(callback, user_data);
+        state
+            .inner
+            .callbacks
+            .set_response(callback, user_data, owned_payload);
     }
 
     /// Registers the event callback slot (and starts the pump on first use).

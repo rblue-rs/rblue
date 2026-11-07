@@ -129,11 +129,22 @@ pub(crate) async fn execute(
             core.adapter().stop_scan().await?;
             Ok(Vec::new())
         }
-        "peripherals" => {
-            let infos: Vec<PeripheralInfo> = core
-                .adapter()
-                .peripherals()
-                .await?
+        "peripherals" | "system_connected_peripherals" => {
+            let adapter = core.adapter();
+            let peripherals = if method == "system_connected_peripherals" {
+                let filter: ScanFilter = parse_with_defaults(&params, "ScanFilter")?;
+                if filter.services.is_empty() {
+                    return Err(RequestFailure::InvalidArgument(
+                        "at least one service UUID is required".into(),
+                    ));
+                }
+                adapter
+                    .system_connected_peripherals(&filter.services)
+                    .await?
+            } else {
+                adapter.peripherals().await?
+            };
+            let infos: Vec<PeripheralInfo> = peripherals
                 .iter()
                 .map(|peripheral| PeripheralInfo {
                     id: peripheral.id().clone(),
@@ -550,6 +561,16 @@ mod tests {
             }
         };
         assert!(event.contains("[101,99,104,111]"), "{event}");
+    }
+
+    #[tokio::test]
+    async fn system_connected_lookup_requires_service_uuids() {
+        let mut fixture = Fixture::new().await;
+        for params in ["{}", r#"{"services":["gen3-5f21"]}"#] {
+            let (status, _) =
+                roundtrip(&mut fixture, 1, "system_connected_peripherals", params, &[]).await;
+            assert!(status.is_some_and(|error| error.contains("InvalidArgument")));
+        }
     }
 
     #[tokio::test]

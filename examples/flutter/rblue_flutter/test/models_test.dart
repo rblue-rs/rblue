@@ -170,6 +170,20 @@ void main() {
   });
 
   group('RblueException', () {
+    test('decodes Rust unit variants from JSON strings', () {
+      for (final kind in [
+        RblueErrorKind.notConnected,
+        RblueErrorKind.timeout,
+        RblueErrorKind.disconnected,
+      ]) {
+        final raw = '"${kind.wire}"';
+        final error = RblueException.fromJson(raw);
+        expect(error.kind, kind);
+        expect(error.message, kind.wire);
+        expect(error.rawJson, raw);
+      }
+    });
+
     test('parses Platform, InvalidLength, and InvalidArgument', () {
       final platform = RblueException.fromJson(
         '{"Platform":{"code":133,"message":"GATT_ERROR"}}',

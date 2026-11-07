@@ -86,8 +86,40 @@ pub extern "C" fn rblue_set_response_callback(
     let Some(handle) = handle_ref(handle) else {
         return RBLUE_REQUEST_NULL_HANDLE;
     };
-    handle.core.set_response_callback(callback, user_data);
+    handle
+        .core
+        .set_response_callback(callback, user_data, false);
     0
+}
+
+/// Registers a response callback that owns each nonempty payload.
+/// Release the original pointer and length with [`rblue_free_payload`].
+/// Returns 0 on success or [`RBLUE_REQUEST_NULL_HANDLE`] for a null handle.
+#[no_mangle]
+pub extern "C" fn rblue_set_owned_response_callback(
+    handle: RblueHandlePtr,
+    callback: Option<RblueResponseCallback>,
+    user_data: *mut c_void,
+) -> i32 {
+    let Some(handle) = handle_ref(handle) else {
+        return RBLUE_REQUEST_NULL_HANDLE;
+    };
+    handle.core.set_response_callback(callback, user_data, true);
+    0
+}
+
+/// Releases a payload delivered to an owned response callback. Null is a no-op.
+///
+/// # Safety
+/// Pass the original pointer and length, exactly once, from a callback
+/// registered with [`rblue_set_owned_response_callback`].
+#[no_mangle]
+pub unsafe extern "C" fn rblue_free_payload(payload: *const u8, len: usize) {
+    if !payload.is_null() {
+        let slice = std::ptr::slice_from_raw_parts_mut(payload.cast_mut(), len);
+        // SAFETY: the caller returns the exact allocation from Box::into_raw.
+        drop(unsafe { Box::from_raw(slice) });
+    }
 }
 
 /// Registers (or with a null `callback` clears) the event callback.

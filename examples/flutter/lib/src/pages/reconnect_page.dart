@@ -122,12 +122,6 @@ class _ReconnectPageState extends State<ReconnectPage> {
       key: const PageStorageKey('reconnect'),
       padding: const EdgeInsets.all(16),
       children: [
-        Text('复现断连，验证恢复。', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 12),
-        const Text(
-          '选择可连接设备并开始监听。将真实外设关闭再开启，观察退避、重试与服务重发现。此处不会注入虚构的 GATT 133 错误。',
-        ),
-        const SizedBox(height: 20),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -203,11 +197,10 @@ class _ReconnectPageState extends State<ReconnectPage> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        const Text(
-          '宿主层重连 · 500ms 起始退避，30s 上限，±20% jitter。重发现后旧特征实例失效；按新服务树匹配并恢复监听开始时的订阅。',
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text('500ms 起始退避 · 30s 上限 · ±20% jitter · 重连后重新发现服务'),
         ),
-        const SizedBox(height: 16),
         if (controller?.lastError != null)
           MaterialBannerTile(
             icon: Icons.error_outline,

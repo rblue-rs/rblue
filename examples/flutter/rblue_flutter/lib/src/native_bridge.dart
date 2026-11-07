@@ -109,7 +109,7 @@ class RealNativeBridge implements NativeBridge {
         ? null
         : _makeResponseCallable(onResponse);
     _eventCallable = onEvent == null ? null : _makeEventCallable(onEvent);
-    final responseCode = _bindings.rblueSetResponseCallback(
+    final responseCode = _bindings.rblueSetOwnedResponseCallback(
       handle,
       _responseCallable?.nativeFunction ?? ffi.nullptr,
       ffi.nullptr,
@@ -141,10 +141,14 @@ class RealNativeBridge implements NativeBridge {
       // Ownership contract: the callback copies and returns the string.
       _bindings.rblueFreeString(statusJson);
     }
-    final data = payloadLen == 0
-        ? Uint8List(0)
-        // Copy before returning: the borrow is only valid for the call.
-        : Uint8List.fromList(payload.asTypedList(payloadLen));
+    final Uint8List data;
+    try {
+      data = payloadLen == 0
+          ? Uint8List(0)
+          : Uint8List.fromList(payload.asTypedList(payloadLen));
+    } finally {
+      _bindings.rblueFreePayload(payload, payloadLen);
+    }
     onResponse(reqId, status, data);
   });
 

@@ -104,7 +104,7 @@ impl Recorder {
     /// starts the event pump).
     pub(crate) fn attach(core: &Core) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        core.set_response_callback(Some(on_response), leak_sender(tx.clone()));
+        core.set_response_callback(Some(on_response), leak_sender(tx.clone()), false);
         core.set_event_callback(Some(on_event), leak_sender(tx));
         Self {
             rx,

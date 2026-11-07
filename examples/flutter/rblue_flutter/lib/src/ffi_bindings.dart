@@ -32,6 +32,17 @@ class RblueFfiBindings {
   late final _rblueFree = _rblueFreePtr
       .asFunction<void Function(ffi.Pointer<RblueHandle>)>();
 
+  void rblueFreePayload(ffi.Pointer<ffi.Uint8> payload, int len) {
+    return _rblueFreePayload(payload, len);
+  }
+
+  late final _rblueFreePayloadPtr =
+      _lookup<
+        ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Uint8>, ffi.Size)>
+      >('rblue_free_payload');
+  late final _rblueFreePayload = _rblueFreePayloadPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Uint8>, int)>();
+
   /// Releases a string rblue-c handed to a callback (returns ownership).
   void rblueFreeString(ffi.Pointer<ffi.Char> string) {
     return _rblueFreeString(string);
@@ -135,6 +146,33 @@ class RblueFfiBindings {
         int Function(
           ffi.Pointer<RblueHandle>,
           rblue_event_cb,
+          ffi.Pointer<ffi.Void>,
+        )
+      >();
+
+  int rblueSetOwnedResponseCallback(
+    ffi.Pointer<RblueHandle> handle,
+    rblue_response_cb callback,
+    ffi.Pointer<ffi.Void> user_data,
+  ) {
+    return _rblueSetOwnedResponseCallback(handle, callback, user_data);
+  }
+
+  late final _rblueSetOwnedResponseCallbackPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(
+            ffi.Pointer<RblueHandle>,
+            rblue_response_cb,
+            ffi.Pointer<ffi.Void>,
+          )
+        >
+      >('rblue_set_owned_response_callback');
+  late final _rblueSetOwnedResponseCallback = _rblueSetOwnedResponseCallbackPtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<RblueHandle>,
+          rblue_response_cb,
           ffi.Pointer<ffi.Void>,
         )
       >();

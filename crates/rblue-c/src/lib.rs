@@ -36,7 +36,9 @@
 //!   re-enter the same handle synchronously from inside a callback.
 //! - Strings handed to callbacks are **owned by the callee**: copy them, then
 //!   release them with [`ffi::rblue_free_string`]. The `payload` byte slice is
-//!   instead a **transient borrow**, valid only until the callback returns.
+//!   a transient borrow by default. Async listeners must register with
+//!   [`ffi::rblue_set_owned_response_callback`] and free their payloads with
+//!   [`ffi::rblue_free_payload`].
 //! - `rblue_request` copies the method, params, and payload before returning,
 //!   so callers may free their buffers immediately.
 //! - [`ffi::rblue_free`] shuts the facade down deterministically: pump and
@@ -68,6 +70,7 @@ mod testing;
 
 pub use callbacks::{RblueEventCallback, RblueResponseCallback};
 pub use ffi::{
-    rblue_free, rblue_free_string, rblue_new, rblue_request, rblue_set_event_callback,
-    rblue_set_response_callback, RblueHandle,
+    rblue_free, rblue_free_payload, rblue_free_string, rblue_new, rblue_request,
+    rblue_set_event_callback, rblue_set_owned_response_callback, rblue_set_response_callback,
+    RblueHandle,
 };
