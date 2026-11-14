@@ -1,0 +1,17 @@
+[package]
+name = "rblue-mock"
+description = "In-memory mock BLE backend for rblue: scripted devices, controlled disconnects, injected ATT errors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+futures = { workspace = true }
+rblue-api = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

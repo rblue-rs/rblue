@@ -37,11 +37,10 @@ class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
             if (requestCode != REQUEST_CODE) {
                 false
             } else {
-                pendingPermissionResult?.success(
+                completePendingPermission(
                     grantResults.isNotEmpty() &&
                         grantResults.all { it == PackageManager.PERMISSION_GRANTED },
                 )
-                pendingPermissionResult = null
                 true
             }
         }
@@ -54,6 +53,7 @@ class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        completePendingPermission(false)
         channel?.setMethodCallHandler(null)
         channel = null
     }
@@ -64,6 +64,7 @@ class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        completePendingPermission(false)
         activity = null
     }
 
@@ -73,6 +74,7 @@ class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
     }
 
     override fun onDetachedFromActivity() {
+        completePendingPermission(false)
         activity = null
     }
 
@@ -93,6 +95,14 @@ class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
     }
 
     private fun requestBlePermissions(result: MethodChannel.Result) {
+        if (pendingPermissionResult != null) {
+            result.error(
+                "permission_request_in_progress",
+                "A Bluetooth permission request is already in progress.",
+                null,
+            )
+            return
+        }
         val activity = activity
         if (activity == null) {
             result.success(false)
@@ -116,6 +126,11 @@ class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
         }
         pendingPermissionResult = result
         ActivityCompat.requestPermissions(activity, missing.toTypedArray(), REQUEST_CODE)
+    }
+
+    private fun completePendingPermission(granted: Boolean) {
+        pendingPermissionResult?.success(granted)
+        pendingPermissionResult = null
     }
 
     companion object {

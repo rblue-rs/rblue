@@ -345,8 +345,10 @@ struct CoreState {
 /// The facade over one backend adapter: a private multi-thread tokio runtime
 /// plus the shared core. Constructed through `rblue_new`.
 pub(crate) struct Core {
-    /// `Some` until teardown; `Option` so `Drop` can move the state.
-    state: Option<Box<CoreState>>,
+    /// `Some` until teardown; `Option` so shutdown can move the state.
+    state: Mutex<Option<Box<CoreState>>>,
+    /// Final callback counts cached for idempotent shutdown calls.
+    shutdown_counts: Mutex<Option<(u64, u64)>>,
 }
 
 impl Core {
@@ -382,7 +384,8 @@ impl Core {
             .build()
             .expect("rblue-c facade runtime must start");
         Self {
-            state: Some(Box::new(CoreState { rt, inner })),
+            state: Mutex::new(Some(Box::new(CoreState { rt, inner }))),
+            shutdown_counts: Mutex::new(None),
         }
     }
 
@@ -395,8 +398,9 @@ impl Core {
     ) {
         let state = self
             .state
-            .as_ref()
-            .expect("facade state lives until teardown");
+            .lock()
+            .expect("facade state must not be poisoned");
+        let state = state.as_ref().expect("facade state lives until teardown");
         state
             .inner
             .callbacks
@@ -411,8 +415,9 @@ impl Core {
     ) {
         let state = self
             .state
-            .as_ref()
-            .expect("facade state lives until teardown");
+            .lock()
+            .expect("facade state must not be poisoned");
+        let state = state.as_ref().expect("facade state lives until teardown");
         // Host FFI threads do not have a Tokio reactor. The pump must belong
         // to this facade, even if registration happens inside another runtime.
         let _runtime = state.rt.enter();
@@ -424,35 +429,65 @@ impl Core {
     pub(crate) fn spawn_request(&self, req_id: u64, request: Request) {
         let state = self
             .state
-            .as_ref()
-            .expect("facade state lives until teardown");
+            .lock()
+            .expect("facade state must not be poisoned");
+        let state = state.as_ref().expect("facade state lives until teardown");
         let inner = Arc::clone(&state.inner);
         state.rt.spawn(async move {
             let outcome = dispatch::execute(&inner, request).await;
             inner.deliver_response(req_id, outcome);
         });
     }
+
+    /// Stops every native producer and returns the final delivered callback
+    /// counts. Repeated calls return the same counts.
+    pub(crate) fn shutdown(&self) -> (u64, u64) {
+        if let Some(counts) = *self
+            .shutdown_counts
+            .lock()
+            .expect("shutdown count state must not be poisoned")
+        {
+            return counts;
+        }
+        let state = self
+            .state
+            .lock()
+            .expect("facade state must not be poisoned")
+            .take();
+        let Some(state) = state else {
+            return self
+                .shutdown_counts
+                .lock()
+                .expect("shutdown count state must not be poisoned")
+                .unwrap_or_default();
+        };
+        state.inner.abort_pump();
+        let callbacks = Arc::clone(&state.inner.callbacks);
+        drop_runtime_state(state);
+        let counts = callbacks.delivered_counts();
+        *self
+            .shutdown_counts
+            .lock()
+            .expect("shutdown count state must not be poisoned") = Some(counts);
+        counts
+    }
+}
+
+fn drop_runtime_state(state: Box<CoreState>) {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        let shutdown = std::thread::Builder::new()
+            .name("rblue-c-shutdown".to_owned())
+            .spawn(move || drop(state))
+            .expect("shutdown helper thread must spawn");
+        let _ = shutdown.join();
+    } else {
+        drop(state);
+    }
 }
 
 impl Drop for Core {
     fn drop(&mut self) {
-        let Some(state) = self.state.take() else {
-            return;
-        };
-        // Stop the pump first, while the runtime is alive.
-        state.inner.abort_pump();
-        if tokio::runtime::Handle::try_current().is_ok() {
-            // A runtime must not be dropped inside an async context; hand
-            // the blocking shutdown wait to a helper thread and join it, so
-            // the no-callbacks-after-return guarantee holds either way.
-            let shutdown = std::thread::Builder::new()
-                .name("rblue-c-shutdown".to_owned())
-                .spawn(move || drop(state))
-                .expect("shutdown helper thread must spawn");
-            let _ = shutdown.join();
-        } else {
-            drop(state);
-        }
+        let _ = self.shutdown();
     }
 }
 

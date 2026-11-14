@@ -23,13 +23,27 @@ allprojects {
 
 plugins {
     id("com.android.library")
-    id("kotlin-android")
+}
+
+val agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION
+    .substringBefore('.')
+    .toInt()
+val builtInKotlin = providers.gradleProperty("android.builtInKotlin")
+    .orNull
+    ?.toBooleanStrictOrNull()
+    ?: (agpMajor >= 9)
+if (!builtInKotlin) {
+    pluginManager.apply("kotlin-android")
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
 }
 
 // Prebuilt rblue-c libraries are part of the published package. Their exact
 // source, build command, checksums, and license inventory are documented in
 // native/BUILDING.md and THIRD_PARTY_NOTICES.md.
-val rblueAbis = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+val rblueAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
 
 val checkRblueLibs by tasks.registering {
     doFirst {
@@ -55,16 +69,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
-    sourceSets {
-        getByName("main") {
-            java.srcDirs("src/main/kotlin", "src/main/java")
-        }
     }
 
     defaultConfig {

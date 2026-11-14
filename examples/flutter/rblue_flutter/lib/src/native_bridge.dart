@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'dart:io' show Platform;
@@ -36,37 +37,37 @@ abstract interface class NativeBridge {
     Uint8List payload,
   );
 
-  /// Frees the facade (`rblue_free`): no callback fires after this returns.
+  /// Starts deterministic shutdown. Native producers stop synchronously; any
+  /// queued ownership transfers drain before the listeners and handle release.
   void dispose(ffi.Pointer<RblueHandle> handle);
-
-  /// A `NativeFinalizer`-compatible function pointer freeing the handle, or
-  /// null when the bridge does not support one (tests).
-  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>?
-  get freeFinalizer;
 }
 
 /// Production bridge over the ffigen bindings.
 ///
 /// On Android the symbols live in the `librblue_c.so` the plugin's Kotlin side
 /// loaded via `System.loadLibrary`; `DynamicLibrary.open` attaches to the same
-/// library. On iOS the static library is force_load-ed into the Runner
-/// binary, so the symbols resolve through `DynamicLibrary.process()`.
+/// library. On Apple platforms the static library is linked into the Runner,
+/// so the symbols resolve through `DynamicLibrary.process()`. Windows ships a
+/// DLL beside the application executable.
 class RealNativeBridge implements NativeBridge {
-  final ffi.DynamicLibrary _lib;
   final RblueFfiBindings _bindings;
 
-  RealNativeBridge._(this._lib, this._bindings);
+  RealNativeBridge._(this._bindings);
 
-  static RealNativeBridge? _instance;
-
-  /// The process-wide bridge (the C facade owns a private runtime per handle;
-  /// only the symbol table is shared).
+  /// Opens the process library for one client bridge. The operating system
+  /// shares the loaded image, while callbacks remain scoped to this bridge and
+  /// cannot overwrite another [RblueClient]'s registrations.
   factory RealNativeBridge.instance() {
-    final existing = _instance;
-    if (existing != null) return existing;
     final lib = _openLibrary();
-    return _instance = RealNativeBridge._(lib, RblueFfiBindings(lib));
+    return RealNativeBridge._(RblueFfiBindings(lib));
   }
+
+  /// Creates a bridge over an explicitly loaded rblue-c library.
+  ///
+  /// Primarily useful for native integration tests and custom embedders that
+  /// manage the library location themselves.
+  factory RealNativeBridge.fromDynamicLibrary(ffi.DynamicLibrary library) =>
+      RealNativeBridge._(RblueFfiBindings(library));
 
   static ffi.DynamicLibrary _openLibrary() {
     if (Platform.isAndroid) {
@@ -75,19 +76,41 @@ class RealNativeBridge implements NativeBridge {
     if (Platform.isIOS || Platform.isMacOS) {
       return ffi.DynamicLibrary.process();
     }
+    if (Platform.isWindows) {
+      return ffi.DynamicLibrary.open('rblue_c.dll');
+    }
     throw UnsupportedError(
-      'rblue_flutter: ${Platform.operatingSystem} is not supported by this '
-      'example; the C ABI ships for Android and iOS only',
+      'rblue_flutter: ${Platform.operatingSystem} is not supported; '
+      'packaged targets are Android, iOS, macOS, and Windows',
     );
   }
 
-  late final ffi.Pointer<
-    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<RblueHandle>)>
-  >
-  _freePtr = _lib.lookup('rblue_free');
-
+  final _drained = Completer<void>();
+  bool _disposing = false;
+  bool _handleFreed = false;
+  int _processedResponses = 0;
+  int _processedEvents = 0;
+  int? _targetResponses;
+  int? _targetEvents;
+  ffi.Pointer<RblueHandle>? _disposingHandle;
   ffi.NativeCallable<rblue_response_cbFunction>? _responseCallable;
   ffi.NativeCallable<rblue_event_cbFunction>? _eventCallable;
+
+  /// Completes after native production stops, queued callbacks release their
+  /// ownership transfers, both listeners close, and the handle is freed.
+  Future<void> get drained => _drained.future;
+
+  /// Callback counts observed by Dart. Exposed for shutdown diagnostics/tests.
+  ({int responses, int events}) get processedCallbackCounts =>
+      (responses: _processedResponses, events: _processedEvents);
+
+  /// Final callback counts returned by `rblue_shutdown`, once disposal starts.
+  ({int responses, int events})? get targetCallbackCounts {
+    final responses = _targetResponses;
+    final events = _targetEvents;
+    if (responses == null || events == null) return null;
+    return (responses: responses, events: events);
+  }
 
   @override
   ffi.Pointer<RblueHandle>? create() {
@@ -101,10 +124,9 @@ class RealNativeBridge implements NativeBridge {
     void Function(int reqId, String? statusJson, Uint8List payload)? onResponse,
     void Function(String eventJson)? onEvent,
   }) {
-    // The callables must outlive the registration: they are kept in fields
-    // and closed only with dispose().
-    _responseCallable?.close();
-    _eventCallable?.close();
+    if (_responseCallable != null || _eventCallable != null) {
+      throw StateError('rblue_flutter: callbacks are already registered');
+    }
     _responseCallable = onResponse == null
         ? null
         : _makeResponseCallable(onResponse);
@@ -128,40 +150,61 @@ class RealNativeBridge implements NativeBridge {
 
   ffi.NativeCallable<rblue_response_cbFunction> _makeResponseCallable(
     void Function(int, String?, Uint8List) onResponse,
-  ) => ffi.NativeCallable<rblue_response_cbFunction>.listener((
-    int reqId,
-    ffi.Pointer<ffi.Char> statusJson,
-    ffi.Pointer<ffi.Uint8> payload,
-    int payloadLen,
-    ffi.Pointer<ffi.Void> userData,
   ) {
-    String? status;
-    if (statusJson != ffi.nullptr) {
-      status = statusJson.cast<Utf8>().toDartString();
-      // Ownership contract: the callback copies and returns the string.
-      _bindings.rblueFreeString(statusJson);
-    }
-    final Uint8List data;
-    try {
-      data = payloadLen == 0
-          ? Uint8List(0)
-          : Uint8List.fromList(payload.asTypedList(payloadLen));
-    } finally {
-      _bindings.rblueFreePayload(payload, payloadLen);
-    }
-    onResponse(reqId, status, data);
-  });
+    late final ffi.NativeCallable<rblue_response_cbFunction> callable;
+    callable = ffi.NativeCallable<rblue_response_cbFunction>.listener((
+      int reqId,
+      ffi.Pointer<ffi.Char> statusJson,
+      ffi.Pointer<ffi.Uint8> payload,
+      int payloadLen,
+      ffi.Pointer<ffi.Void> userData,
+    ) {
+      String? status;
+      if (statusJson != ffi.nullptr) {
+        status = statusJson.cast<Utf8>().toDartString();
+        _bindings.rblueFreeString(statusJson);
+      }
+      final Uint8List data;
+      try {
+        data = payloadLen == 0
+            ? Uint8List(0)
+            : Uint8List.fromList(payload.asTypedList(payloadLen));
+      } finally {
+        _bindings.rblueFreePayload(payload, payloadLen);
+      }
+      _processedResponses++;
+      if (!_disposing) {
+        onResponse(reqId, status, data);
+      } else if (_processedResponses >= _targetResponses!) {
+        callable.close();
+        _responseCallable = null;
+        _freeHandleWhenDrained();
+      }
+    });
+    return callable;
+  }
 
   ffi.NativeCallable<rblue_event_cbFunction> _makeEventCallable(
     void Function(String) onEvent,
-  ) => ffi.NativeCallable<rblue_event_cbFunction>.listener((
-    ffi.Pointer<ffi.Char> eventJson,
-    ffi.Pointer<ffi.Void> userData,
   ) {
-    final json = eventJson.cast<Utf8>().toDartString();
-    _bindings.rblueFreeString(eventJson);
-    onEvent(json);
-  });
+    late final ffi.NativeCallable<rblue_event_cbFunction> callable;
+    callable = ffi.NativeCallable<rblue_event_cbFunction>.listener((
+      ffi.Pointer<ffi.Char> eventJson,
+      ffi.Pointer<ffi.Void> userData,
+    ) {
+      final json = eventJson.cast<Utf8>().toDartString();
+      _bindings.rblueFreeString(eventJson);
+      _processedEvents++;
+      if (!_disposing) {
+        onEvent(json);
+      } else if (_processedEvents >= _targetEvents!) {
+        callable.close();
+        _eventCallable = null;
+        _freeHandleWhenDrained();
+      }
+    });
+    return callable;
+  }
 
   @override
   int send(
@@ -198,18 +241,43 @@ class RealNativeBridge implements NativeBridge {
 
   @override
   void dispose(ffi.Pointer<RblueHandle> handle) {
-    // The Rust contract guarantees that no callback can fire after
-    // rblue_free returns. Stop and join the native side before closing the
-    // cross-thread callables; doing this in the opposite order leaves a race
-    // where a worker calls a closed NativeCallable.
-    _bindings.rblueFree(handle);
-    _responseCallable?.close();
-    _eventCallable?.close();
-    _responseCallable = null;
-    _eventCallable = null;
+    if (_disposing) return;
+    _disposing = true;
+    _disposingHandle = handle;
+    final responseCount = calloc<ffi.Uint64>();
+    final eventCount = calloc<ffi.Uint64>();
+    try {
+      final code = _bindings.rblueShutdown(handle, responseCount, eventCount);
+      if (code != RBLUE_REQUEST_OK) {
+        throw StateError('rblue_flutter: native shutdown failed ($code)');
+      }
+      _targetResponses = responseCount.value;
+      _targetEvents = eventCount.value;
+    } finally {
+      calloc.free(responseCount);
+      calloc.free(eventCount);
+    }
+
+    if (_processedResponses >= _targetResponses!) {
+      _responseCallable?.close();
+      _responseCallable = null;
+    }
+    if (_processedEvents >= _targetEvents!) {
+      _eventCallable?.close();
+      _eventCallable = null;
+    }
+    _freeHandleWhenDrained();
   }
 
-  @override
-  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>?
-  get freeFinalizer => _freePtr.cast();
+  void _freeHandleWhenDrained() {
+    if (_handleFreed || _responseCallable != null || _eventCallable != null) {
+      return;
+    }
+    final handle = _disposingHandle;
+    if (handle == null) return;
+    _bindings.rblueFree(handle);
+    _disposingHandle = null;
+    _handleFreed = true;
+    if (!_drained.isCompleted) _drained.complete();
+  }
 }

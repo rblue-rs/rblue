@@ -1,17 +1,12 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/services.dart';
 
-/// The plugin's method channel: host-side setup the C ABI cannot do itself.
+/// The plugin's method channel for Android-only host setup.
 ///
-/// Android: the JNI bridge of the `rblue-android` backend requires a Java-side
-/// initialization before the first adapter operation. The plugin ships the
-/// Kotlin class `com.rblue.RblueNative` (its `external fun nativeInit()`
-/// resolves against `Java_com_rblue_RblueNative_nativeInit`, linked into
-/// `librblue_c.so`). The plugin calls it when the engine attaches and this
-/// channel re-asserts it before the first Dart FFI call - the engine may start
-/// Dart before `onAttachedToEngine` runs, so the client must not rely on the
-/// plugin-side call alone. The call is idempotent.
-///
-/// iOS: no initialization step exists; every call returns success.
+/// The Android backend requires Java-side JNI initialization before the first
+/// Dart FFI call and runtime BLE permission handling. Apple and Windows builds
+/// call the C ABI directly, so their setup and permission methods are no-ops.
 class RbluePluginChannel {
   /// The channel used for the initialization handshake and the Android BLE
   /// runtime-permission request.
@@ -21,22 +16,23 @@ class RbluePluginChannel {
 
   static final RbluePluginChannel instance = RbluePluginChannel._();
 
-  /// Runs the platform initialization; throws when it reports failure.
+  /// Runs the Android JNI initialization handshake.
   Future<void> initialize() async {
+    if (!Platform.isAndroid) return;
     final ok = await methodChannel.invokeMethod<bool>('initialize');
     if (ok != true) {
       throw StateError(
-        'rblue_flutter: platform initialization failed; on Android this means '
+        'rblue_flutter: Android JNI initialization failed; '
         'RblueNative.nativeInit() returned false - check logcat for the '
         'rblue-android error record',
       );
     }
   }
 
-  /// Requests the Android BLE runtime permissions (BLUETOOTH_SCAN/CONNECT on
-  /// API 31+, ACCESS_FINE_LOCATION on API 30 and below). Returns true when
-  /// every requested permission was granted; on iOS always true.
+  /// Requests Android BLE runtime permissions. Other native platforms grant
+  /// access through their operating-system Bluetooth flows.
   Future<bool> requestBlePermissions() async {
+    if (!Platform.isAndroid) return true;
     final granted = await methodChannel.invokeMethod<bool>(
       'requestBlePermissions',
     );

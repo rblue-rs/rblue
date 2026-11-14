@@ -24,34 +24,23 @@ typedef RawResponse = ({String? statusJson, Uint8List payload});
 ///   in [RblueException.platformCode].
 ///
 /// Lifecycle: create through [create] (which performs the Android-side JNI
-/// initialization), use, then [dispose]. A `NativeFinalizer` is the leak
-/// backstop, not a substitute for [dispose].
-class RblueClient implements ffi.Finalizable {
+/// initialization), use, then [dispose]. Native callback listeners keep this
+/// client reachable, so explicit disposal is required.
+class RblueClient {
   final NativeBridge _bridge;
   final ffi.Pointer<RblueHandle> _handle;
   final _pending = <int, Completer<RawResponse>>{};
   final _events = StreamController<AdapterEvent>.broadcast();
-  final ffi.NativeFinalizer? _finalizer;
   final _notifications = StreamController<DeviceNotification>.broadcast();
   var _nextReqId = 1;
   var _disposed = false;
 
-  RblueClient._(this._bridge, this._handle)
-    : _finalizer = _makeFinalizer(_bridge) {
+  RblueClient._(this._bridge, this._handle) {
     _bridge.registerCallbacks(
       _handle,
       onResponse: _onResponse,
       onEvent: _onEvent,
     );
-    // Leak backstop: if the embedder forgets dispose(), the GC eventually
-    // frees the native facade through rblue_free. Real bridge only.
-    _finalizer?.attach(this, _handle.cast(), detach: this);
-  }
-
-  /// Wraps the bridge's native free pointer, when it has one.
-  static ffi.NativeFinalizer? _makeFinalizer(NativeBridge bridge) {
-    final free = bridge.freeFinalizer;
-    return free == null ? null : ffi.NativeFinalizer(free);
   }
 
   /// Creates the client over [bridge], performing the platform
@@ -222,12 +211,12 @@ class RblueClient implements ffi.Finalizable {
     decode: (payload) => jsonDecode(utf8.decode(payload))! as bool,
   );
 
-  /// Shuts the facade down. After this returns, no callback can fire and all
-  /// client methods throw.
+  /// Stops native producers, fails pending requests, and closes the public
+  /// streams. Internal FFI callbacks may continue briefly only to release
+  /// already-queued native ownership transfers before the handle is freed.
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    _finalizer?.detach(this);
     for (final completer in _pending.values) {
       completer.completeError(
         RblueException.client('client disposed'),

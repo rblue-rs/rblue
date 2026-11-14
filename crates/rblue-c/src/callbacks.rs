@@ -9,6 +9,7 @@
 
 use std::ffi::CString;
 use std::os::raw::c_void;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 /// Response callback: one completed [`super::ffi::rblue_request`].
@@ -53,6 +54,8 @@ unsafe impl<F> Sync for Registered<F> {}
 pub(crate) struct Callbacks {
     response: Mutex<Option<(Registered<RblueResponseCallback>, bool)>>,
     event: Mutex<Option<Registered<RblueEventCallback>>>,
+    delivered_responses: AtomicU64,
+    delivered_events: AtomicU64,
 }
 
 impl Callbacks {
@@ -123,6 +126,10 @@ impl Callbacks {
         } else {
             split_payload(&payload)
         };
+        // Count before invoking the host. The native call returns only after an
+        // asynchronous listener has accepted the ownership transfer into its
+        // queue, so shutdown can use this as a precise drain target.
+        self.delivered_responses.fetch_add(1, Ordering::AcqRel);
         // SAFETY: `function` came from the embedder through
         // `rblue_set_response_callback`; `status_ptr` is either null or a
         // valid `CString::into_raw` allocation whose ownership the callee
@@ -139,11 +146,20 @@ impl Callbacks {
             return;
         };
         let event_ptr = event_json.into_raw();
+        self.delivered_events.fetch_add(1, Ordering::AcqRel);
         // SAFETY: `function` came from the embedder through
         // `rblue_set_event_callback`; `event_ptr` is a valid
         // `CString::into_raw` allocation whose ownership the callee takes
         // over.
         unsafe { function(event_ptr, user_data) };
+    }
+
+    /// Returns callback counts after all native producers have stopped.
+    pub(crate) fn delivered_counts(&self) -> (u64, u64) {
+        (
+            self.delivered_responses.load(Ordering::Acquire),
+            self.delivered_events.load(Ordering::Acquire),
+        )
     }
 
     fn lock_response(

@@ -1,11 +1,12 @@
-/// Local Flutter plugin for the rblue BLE example.
+/// Early experimental Flutter binding for the rblue BLE project.
 ///
-/// The plugin wraps the message-passing C ABI of `crates/rblue-c`:
-/// `RblueClient` turns `rblue_request` calls into typed Dart futures
-/// (req_id -> Completer) and the two C callbacks into broadcast streams.
+/// The package wraps the message-passing `rblue-c` ABI. [RblueClient] maps
+/// request IDs to Dart futures and exposes adapter events and notifications as
+/// broadcast streams. Native libraries for Android, iOS, macOS, and Windows
+/// are bundled in the package; see the README for the exact support matrix and
+/// known limitations.
 ///
-/// See the plugin README for the initialization discipline (the Android JNI
-/// step) and `../tools/build-libs.sh` for the prebuilt library workflow.
+/// This API is a development preview and may change before a stable release.
 library;
 
 export 'src/client.dart';

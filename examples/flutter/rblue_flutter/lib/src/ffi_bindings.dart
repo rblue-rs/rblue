@@ -19,8 +19,8 @@ class RblueFfiBindings {
     ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName) lookup,
   ) : _lookup = lookup;
 
-  /// Shuts the facade down and frees the handle. No callback fires after the
-  /// call returns. Null is a no-op.
+  /// Shuts down if needed and frees the handle. No native callback fires after
+  /// shutdown returns. Null is a no-op.
   void rblueFree(ffi.Pointer<RblueHandle> handle) {
     return _rblueFree(handle);
   }
@@ -203,6 +203,37 @@ class RblueFfiBindings {
           ffi.Pointer<RblueHandle>,
           rblue_response_cb,
           ffi.Pointer<ffi.Void>,
+        )
+      >();
+
+  /// Stops native callback production and writes the final number of response and
+  /// event callbacks accepted by the host. Output pointers may be NULL. The handle
+  /// remains allocated; call rblue_free after async callback queues reach these
+  /// counts. Repeated calls return the same values.
+  int rblueShutdown(
+    ffi.Pointer<RblueHandle> handle,
+    ffi.Pointer<ffi.Uint64> response_count,
+    ffi.Pointer<ffi.Uint64> event_count,
+  ) {
+    return _rblueShutdown(handle, response_count, event_count);
+  }
+
+  late final _rblueShutdownPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(
+            ffi.Pointer<RblueHandle>,
+            ffi.Pointer<ffi.Uint64>,
+            ffi.Pointer<ffi.Uint64>,
+          )
+        >
+      >('rblue_shutdown');
+  late final _rblueShutdown = _rblueShutdownPtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<RblueHandle>,
+          ffi.Pointer<ffi.Uint64>,
+          ffi.Pointer<ffi.Uint64>,
         )
       >();
 }

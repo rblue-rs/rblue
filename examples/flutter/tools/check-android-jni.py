@@ -10,7 +10,8 @@ import subprocess
 import sys
 
 repo = Path(__file__).resolve().parents[3]
-sources = repo / "bindings/kotlin/btleplug-java/src/main/java"
+package = repo / "examples/flutter/rblue_flutter"
+sources = package / "android/src/main/java"
 expected = {"com.rblue.RblueNative"}
 for source in sources.rglob("*.java"):
     package = re.search(r"^package\s+([\w.]+);", source.read_text(), re.MULTILINE)

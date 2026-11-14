@@ -1,0 +1,32 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.idea/
+*.iml
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins-dependencies
+.packages
+/build/
+/coverage/
+pubspec.lock
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/build/
+android/captures/
+android/.cxx/
+
+# iOS
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+ios/.symlinks/
+ios/Runner.xcworkspace/xcuserdata/
+ios/Runner.xcodeproj/xcuserdata/

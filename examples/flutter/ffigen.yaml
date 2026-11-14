@@ -11,7 +11,7 @@
 # The generated functions resolve symbols through `DynamicLibrary.process()`,
 # which works for the iOS static library but not for Android's
 # `librblue_c.so` (loaded via System.loadLibrary / DynamicLibrary.open). The
-# plugin therefore keeps the generated type definitions and resolves the seven
+# plugin therefore keeps the generated type definitions and resolves the nine
 # entry points itself in `rblue_flutter/lib/src/native_bridge.dart` using the
 # generated `NativeFunction` typedefs - see that file for the rationale.
 name: RblueFfiBindings
@@ -37,6 +37,7 @@ functions:
     rblue_free_payload: rblueFreePayload
     rblue_set_owned_response_callback: rblueSetOwnedResponseCallback
     rblue_request: rblueRequest
+    rblue_shutdown: rblueShutdown
     rblue_set_response_callback: rblueSetResponseCallback
     rblue_set_event_callback: rblueSetEventCallback
 sort: true

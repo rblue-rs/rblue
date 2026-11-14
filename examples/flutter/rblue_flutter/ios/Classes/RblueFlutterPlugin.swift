@@ -1,7 +1,7 @@
 import Flutter
 import UIKit
 
-/// iOS side of the example plugin.
+/// iOS side of the plugin.
 ///
 /// There is no iOS initialization step (the CoreBluetooth backend needs no
 /// JVM-side init), so `initialize` simply succeeds; the channel exists so the

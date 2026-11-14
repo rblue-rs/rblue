@@ -51,11 +51,11 @@ pub extern "C" fn rblue_new() -> RblueHandlePtr {
     }
 }
 
-/// Shuts the facade down and frees the handle: pump and forwarder tasks are
-/// aborted, the runtime is dropped, and no callback fires after the call
-/// returns. The handle is invalid afterwards; callers must not free it twice
-/// nor call any other function with it (a `NativeFinalizer` on the embedder
-/// side is the leak backstop, this explicit free is the discipline).
+/// Shuts the facade down if needed and frees the handle. Native pump and
+/// forwarder tasks stop before this returns. Async embedders should call
+/// [`rblue_shutdown`], drain the reported ownership transfers, and only then
+/// call this function. The handle is invalid afterwards; callers must not free
+/// it twice nor call any other function with it.
 ///
 /// # Safety
 ///
@@ -68,7 +68,41 @@ pub unsafe extern "C" fn rblue_free(handle: RblueHandlePtr) {
     }
     // SAFETY: the caller guarantees sole ownership of a live handle per the
     // `# Safety` contract; the box is reconstructed exactly once.
-    drop(Box::from_raw(handle));
+    let handle = unsafe { Box::from_raw(handle) };
+    let _ = handle.core.shutdown();
+    drop(handle);
+}
+
+/// Stops all callback producers and returns the final callback delivery counts.
+///
+/// The handle remains allocated so the embedder can drain asynchronous callback
+/// queues before calling [`rblue_free`]. Repeated calls return the same counts.
+/// Returns [`RBLUE_REQUEST_NULL_HANDLE`] for a null handle.
+///
+/// # Safety
+///
+/// `handle` must be a live handle and `response_count` / `event_count` must be
+/// null or writable pointers. No request or callback registration may race this
+/// call.
+#[no_mangle]
+pub unsafe extern "C" fn rblue_shutdown(
+    handle: RblueHandlePtr,
+    response_count: *mut u64,
+    event_count: *mut u64,
+) -> i32 {
+    let Some(handle) = handle_ref(handle) else {
+        return RBLUE_REQUEST_NULL_HANDLE;
+    };
+    let (responses, events) = handle.core.shutdown();
+    if !response_count.is_null() {
+        // SAFETY: the caller guarantees a writable output pointer.
+        unsafe { response_count.write(responses) };
+    }
+    if !event_count.is_null() {
+        // SAFETY: the caller guarantees a writable output pointer.
+        unsafe { event_count.write(events) };
+    }
+    0
 }
 
 /// Registers (or with a null `callback` clears) the response callback.
@@ -383,6 +417,31 @@ mod tests {
         // SAFETY: the string was handed to the recorder callback by this
         // library and has not been released yet.
         unsafe { rblue_free_string(owned.into_raw()) };
+        harness.free();
+    }
+
+    #[tokio::test]
+    async fn shutdown_reports_final_callback_counts_and_is_idempotent() {
+        let mut harness = Harness::new();
+        assert_eq!(harness.request(1, "backend_version", "{}"), 0);
+        let _ = harness.next_response().await;
+        let mut responses = 0;
+        let mut events = 0;
+        // SAFETY: the harness owns a live handle and both outputs are writable.
+        assert_eq!(
+            unsafe { rblue_shutdown(harness.handle, &mut responses, &mut events) },
+            0,
+        );
+        assert_eq!(responses, 1);
+        let first = (responses, events);
+        responses = 0;
+        events = 0;
+        // SAFETY: shutdown is idempotent and the handle remains allocated.
+        assert_eq!(
+            unsafe { rblue_shutdown(harness.handle, &mut responses, &mut events) },
+            0,
+        );
+        assert_eq!((responses, events), first);
         harness.free();
     }
 

@@ -1,29 +1,33 @@
-name: Flutter example
+name: Flutter package
 
-# examples/flutter: Rust cross-builds (rblue-c) + Flutter analyze/test/build.
-# The Android native example has its own workflow; this one covers the
-# Flutter plugin and app on both platforms.
-
+# Build and inspect the exact native artifacts distributed by rblue_flutter.
+# Physical-radio acceptance remains a separate manual/self-hosted concern.
 on:
   push:
     branches: [main]
-    paths:
-      - "examples/flutter/**"
-      - "crates/rblue-c/**"
-      - "bindings/c/**"
+    tags:
+      - "rblue_flutter-v[0-9]+.[0-9]+.[0-9]+*"
   pull_request:
     paths:
-      - "examples/flutter/**"
-      - "crates/rblue-c/**"
+      - ".github/workflows/example-flutter.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/rblue*/**"
       - "bindings/c/**"
+      - "examples/flutter/**"
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
   FLUTTER_VERSION: "3.47.9"
+  PACKAGE_DIR: examples/flutter/rblue_flutter
+  EXAMPLE_DIR: examples/flutter/rblue_flutter/example
 
 jobs:
   rust-tests:
-    name: rblue-c tests (host, mock backend)
+    name: rblue-c tests (mock backend)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,14 +36,99 @@ jobs:
       - run: cargo test -p rblue-c
       - run: cargo clippy -p rblue-c --all-targets --no-deps -- -D warnings
 
+  package:
+    name: Dart package and Pub score
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify committed native artifact checksums
+        run: python3 examples/flutter/tools/verify-native-artifacts.py
+      - name: Analyze and test package
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test
+      - name: Verify native callback queues drain before listener shutdown
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          cargo build --locked --manifest-path native/source/Cargo.toml \
+            -p rblue-c --no-default-features --features mock
+          RBLUE_C_TEST_LIBRARY="$PWD/native/source/target/debug/librblue_c.so" \
+            flutter test test/native_bridge_integration_test.dart
+      - name: Verify release tag and public package URLs
+        if: startsWith(github.ref, 'refs/tags/rblue_flutter-v')
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#rblue_flutter-v}"
+          package_version="$(awk '$1 == "version:" { print $2; exit }' pubspec.yaml)"
+          test "$tag_version" = "$package_version"
+          for url in \
+            https://github.com/rblue-rs/rblue \
+            https://github.com/rblue-rs/rblue/issues; do
+            curl --fail --head --location --retry 3 --max-time 90 "$url" >/dev/null
+          done
+      - name: Validate Pub archive
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: dart pub publish --dry-run
+      - name: Verify Pub points with pana 0.23.19
+        run: |
+          dart pub global activate pana 0.23.19
+          dart pub global run pana --source path "$PACKAGE_DIR" --json > pana.json
+          python3 - <<'PY'
+          import json
+          report = json.load(open("pana.json"))
+          scores = report["scores"]
+          granted = scores["grantedPoints"]
+          maximum = scores["maxPoints"]
+          print(f"pana score: {granted}/{maximum}")
+          if (granted, maximum) != (160, 160):
+              raise SystemExit("Expected a 160/160 pana score")
+          PY
+
+  android-minimum:
+    name: Android (Flutter 3.41.7 compatibility)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+      - name: Build against packaged Android libraries
+        working-directory: ${{ env.EXAMPLE_DIR }}
+        run: flutter build apk --debug
+      - name: Build a disposable AGP 9 built-in Kotlin consumer
+        run: |
+          package_copy="$(mktemp -d)/rblue_flutter"
+          mkdir -p "$package_copy"
+          tar --exclude='.dart_tool' --exclude='build' \
+            --exclude='example/.dart_tool' --exclude='example/build' \
+            --exclude='native/source/target' \
+            -C "$PACKAGE_DIR" -cf - . | tar -xf - -C "$package_copy"
+          python3 examples/flutter/tools/prepare-agp9-test.py "$package_copy"
+          (cd "$package_copy/example" && \
+            flutter build apk --debug --android-skip-build-dependency-validation)
+
   android:
-    name: Android (APK debug)
+    name: Android artifacts and release APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-java@v4
         with:
@@ -49,43 +138,127 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      # NDK comes with the hosted runner; point the cross linker at its clang
-      # wrappers exactly like tools/build-libs.sh does locally.
-      - name: Cross-build rblue-c (.so per ABI)
+      - name: Rebuild packaged Android C ABI
         run: examples/flutter/tools/build-libs.sh --android-only
-      - name: Verify generated Dart bindings are current
+      - name: Verify generated Dart bindings
         working-directory: examples/flutter
         run: |
           flutter pub get
           dart run ffigen --config ffigen.yaml
           git diff --exit-code -- rblue_flutter/lib/src/ffi_bindings.dart
-      - run: flutter analyze
-        working-directory: examples/flutter/rblue_flutter
-      - run: flutter test
-        working-directory: examples/flutter/rblue_flutter
-      - run: flutter analyze
-        working-directory: examples/flutter
-      - run: flutter test
-        working-directory: examples/flutter
-      - run: flutter build apk --debug
-        working-directory: examples/flutter
+      - name: Build debug and release APKs
+        working-directory: ${{ env.EXAMPLE_DIR }}
+        run: |
+          flutter build apk --debug
+          flutter build apk --release
+      - name: Verify packaged ABIs, exports, and JNI helpers
+        run: |
+          apk="$EXAMPLE_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          unzip -l "$apk" | grep 'lib/arm64-v8a/librblue_c.so'
+          unzip -l "$apk" | grep 'lib/armeabi-v7a/librblue_c.so'
+          unzip -l "$apk" | grep 'lib/x86_64/librblue_c.so'
+          for library in "$PACKAGE_DIR"/android/src/main/jniLibs/*/librblue_c.so; do
+            for symbol in rblue_new rblue_shutdown rblue_free rblue_request \
+              rblue_set_event_callback rblue_set_owned_response_callback \
+              rblue_set_response_callback rblue_free_string rblue_free_payload; do
+              llvm-nm -D --defined-only "$library" | grep -q " $symbol$"
+            done
+          done
+          python3 examples/flutter/tools/check-android-jni.py "$apk"
 
-  ios:
-    name: iOS (no codesign build)
+  apple:
+    name: Apple artifacts, CocoaPods, and SwiftPM
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - name: Cross-build rblue-c (staticlibs)
-        run: examples/flutter/tools/build-libs.sh --ios-only
-      - run: flutter analyze
-        working-directory: examples/flutter
-      - run: flutter build ios --no-codesign
-        working-directory: examples/flutter
+      - name: Rebuild packaged Apple C ABI and XCFrameworks
+        run: examples/flutter/tools/build-libs.sh --apple-only
+      - name: Validate package manifests and podspecs
+        run: |
+          ruby -c "$PACKAGE_DIR/ios/rblue_flutter.podspec"
+          ruby -c "$PACKAGE_DIR/macos/rblue_flutter.podspec"
+          pod ipc spec "$PACKAGE_DIR/ios/rblue_flutter.podspec" >/dev/null
+          pod ipc spec "$PACKAGE_DIR/macos/rblue_flutter.podspec" >/dev/null
+          plutil -lint \
+            "$PACKAGE_DIR/ios/Resources/PrivacyInfo.xcprivacy" \
+            "$PACKAGE_DIR/macos/Resources/PrivacyInfo.xcprivacy"
+          lipo -verify_arch arm64 \
+            "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"
+          lipo -verify_arch x86_64 \
+            "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"
+          for library in \
+            "$PACKAGE_DIR"/ios/rblue_flutter/RblueC.xcframework/*/librblue_c.a \
+            "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"; do
+            for symbol in rblue_new rblue_shutdown rblue_free rblue_request \
+              rblue_set_event_callback rblue_set_owned_response_callback \
+              rblue_set_response_callback rblue_free_string rblue_free_payload; do
+              nm -gU "$library" 2>/dev/null | grep -q " _${symbol}$"
+            done
+          done
+      - name: Build iOS through CocoaPods
+        working-directory: ${{ env.EXAMPLE_DIR }}
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter build ios --debug --no-codesign
+      - name: Build Apple examples through SwiftPM in a disposable copy
+        run: |
+          package_copy="$(mktemp -d)/rblue_flutter"
+          mkdir -p "$package_copy"
+          tar --exclude='.dart_tool' --exclude='build' \
+            --exclude='example/.dart_tool' --exclude='example/build' \
+            --exclude='native/source/target' \
+            -C "$PACKAGE_DIR" -cf - . | tar -xf - -C "$package_copy"
+          cd "$package_copy/example"
+          flutter clean
+          flutter config --enable-swift-package-manager
+          flutter build ios --simulator --debug --no-codesign
+          flutter build macos --debug
+          flutter build macos --release
+
+  windows:
+    name: Windows x64 DLL and Flutter runner
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Rebuild and verify packaged WinRT DLL
+        shell: pwsh
+        run: ./examples/flutter/tools/build-windows.ps1
+      - name: Build Windows debug and release runners
+        working-directory: ${{ env.EXAMPLE_DIR }}
+        run: |
+          flutter build windows --debug
+          flutter build windows --release
+      - name: Verify runtime DLL installation
+        shell: pwsh
+        run: |
+          $dlls = Get-ChildItem "$env:EXAMPLE_DIR/build/windows" -Recurse -Filter rblue_c.dll
+          if (-not $dlls) { throw "Flutter build did not install rblue_c.dll" }
+          $dlls | ForEach-Object { Write-Host $_.FullName }
+
+  publish:
+    name: Publish rblue_flutter to pub.dev
+    if: startsWith(github.ref, 'refs/tags/rblue_flutter-v')
+    needs: [rust-tests, package, android-minimum, android, apple, windows]
+    permissions:
+      id-token: write
+      contents: read
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: examples/flutter/rblue_flutter
+      environment: pub.dev

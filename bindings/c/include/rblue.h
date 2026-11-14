@@ -66,9 +66,12 @@
  * - The default response callback borrows `payload` only for the call.
  *   Async listeners must register with `rblue_set_owned_response_callback`.
  * - `rblue_request` copies all inputs before returning.
- * - `rblue_free` shuts down deterministically: no callback fires after it
- *   returns; the handle must not be used afterwards and must not be freed
- *   twice (a NativeFinalizer is the embedder's leak backstop only).
+ * - `rblue_shutdown` stops native callback production and reports the final
+ *   number of response and event ownership transfers. Async hosts must drain
+ *   those counts before closing callback listeners, then call `rblue_free`.
+ * - `rblue_free` shuts down if needed and frees the handle; no native callback
+ *   fires after shutdown returns. The handle must not be used afterwards or
+ *   freed twice. Explicit shutdown/free is required.
  * - Android: `Java_com_rblue_RblueNative_nativeInit` (linked into
  *   `librblue_c.so` from the rblue-android crate) must be called from the
  *   host before the first adapter operation; see the rblue_flutter plugin.
@@ -114,8 +117,18 @@ typedef void (*rblue_event_cb)(const char* event_json, void* user_data);
 RblueHandle* rblue_new(void);
 
 /**
- * Shuts the facade down and frees the handle. No callback fires after the
- * call returns. Null is a no-op.
+ * Stops native callback production and writes the final number of response and
+ * event callbacks accepted by the host. Output pointers may be NULL. The handle
+ * remains allocated; call rblue_free after async callback queues reach these
+ * counts. Repeated calls return the same values.
+ */
+int32_t rblue_shutdown(RblueHandle* handle,
+                       uint64_t* response_count,
+                       uint64_t* event_count);
+
+/**
+ * Shuts down if needed and frees the handle. No native callback fires after
+ * shutdown returns. Null is a no-op.
  */
 void rblue_free(RblueHandle* handle);
 

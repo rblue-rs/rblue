@@ -1,0 +1,13 @@
+flutter/ephemeral/
+
+# Visual Studio user-specific files.
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio build outputs and caches.
+x64/
+x86/
+*.[Cc]ache
+!*.[Cc]ache/

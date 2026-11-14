@@ -1,13 +1,20 @@
 name: rblue_flutter
 description: >-
-  Local Flutter plugin for the rblue example: a Dart client over the
-  message-passing rblue-c C ABI (ffigen bindings + prebuilt libraries).
-version: 0.1.0
-publish_to: none
+  Experimental Flutter BLE plugin backed by rblue's Rust C ABI for Android,
+  iOS, macOS, and Windows.
+version: 0.0.1-dev.2
+homepage: https://github.com/rblue-rs/rblue
+repository: https://github.com/rblue-rs/rblue
+issue_tracker: https://github.com/rblue-rs/rblue/issues
+topics:
+  - bluetooth
+  - ble
+  - ffi
+  - rust
 
 environment:
   sdk: ^3.11.5
-  flutter: '>=3.3.0'
+  flutter: ">=3.41.7"
 
 dependencies:
   ffi: ^2.1.0
@@ -27,3 +34,7 @@ flutter:
         pluginClass: RblueFlutterPlugin
       ios:
         pluginClass: RblueFlutterPlugin
+      macos:
+        pluginClass: RblueFlutterPlugin
+      windows:
+        ffiPlugin: true

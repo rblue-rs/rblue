@@ -1,0 +1,43 @@
+# Dart and Flutter generated state
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+build/
+coverage/
+pubspec.lock
+
+# IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Generated example state; keep example source and platform runners
+example/.dart_tool/
+example/.flutter-plugins
+example/.flutter-plugins-dependencies
+example/.packages
+example/.pub/
+example/build/
+example/pubspec.lock
+example/android/.gradle/
+example/android/local.properties
+example/ios/Flutter/ephemeral/
+example/ios/Podfile.lock
+example/macos/Flutter/ephemeral/
+example/macos/Podfile.lock
+example/macos/Flutter/GeneratedPluginRegistrant.swift
+example/windows/flutter/ephemeral/
+example/windows/flutter/generated_plugin_registrant.cc
+example/windows/flutter/generated_plugin_registrant.h
+example/windows/flutter/generated_plugins.cmake
+
+# Native build caches; packaged release artifacts under android/src/main/jniLibs,
+# ios/, macos/, and windows/x64 are intentionally not ignored.
+native/source/target/
+ios/Libs/
+macos/Libs/
+**/.build/
+**/.swiftpm/

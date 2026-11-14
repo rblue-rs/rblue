@@ -1,0 +1,20 @@
+The packaged 64-bit MSVC DLL is:
+
+    windows/x64/rblue_c.dll
+
+It was built from the self-contained Rust snapshot under `native/source`:
+
+    cargo build --locked --release \
+      --manifest-path native/source/crates/rblue-c/Cargo.toml \
+      --target x86_64-pc-windows-msvc \
+      --no-default-features --features winrt
+
+On macOS or Linux, use the same command through `cargo xwin build`.
+
+Published SHA-256:
+
+    906b8765a302472a98764c200d63413b72a3b51e2ce2eaad35f743a9abde7421
+
+The plugin CMake configuration validates that the DLL exists, has the exact
+runtime name expected by Dart, and is being consumed by an x64 MSVC Flutter
+build. Flutter installs it beside the runner executable.

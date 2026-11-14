@@ -88,10 +88,6 @@ class FakeNativeBridge implements NativeBridge {
     registrations = 0;
   }
 
-  @override
-  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>?
-  get freeFinalizer => null;
-
   /// Completes one request with a success payload; asserts it was sent.
   void respondTo(int reqId, [List<int> payload = const []]) {
     assert(

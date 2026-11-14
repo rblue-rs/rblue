@@ -1,0 +1,22 @@
+PODS:
+  - FlutterMacOS (1.0.0)
+  - rblue_flutter (0.0.1-dev.2):
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - FlutterMacOS (from `Flutter/ephemeral`)
+  - rblue_flutter (from `Flutter/ephemeral/.symlinks/plugins/rblue_flutter/macos`)
+
+EXTERNAL SOURCES:
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+  rblue_flutter:
+    :path: Flutter/ephemeral/.symlinks/plugins/rblue_flutter/macos
+
+SPEC CHECKSUMS:
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
+  rblue_flutter: 206004bcced5fe871052a8457b4ce022f947b7b5
+
+PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
+
+COCOAPODS: 1.16.2

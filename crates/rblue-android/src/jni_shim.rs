@@ -9,7 +9,7 @@
 //! ```kotlin
 //! // package com.rblue — must match the mangled symbol below
 //! object RblueNative {
-//!     init { System.loadLibrary("rblue_ffi") }
+//!     init { System.loadLibrary("rblue_c") }
 //!     external fun nativeInit(): Boolean
 //! }
 //! ```

@@ -41,11 +41,11 @@
 //!   [`ffi::rblue_free_payload`].
 //! - `rblue_request` copies the method, params, and payload before returning,
 //!   so callers may free their buffers immediately.
-//! - [`ffi::rblue_free`] shuts the facade down deterministically: pump and
-//!   forwarder tasks are aborted, the runtime is dropped, and no callback
-//!   fires after it returns. The handle must not be used afterwards; a
-//!   `NativeFinalizer` on the embedder side is the leak backstop, the
-//!   explicit free is the discipline.
+//! - [`ffi::rblue_shutdown`] stops every native callback producer and reports
+//!   the final delivery counts, allowing asynchronous embedders to drain their
+//!   callback queues before [`ffi::rblue_free`] releases the handle. Explicit
+//!   shutdown and free are required; an async callback closure may keep the
+//!   client reachable, so a finalizer cannot replace this discipline.
 //!
 //! ## Android initialization
 //!
@@ -72,5 +72,5 @@ pub use callbacks::{RblueEventCallback, RblueResponseCallback};
 pub use ffi::{
     rblue_free, rblue_free_payload, rblue_free_string, rblue_new, rblue_request,
     rblue_set_event_callback, rblue_set_owned_response_callback, rblue_set_response_callback,
-    RblueHandle,
+    rblue_shutdown, RblueHandle,
 };
