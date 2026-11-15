@@ -132,8 +132,10 @@ build_abi() {
 }
 
 # Fail if the JNI init entry is missing from a real-backend .so, and dump
-# both the dynamic and the full symbol table so a false-negative `nm -D`
-# (seen on some aarch64 ELFs) is visible in CI logs.
+# the captured symbol table on miss. Capture nm output first: this script
+# runs under `set -o pipefail`, and `grep -q` closes the pipe early, which
+# makes llvm-nm exit 141 (SIGPIPE) when the symbol appears near the start
+# of the table (observed on aarch64 in CI even though the export was present).
 check_jni_export() {
   local so="$1"
   local symbol="Java_com_rblue_RblueNative_nativeInit"
@@ -141,20 +143,26 @@ check_jni_export() {
     echo "error: expected $so after the real backend build" >&2
     return 1
   fi
-  if "$NM" -D --defined-only "$so" | grep -q "$symbol"; then
+  local nm_dyn=""
+  nm_dyn="$("$NM" -D --defined-only "$so" 2>&1)" || true
+  if grep -F -q -- "$symbol" <<<"$nm_dyn"; then
     echo "    $symbol exported by ${so#"$ROOT"/}"
     return 0
   fi
   echo "error: $symbol is not exported by $so" >&2
   echo "       (the AAR would fail at RblueAndroid.initialize; see crates/rblue-android/src/jni_shim.rs)" >&2
   echo "       llvm-nm -D --defined-only:" >&2
-  "$NM" -D --defined-only "$so" >&2 || true
+  printf '%s\n' "$nm_dyn" >&2
   echo "       llvm-nm --defined-only (grep $symbol / T):" >&2
-  "$NM" --defined-only "$so" | grep -E "$symbol|[[:space:]]T[[:space:]]" | head -n 80 >&2 || true
+  local nm_all=""
+  nm_all="$("$NM" --defined-only "$so" 2>&1)" || true
+  printf '%s\n' "$nm_all" | grep -E "$symbol|[[:space:]]T[[:space:]]" | head -n 80 >&2 || true
   local readelf="${NM%llvm-nm}llvm-readelf"
   if [[ -x "$readelf" ]]; then
     echo "       llvm-readelf --dyn-syms (grep $symbol):" >&2
-    "$readelf" --dyn-syms "$so" | grep -E "$symbol|File:|Symbol table" >&2 || true
+    local re_out=""
+    re_out="$("$readelf" --dyn-syms "$so" 2>&1)" || true
+    printf '%s\n' "$re_out" | grep -E "$symbol|File:|Symbol table" >&2 || true
   fi
   return 1
 }
