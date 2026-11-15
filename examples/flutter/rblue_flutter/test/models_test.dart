@@ -76,28 +76,26 @@ void main() {
 
   group('AdapterEvent', () {
     test('decodes every variant of the rblue-c envelope', () {
-      final discovered =
-          AdapterEvent.fromJson(const {
-                'device_discovered': {
-                  'id': {
-                    'mac': [
-                      [2, 0, 0, 0, 0, 1],
-                      'random_static',
-                    ],
-                  },
-                  'advertisement': {
-                    'local_name': 'sensor',
-                    'services': ['00000000-0000-0000-0000-00000000180f'],
-                    'service_data': [],
-                    'manufacturer_data': null,
-                    'tx_power': null,
-                    'adv_flags': null,
-                    'rssi': -40,
-                    'is_connectable': true,
-                  },
-                },
-              })
-              as AdapterDeviceDiscovered;
+      final discovered = AdapterEvent.fromJson(const {
+        'device_discovered': {
+          'id': {
+            'mac': [
+              [2, 0, 0, 0, 0, 1],
+              'random_static',
+            ],
+          },
+          'advertisement': {
+            'local_name': 'sensor',
+            'services': ['00000000-0000-0000-0000-00000000180f'],
+            'service_data': [],
+            'manufacturer_data': null,
+            'tx_power': null,
+            'adv_flags': null,
+            'rssi': -40,
+            'is_connectable': true,
+          },
+        },
+      }) as AdapterDeviceDiscovered;
       expect(discovered.device.advertisement.localName, 'sensor');
       expect(
         discovered.device.advertisement.services.single,
@@ -134,18 +132,14 @@ void main() {
       expect(drop.reason!.platformCode, 133);
       expect(drop.reason!.display, 'platform 133');
 
-      final connected =
-          AdapterEvent.fromJson(const {
-                'device_connected': {
-                  'uuid': '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f',
-                },
-              })
-              as AdapterDeviceConnected;
+      final connected = AdapterEvent.fromJson(const {
+        'device_connected': {'uuid': '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f'},
+      }) as AdapterDeviceConnected;
       expect(connected.id.display, '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f');
 
-      final stateChanged =
-          AdapterEvent.fromJson(const {'state_changed': 'powered_on'})
-              as AdapterStateChanged;
+      final stateChanged = AdapterEvent.fromJson(const {
+        'state_changed': 'powered_on',
+      }) as AdapterStateChanged;
       expect(stateChanged.state, AdapterState.poweredOn);
     });
   });

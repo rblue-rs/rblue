@@ -191,6 +191,15 @@ pub mod bluez {
 #[cfg(feature = "android")]
 pub mod android {
     pub use rblue_android::{backend_version, default_adapter};
+
+    /// Forces the JNI `nativeInit` export into consuming cdylibs.
+    ///
+    /// Rust never calls this entry point, so the linker would otherwise drop it.
+    #[cfg(target_os = "android")]
+    #[doc(hidden)]
+    pub fn keep_jni_native_init() {
+        rblue_android::keep_jni_native_init();
+    }
 }
 
 /// Web Bluetooth backend (feature `web`, `target_arch = "wasm32"`).

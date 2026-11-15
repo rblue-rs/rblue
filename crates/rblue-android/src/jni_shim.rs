@@ -41,3 +41,10 @@ pub extern "system" fn Java_com_rblue_RblueNative_nativeInit<'caller>(
         .resolve::<LogErrorAndDefault>();
     ok
 }
+
+/// Referenced from consuming cdylibs so the linker retains [`Java_com_rblue_RblueNative_nativeInit`].
+#[used]
+pub(crate) static KEEP_JNI_NATIVE_INIT: for<'caller> extern "system" fn(
+    EnvUnowned<'caller>,
+    JClass<'caller>,
+) -> jboolean = Java_com_rblue_RblueNative_nativeInit;

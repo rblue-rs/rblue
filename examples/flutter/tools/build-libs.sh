@@ -179,8 +179,8 @@ if [[ "$BUILD_MACOS" == 1 ]]; then
     -library "$PLUGIN_MACOS_LIBS/macos/librblue_c.a" -headers "$NATIVE_HEADERS" \
     -output "$PLUGIN_MACOS_XCFRAMEWORK" >/dev/null
   stage_apple_headers macos "$PLUGIN_MACOS_XCFRAMEWORK"
-  lipo -verify_arch arm64 "$PLUGIN_MACOS_LIBS/macos/librblue_c.a"
-  lipo -verify_arch x86_64 "$PLUGIN_MACOS_LIBS/macos/librblue_c.a"
+  lipo "$PLUGIN_MACOS_LIBS/macos/librblue_c.a" -verify_arch arm64
+  lipo "$PLUGIN_MACOS_LIBS/macos/librblue_c.a" -verify_arch x86_64
   echo "   macOS arm64/x86_64 universal library and XCFramework staged"
 fi
 

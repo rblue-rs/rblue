@@ -74,3 +74,9 @@ pub use ffi::{
     rblue_set_event_callback, rblue_set_owned_response_callback, rblue_set_response_callback,
     rblue_shutdown, RblueHandle,
 };
+
+/// Keep the Android JNI `nativeInit` export in the final cdylib. Rust never
+/// calls it, so the linker would otherwise drop the symbol from rblue-android.
+#[cfg(all(feature = "android", target_os = "android"))]
+#[used]
+static KEEP_JNI_NATIVE_INIT: fn() = rblue::platform::android::keep_jni_native_init;

@@ -52,6 +52,7 @@ jobs:
       - name: Analyze and test package
         working-directory: ${{ env.PACKAGE_DIR }}
         run: |
+          flutter pub get
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
@@ -120,6 +121,15 @@ jobs:
           python3 examples/flutter/tools/prepare-agp9-test.py "$package_copy"
           (cd "$package_copy/example" && \
             flutter build apk --debug --android-skip-build-dependency-validation)
+      - name: Upload Flutter 3.41.7 logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-minimum-logs
+          path: |
+            ${{ env.EXAMPLE_DIR }}/build
+          if-no-files-found: ignore
+          retention-days: 7
 
   android:
     name: Android artifacts and release APK
@@ -140,16 +150,21 @@ jobs:
           cache: true
       - name: Rebuild packaged Android C ABI
         run: examples/flutter/tools/build-libs.sh --android-only
+      - name: Free Rust target directory after staging JNI libraries
+        run: rm -rf target
       - name: Verify generated Dart bindings
         working-directory: examples/flutter
         run: |
           flutter pub get
           dart run ffigen --config ffigen.yaml
+          dart format rblue_flutter/lib/src/ffi_bindings.dart
           git diff --exit-code -- rblue_flutter/lib/src/ffi_bindings.dart
       - name: Build debug and release APKs
         working-directory: ${{ env.EXAMPLE_DIR }}
         run: |
           flutter build apk --debug
+          rm -rf build/app/intermediates build/app/tmp
+          rm -f build/app/outputs/flutter-apk/app-debug.apk
           flutter build apk --release
       - name: Verify packaged ABIs, exports, and JNI helpers
         run: |
@@ -190,10 +205,10 @@ jobs:
           plutil -lint \
             "$PACKAGE_DIR/ios/Resources/PrivacyInfo.xcprivacy" \
             "$PACKAGE_DIR/macos/Resources/PrivacyInfo.xcprivacy"
-          lipo -verify_arch arm64 \
-            "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"
-          lipo -verify_arch x86_64 \
-            "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"
+          lipo "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a" \
+            -verify_arch arm64
+          lipo "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a" \
+            -verify_arch x86_64
           for library in \
             "$PACKAGE_DIR"/ios/rblue_flutter/RblueC.xcframework/*/librblue_c.a \
             "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"; do

@@ -115,6 +115,15 @@ pub fn init(env: &mut jni::Env<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Forces the JNI `nativeInit` export into consuming cdylibs.
+///
+/// Rust never calls this entry point, so the linker would otherwise drop it
+/// when linking `librblue_ffi.so` or `librblue_c.so`.
+#[cfg(target_os = "android")]
+pub fn keep_jni_native_init() {
+    let _ = jni_shim::KEEP_JNI_NATIVE_INIT;
+}
+
 /// Returns the system-default Android central wrapped in the unified
 /// [`Adapter`] trait.
 ///
