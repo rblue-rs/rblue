@@ -192,13 +192,22 @@ pub mod bluez {
 pub mod android {
     pub use rblue_android::{backend_version, default_adapter};
 
-    /// Forces the JNI `nativeInit` export into consuming cdylibs.
+    /// JNI trampoline for `com.rblue.RblueNative.nativeInit()`.
     ///
-    /// Rust never calls this entry point, so the linker would otherwise drop it.
+    /// Consuming cdylibs define the `#[no_mangle]` symbol and call this so
+    /// rustc exports it from the shared library.
+    ///
+    /// # Safety
+    ///
+    /// `env` must be a valid `JNIEnv*` for the current thread's JNI attachment.
+    /// `class` is the JNI class argument and is unused.
     #[cfg(target_os = "android")]
     #[doc(hidden)]
-    pub fn keep_jni_native_init() {
-        rblue_android::keep_jni_native_init();
+    pub unsafe fn jni_native_init(
+        env: *mut std::ffi::c_void,
+        class: *mut std::ffi::c_void,
+    ) -> bool {
+        unsafe { rblue_android::native_init_from_raw(env, class) }
     }
 }
 

@@ -50,12 +50,12 @@
 //! ## Android initialization
 //!
 //! The Android backend's JNI bridge requires a Java-side init before the
-//! first adapter call. The exported symbol
-//! `Java_com_rblue_RblueNative_nativeInit` (`rblue-android` crate, linked
-//! into `librblue_c.so`) must be called from the host: on Android the
-//! `rblue_flutter` plugin declares the Kotlin class `com.rblue.RblueNative`
-//! and invokes it when the plugin attaches (see the plugin README). There is
-//! no such step on iOS.
+//! first adapter call. This crate exports
+//! `Java_com_rblue_RblueNative_nativeInit` from `librblue_c.so` (the
+//! implementation lives in `rblue-android`) and the host must call it: on
+//! Android the `rblue_flutter` plugin declares the Kotlin class
+//! `com.rblue.RblueNative` and invokes it when the plugin attaches (see the
+//! plugin README). There is no such step on iOS.
 
 #![warn(missing_docs)]
 
@@ -75,8 +75,15 @@ pub use ffi::{
     rblue_shutdown, RblueHandle, RBLUE_REQUEST_INVALID_STRING, RBLUE_REQUEST_NULL_HANDLE,
 };
 
-/// Keep the Android JNI `nativeInit` export in the final cdylib. Rust never
-/// calls it, so the linker would otherwise drop the symbol from rblue-android.
+/// JNI entry: `com.rblue.RblueNative.nativeInit()`.
+///
+/// Defined in this cdylib so rustc includes the symbol in the `librblue_c.so`
+/// export list. The implementation lives in `rblue-android`.
 #[cfg(all(feature = "android", target_os = "android"))]
-#[used]
-static KEEP_JNI_NATIVE_INIT: fn() = rblue::platform::android::keep_jni_native_init;
+#[no_mangle]
+pub extern "system" fn Java_com_rblue_RblueNative_nativeInit(
+    env: *mut std::ffi::c_void,
+    class: *mut std::ffi::c_void,
+) -> bool {
+    unsafe { rblue::platform::android::jni_native_init(env, class) }
+}

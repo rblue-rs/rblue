@@ -115,13 +115,21 @@ pub fn init(env: &mut jni::Env<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Forces the JNI `nativeInit` export into consuming cdylibs.
+/// JNI trampoline for `com.rblue.RblueNative.nativeInit()`.
 ///
-/// Rust never calls this entry point, so the linker would otherwise drop it
-/// when linking `librblue_ffi.so` or `librblue_c.so`.
+/// Consuming cdylibs (`rblue-ffi`, `rblue-c`) define the `#[no_mangle]`
+/// symbol and call this so rustc exports it from the shared library.
+///
+/// # Safety
+///
+/// `env` must be a valid `JNIEnv*` for the current thread's JNI attachment.
+/// `class` is the JNI class argument and is unused.
 #[cfg(target_os = "android")]
-pub fn keep_jni_native_init() {
-    let _ = jni_shim::KEEP_JNI_NATIVE_INIT;
+pub unsafe fn native_init_from_raw(
+    env: *mut std::ffi::c_void,
+    class: *mut std::ffi::c_void,
+) -> bool {
+    unsafe { jni_shim::native_init_from_raw(env, class) }
 }
 
 /// Returns the system-default Android central wrapped in the unified

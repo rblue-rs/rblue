@@ -88,8 +88,15 @@ pub use facade::{EventSink, Rblue};
 #[cfg(not(target_arch = "wasm32"))]
 uniffi::setup_scaffolding!();
 
-/// Keep the Android JNI `nativeInit` export in the final cdylib. Rust never
-/// calls it, so the linker would otherwise drop the symbol from rblue-android.
+/// JNI entry: `com.rblue.RblueNative.nativeInit()`.
+///
+/// Defined in this cdylib so rustc includes the symbol in the
+/// `librblue_ffi.so` export list. The implementation lives in `rblue-android`.
 #[cfg(all(feature = "android", target_os = "android"))]
-#[used]
-static KEEP_JNI_NATIVE_INIT: fn() = rblue::platform::android::keep_jni_native_init;
+#[no_mangle]
+pub extern "system" fn Java_com_rblue_RblueNative_nativeInit(
+    env: *mut std::ffi::c_void,
+    class: *mut std::ffi::c_void,
+) -> bool {
+    unsafe { rblue::platform::android::jni_native_init(env, class) }
+}

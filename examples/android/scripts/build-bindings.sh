@@ -130,15 +130,26 @@ if [[ "$MODE" == "all" || "$MODE" == "mock" ]]; then
   for abi in "${MOCK_ABIS[@]}"; do build_abi "$abi" mock; done
 fi
 
-# --- Sanity check: the JNI init entry must be in the real .so ----------------
-REAL_SO="$RBLUE_MODULE/src/real/jniLibs/arm64-v8a/librblue_ffi.so"
-if [[ -f "$REAL_SO" && -x "$NM" ]]; then
-  if ! "$NM" -D "$REAL_SO" | grep -q "Java_com_rblue_RblueNative_nativeInit"; then
-    echo "error: Java_com_rblue_RblueNative_nativeInit is not exported by $REAL_SO" >&2
-    echo "       (the AAR would fail at RblueAndroid.initialize; see crates/rblue-android/src/jni_shim.rs)" >&2
+# --- Sanity check: the JNI init entry must be in every real .so -------------
+if [[ "$MODE" == "all" || "$MODE" == "real" ]] && [[ -x "$NM" ]]; then
+  missing=0
+  for abi in "${REAL_ABIS[@]}"; do
+    real_so="$RBLUE_MODULE/src/real/jniLibs/$abi/librblue_ffi.so"
+    if [[ ! -f "$real_so" ]]; then
+      echo "error: expected $real_so after the real backend build" >&2
+      missing=1
+      continue
+    fi
+    if ! "$NM" -D "$real_so" | grep -q "Java_com_rblue_RblueNative_nativeInit"; then
+      echo "error: Java_com_rblue_RblueNative_nativeInit is not exported by $real_so" >&2
+      echo "       (the AAR would fail at RblueAndroid.initialize; see crates/rblue-android/src/jni_shim.rs)" >&2
+      missing=1
+    fi
+  done
+  if [[ "$missing" -ne 0 ]]; then
     exit 1
   fi
-  echo "==> JNI init symbol present in librblue_ffi.so"
+  echo "==> JNI init symbol present in every real librblue_ffi.so"
 fi
 
 # --- UniFFI Kotlin bindings ---------------------------------------------------
