@@ -5,6 +5,11 @@
 //! best-effort string normalization (ATT codes re-extracted from messages).
 //! See `docs/error-mapping.md` for the full table.
 
+#![cfg_attr(
+    not(any(target_os = "macos", target_os = "ios")),
+    allow(dead_code, unused_imports)
+)]
+
 use btleplug::api::{CentralState, CharPropFlags, PeripheralProperties};
 use rblue_api::error::{AttError, Error, PermissionReason};
 use rblue_api::event::AdapterState;

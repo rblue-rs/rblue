@@ -10,7 +10,7 @@
 //!
 //! One facade handle per client, one request entry point, two callbacks:
 //!
-//! - [`rblue_request`](ffi::rblue_request) dispatches `method` + JSON params
+//! - [`rblue_request`] dispatches `method` + JSON params
 //!   (+ optional binary payload) and resolves asynchronously through the
 //!   registered response callback, correlated by the caller-chosen `req_id`.
 //! - The response callback receives `req_id`, a `status_json` string (null on
@@ -35,15 +35,15 @@
 //!   `NativeCallable.listener`, never `isolateLocal`), and must not
 //!   re-enter the same handle synchronously from inside a callback.
 //! - Strings handed to callbacks are **owned by the callee**: copy them, then
-//!   release them with [`ffi::rblue_free_string`]. The `payload` byte slice is
+//!   release them with [`rblue_free_string`]. The `payload` byte slice is
 //!   a transient borrow by default. Async listeners must register with
-//!   [`ffi::rblue_set_owned_response_callback`] and free their payloads with
-//!   [`ffi::rblue_free_payload`].
+//!   [`rblue_set_owned_response_callback`] and free their payloads with
+//!   [`rblue_free_payload`].
 //! - `rblue_request` copies the method, params, and payload before returning,
 //!   so callers may free their buffers immediately.
-//! - [`ffi::rblue_shutdown`] stops every native callback producer and reports
+//! - [`rblue_shutdown`] stops every native callback producer and reports
 //!   the final delivery counts, allowing asynchronous embedders to drain their
-//!   callback queues before [`ffi::rblue_free`] releases the handle. Explicit
+//!   callback queues before [`rblue_free`] releases the handle. Explicit
 //!   shutdown and free are required; an async callback closure may keep the
 //!   client reachable, so a finalizer cannot replace this discipline.
 //!
@@ -72,7 +72,7 @@ pub use callbacks::{RblueEventCallback, RblueResponseCallback};
 pub use ffi::{
     rblue_free, rblue_free_payload, rblue_free_string, rblue_new, rblue_request,
     rblue_set_event_callback, rblue_set_owned_response_callback, rblue_set_response_callback,
-    rblue_shutdown, RblueHandle,
+    rblue_shutdown, RblueHandle, RBLUE_REQUEST_INVALID_STRING, RBLUE_REQUEST_NULL_HANDLE,
 };
 
 /// Keep the Android JNI `nativeInit` export in the final cdylib. Rust never
