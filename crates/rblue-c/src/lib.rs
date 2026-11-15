@@ -87,3 +87,13 @@ pub extern "system" fn Java_com_rblue_RblueNative_nativeInit(
 ) -> bool {
     unsafe { rblue::platform::android::jni_native_init(env, class) }
 }
+
+/// Prevent the linker from dropping `Java_com_rblue_RblueNative_nativeInit`
+/// as unused. Complements the `-u` / `--export-dynamic-symbol` flags in
+/// `build.rs` on Android targets that still omit an unreferenced export.
+#[cfg(all(feature = "android", target_os = "android"))]
+#[used]
+static KEEP_JNI_NATIVE_INIT: extern "system" fn(
+    *mut std::ffi::c_void,
+    *mut std::ffi::c_void,
+) -> bool = Java_com_rblue_RblueNative_nativeInit;

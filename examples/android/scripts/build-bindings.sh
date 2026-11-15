@@ -119,8 +119,44 @@ build_abi() {
   [[ -f "$so" ]] || { echo "error: $so was not produced" >&2; exit 1; }
   local dest="$RBLUE_MODULE/src/$flavor/jniLibs/$abi"
   mkdir -p "$dest"
+  # Replace any previous file (including a symlink) so a later mock rebuild
+  # of the same target cannot clobber the real-backend copy in place.
+  rm -f "$dest/librblue_ffi.so"
   cp "$so" "$dest/librblue_ffi.so"
   echo "    installed $(basename "$so") -> ${dest#"$ROOT"/}"
+  if [[ "$flavor" == "real" && -x "$NM" ]]; then
+    if ! check_jni_export "$dest/librblue_ffi.so"; then
+      exit 1
+    fi
+  fi
+}
+
+# Fail if the JNI init entry is missing from a real-backend .so, and dump
+# both the dynamic and the full symbol table so a false-negative `nm -D`
+# (seen on some aarch64 ELFs) is visible in CI logs.
+check_jni_export() {
+  local so="$1"
+  local symbol="Java_com_rblue_RblueNative_nativeInit"
+  if [[ ! -f "$so" ]]; then
+    echo "error: expected $so after the real backend build" >&2
+    return 1
+  fi
+  if "$NM" -D --defined-only "$so" | grep -q "$symbol"; then
+    echo "    $symbol exported by ${so#"$ROOT"/}"
+    return 0
+  fi
+  echo "error: $symbol is not exported by $so" >&2
+  echo "       (the AAR would fail at RblueAndroid.initialize; see crates/rblue-android/src/jni_shim.rs)" >&2
+  echo "       llvm-nm -D --defined-only:" >&2
+  "$NM" -D --defined-only "$so" >&2 || true
+  echo "       llvm-nm --defined-only (grep $symbol / T):" >&2
+  "$NM" --defined-only "$so" | grep -E "$symbol|[[:space:]]T[[:space:]]" | head -n 80 >&2 || true
+  local readelf="${NM%llvm-nm}llvm-readelf"
+  if [[ -x "$readelf" ]]; then
+    echo "       llvm-readelf --dyn-syms (grep $symbol):" >&2
+    "$readelf" --dyn-syms "$so" | grep -E "$symbol|File:|Symbol table" >&2 || true
+  fi
+  return 1
 }
 
 if [[ "$MODE" == "all" || "$MODE" == "real" ]]; then
@@ -131,18 +167,13 @@ if [[ "$MODE" == "all" || "$MODE" == "mock" ]]; then
 fi
 
 # --- Sanity check: the JNI init entry must be in every real .so -------------
+# Individual real ABIs are already checked at install time; this pass
+# re-checks every copy after the mock builds so an in-place clobber
+# cannot slip through.
 if [[ "$MODE" == "all" || "$MODE" == "real" ]] && [[ -x "$NM" ]]; then
   missing=0
   for abi in "${REAL_ABIS[@]}"; do
-    real_so="$RBLUE_MODULE/src/real/jniLibs/$abi/librblue_ffi.so"
-    if [[ ! -f "$real_so" ]]; then
-      echo "error: expected $real_so after the real backend build" >&2
-      missing=1
-      continue
-    fi
-    if ! "$NM" -D "$real_so" | grep -q "Java_com_rblue_RblueNative_nativeInit"; then
-      echo "error: Java_com_rblue_RblueNative_nativeInit is not exported by $real_so" >&2
-      echo "       (the AAR would fail at RblueAndroid.initialize; see crates/rblue-android/src/jni_shim.rs)" >&2
+    if ! check_jni_export "$RBLUE_MODULE/src/real/jniLibs/$abi/librblue_ffi.so"; then
       missing=1
     fi
   done
