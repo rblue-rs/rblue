@@ -40,7 +40,6 @@ pub(crate) const ATT_WRITE_NOT_PERMITTED: u8 = 0x03;
 pub(crate) const ATT_ATTRIBUTE_NOT_FOUND: u8 = 0x0A;
 
 /// `org.bluez.Error.*` names with a unified equivalent (BlueZ `src/error.c`).
-const BLUEZ_PREFIX: &str = "org.bluez.Error.";
 const BLUEZ_NOT_CONNECTED: &str = "org.bluez.Error.NotConnected";
 const BLUEZ_NOT_PERMITTED: &str = "org.bluez.Error.NotPermitted";
 const BLUEZ_NOT_AUTHORIZED: &str = "org.bluez.Error.NotAuthorized";

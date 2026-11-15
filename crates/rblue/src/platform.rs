@@ -10,7 +10,7 @@
 //! - otherwise `mock`, the universal no-hardware fallback,
 //! - otherwise the first enabled backend in the fixed order `web`, `ohos`,
 //!   `winrt`, `corebluetooth`, `bluez`, `android`. Those runtimes fail with
-//!   [`Error::Unsupported`] at run time when away from their native target;
+//!   [`crate::Error::Unsupported`] at run time when away from their native target;
 //!   the web and ohos submodules are host-testable placeholders by design.
 //!
 //! Regardless of the selection, every compiled-in backend remains reachable
@@ -206,7 +206,7 @@ pub mod android {
 ///
 /// On wasm32 this is the real `navigator.bluetooth` implementation; on other
 /// targets the submodule compiles but [`web::default_adapter`] fails with
-/// [`Error::Unsupported`] — it exists so host builds of web-dependent code
+/// [`crate::Error::Unsupported`] — it exists so host builds of web-dependent code
 /// type-check.
 #[cfg(feature = "web")]
 pub mod web {

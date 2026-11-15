@@ -110,6 +110,12 @@ jobs:
       - name: Build against packaged Android libraries
         working-directory: ${{ env.EXAMPLE_DIR }}
         run: flutter build apk --debug
+      - name: Free disk before the AGP 9 consumer build
+        run: |
+          rm -rf "${{ env.EXAMPLE_DIR }}/build"
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/powershell /usr/share/swift || true
+          df -h
       - name: Build a disposable AGP 9 built-in Kotlin consumer
         run: |
           package_copy="$(mktemp -d)/rblue_flutter"
@@ -119,8 +125,14 @@ jobs:
             --exclude='native/source/target' \
             -C "$PACKAGE_DIR" -cf - . | tar -xf - -C "$package_copy"
           python3 examples/flutter/tools/prepare-agp9-test.py "$package_copy"
+          agp_log_dir="${GITHUB_WORKSPACE}/android-minimum-agp9-logs"
+          mkdir -p "$agp_log_dir"
+          set +e
           (cd "$package_copy/example" && \
             flutter build apk --debug --android-skip-build-dependency-validation)
+          status=$?
+          cp -a "$package_copy/example/build" "$agp_log_dir/" 2>/dev/null || true
+          exit "$status"
       - name: Upload Flutter 3.41.7 logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -128,6 +140,7 @@ jobs:
           name: android-minimum-logs
           path: |
             ${{ env.EXAMPLE_DIR }}/build
+            android-minimum-agp9-logs
           if-no-files-found: ignore
           retention-days: 7
 
@@ -176,7 +189,7 @@ jobs:
             for symbol in rblue_new rblue_shutdown rblue_free rblue_request \
               rblue_set_event_callback rblue_set_owned_response_callback \
               rblue_set_response_callback rblue_free_string rblue_free_payload; do
-              llvm-nm -D --defined-only "$library" | grep -q " $symbol$"
+              nm -D --defined-only "$library" | grep -q " $symbol$"
             done
           done
           python3 examples/flutter/tools/check-android-jni.py "$apk"
