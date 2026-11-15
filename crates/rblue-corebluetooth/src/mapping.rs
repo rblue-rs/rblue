@@ -116,7 +116,9 @@ pub(crate) fn map_central_state(state: CentralState) -> AdapterState {
 ///
 /// The fork keeps the field private and only implements `Display` (the
 /// hyphenated UUID form) plus `From<Uuid>`, so the round trip goes through
-/// the string form.
+/// the string form. The `platform::PeripheralId` type is Apple-specific, so
+/// this helper is compiled only there.
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) fn peripheral_uuid(id: &btleplug::platform::PeripheralId) -> Option<Uuid> {
     Uuid::parse_str(&id.to_string()).ok()
 }
@@ -265,6 +267,7 @@ mod tests {
         );
     }
 
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[test]
     fn peripheral_uuid_round_trips_through_the_display_form() {
         let uuid = uuid::Uuid::from_u128(0x9fb0_e9e1_7a34_4e2a_a4c5_9c34_a221_3f81);

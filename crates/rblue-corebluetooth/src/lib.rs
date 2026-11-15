@@ -38,12 +38,21 @@
 //! The fork drives its callbacks through tokio tasks, so every method of
 //! this backend must be called from within a tokio runtime context
 //! (tokio::spawn / tokio::sync primitives are used internally).
+//!
+//! # Platform gating
+//!
+//! The adapter/peripheral glue compiles only on Apple targets, where the
+//! fork's `platform` module exposes the CoreBluetooth types. Host builds keep
+//! the pure mapping and hub modules (and their tests) so the translation
+//! semantics stay verifiable without an Apple machine.
 
 #![warn(missing_docs)]
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod adapter;
 mod hub;
 mod mapping;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod peripheral;
 
 use std::sync::Arc;
@@ -65,8 +74,10 @@ pub const BACKEND_VERSION: &str = "corebluetooth/btleplug 1af8299c291f24fca68dfb
 ///
 /// # Errors
 ///
-/// Never fails for the CoreBluetooth backend; the `Result` matches the
-/// cross-backend contract that adapter acquisition can be fallible.
+/// Never fails on Apple targets; the `Result` matches the cross-backend
+/// contract that adapter acquisition can be fallible. On non-Apple hosts this
+/// always fails with [`Error::Unsupported`]: the backend only functions where
+/// the fork's CoreBluetooth implementation exists.
 ///
 /// # Examples
 ///
@@ -87,8 +98,46 @@ pub const BACKEND_VERSION: &str = "corebluetooth/btleplug 1af8299c291f24fca68dfb
 /// # Ok(())
 /// # }
 /// ```
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub fn default_adapter() -> Result<Arc<dyn Adapter>, Error> {
     Ok(Arc::new(adapter::CoreBluetoothAdapter::new()))
+}
+
+/// Returns the system-default CoreBluetooth central wrapped in the unified
+/// [`Adapter`] trait.
+///
+/// # Errors
+///
+/// On non-Apple targets this always fails with [`Error::Unsupported`]: the
+/// backend only functions where the fork's CoreBluetooth implementation
+/// exists. The usage example is shared with the Apple variant so it stays
+/// compile-checked on every host.
+///
+/// # Examples
+///
+/// ```no_run
+/// # async fn example() -> Result<(), rblue_api::Error> {
+/// use futures::StreamExt;
+/// use rblue_api::Adapter;
+/// use rblue_corebluetooth::default_adapter;
+///
+/// let adapter = default_adapter()?;
+/// adapter.initialize().await?;
+/// adapter.start_scan(&rblue_api::ScanFilter::default()).await?;
+/// let mut events = adapter.events();
+/// while let Some(event) = events.next().await {
+///     // Identifiers are personal data: never log them at info level or above.
+///     let _ = event;
+/// }
+/// # Ok(())
+/// # }
+/// ```
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+pub fn default_adapter() -> Result<Arc<dyn Adapter>, Error> {
+    Err(Error::Unsupported {
+        platform: mapping::PLATFORM,
+        feature: "adapter",
+    })
 }
 
 /// Identifies the backend build: shell crate and pinned btleplug fork
@@ -107,6 +156,19 @@ mod tests {
         );
     }
 
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[test]
+    fn host_construction_reports_unsupported() {
+        assert!(matches!(
+            super::default_adapter(),
+            Err(rblue_api::Error::Unsupported {
+                platform: "corebluetooth",
+                ..
+            })
+        ));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[test]
     fn default_adapter_constructs_without_touching_the_stack() {
         let adapter = super::default_adapter().expect("constructed");
