@@ -249,31 +249,35 @@ final class RblueHandle extends ffi.Opaque {}
 /// One adapter event or notification envelope (owned string).
 typedef rblue_event_cb =
     ffi.Pointer<ffi.NativeFunction<rblue_event_cbFunction>>;
-typedef rblue_event_cbFunction = ffi.Void Function(
-  ffi.Pointer<ffi.Char> event_json,
-  ffi.Pointer<ffi.Void> user_data,
-);
-typedef Dartrblue_event_cbFunction = void Function(
-  ffi.Pointer<ffi.Char> event_json,
-  ffi.Pointer<ffi.Void> user_data,
-);
+typedef rblue_event_cbFunction =
+    ffi.Void Function(
+      ffi.Pointer<ffi.Char> event_json,
+      ffi.Pointer<ffi.Void> user_data,
+    );
+typedef Dartrblue_event_cbFunction =
+    void Function(
+      ffi.Pointer<ffi.Char> event_json,
+      ffi.Pointer<ffi.Void> user_data,
+    );
 
 /// One completed request. `status_json` is NULL on success and otherwise an
 /// owned string to release with rblue_free_string. `payload` is a transient
 /// borrow (NULL when `payload_len` is 0).
 typedef rblue_response_cb =
     ffi.Pointer<ffi.NativeFunction<rblue_response_cbFunction>>;
-typedef rblue_response_cbFunction = ffi.Void Function(
-  ffi.Uint64 req_id,
-  ffi.Pointer<ffi.Char> status_json,
-  ffi.Pointer<ffi.Uint8> payload,
-  ffi.Size payload_len,
-  ffi.Pointer<ffi.Void> user_data,
-);
-typedef Dartrblue_response_cbFunction = void Function(
-  int req_id,
-  ffi.Pointer<ffi.Char> status_json,
-  ffi.Pointer<ffi.Uint8> payload,
-  int payload_len,
-  ffi.Pointer<ffi.Void> user_data,
-);
+typedef rblue_response_cbFunction =
+    ffi.Void Function(
+      ffi.Uint64 req_id,
+      ffi.Pointer<ffi.Char> status_json,
+      ffi.Pointer<ffi.Uint8> payload,
+      ffi.Size payload_len,
+      ffi.Pointer<ffi.Void> user_data,
+    );
+typedef Dartrblue_response_cbFunction =
+    void Function(
+      int req_id,
+      ffi.Pointer<ffi.Char> status_json,
+      ffi.Pointer<ffi.Uint8> payload,
+      int payload_len,
+      ffi.Pointer<ffi.Void> user_data,
+    );
