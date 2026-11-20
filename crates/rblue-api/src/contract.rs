@@ -7,6 +7,12 @@
 //! `#[ignore]`d hardware tests. When a behavior is added to the API, extend
 //! this suite.
 //!
+//! Capability-gated methods that exist on the trait surface (`pair`, `rssi`,
+//! `mtu`, `request_device`, and `system_connected_peripherals`) must return
+//! [`Error::Unsupported`] with a non-empty `feature` name when the backend
+//! does not advertise the corresponding [`Capability`]. Silent `Ok` no-ops
+//! are forbidden.
+//!
 //! # Fixture contract
 //!
 //! The adapter handed to [`run_contract_suite`] must expose a connectable
@@ -32,7 +38,7 @@ use futures_timer::Delay;
 use crate::adapter::AdapterEventStream;
 use crate::{
     Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties, DeviceId, Error,
-    ScanFilter, ServiceId, WriteMode,
+    RequestDeviceOptions, ScanFilter, ServiceId, WriteMode,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -49,6 +55,11 @@ pub const CONTRACT_CHARACTERISTIC_UUID: uuid::Uuid =
 /// Largest ATT_MTU allowed by the Bluetooth spec (517); sanity bound for
 /// reported `max_write_len` values.
 const MAX_REASONABLE_WRITE_LEN: usize = 517;
+
+/// Minimum ATT_MTU defined by the Bluetooth spec.
+const MIN_ATT_MTU: u16 = 23;
+/// Largest ATT_MTU allowed by the Bluetooth spec.
+const MAX_ATT_MTU: u16 = 517;
 
 /// Payload written to trigger the notification echo.
 const ECHO_PAYLOAD: &[u8] = b"rblue-contract-echo";
@@ -98,8 +109,9 @@ where
 
     // -- initialize ---------------------------------------------------------
     require("initialize", adapter.initialize().await);
+    let caps = adapter.capabilities();
     assert!(
-        adapter.capabilities().has(Capability::GattClient),
+        caps.has(Capability::GattClient),
         "contract violation: fixture backend must report Capability::GattClient"
     );
 
@@ -139,6 +151,41 @@ where
 
     let peripheral = require("peripheral", adapter.peripheral(&device_id).await);
 
+    // -- capability-gated adapter APIs ----------------------------------------
+    // `system_connected_peripherals` has no Capability bit; backends either
+    // implement it or return the default `Error::Unsupported`.
+    match adapter
+        .system_connected_peripherals(&[CONTRACT_SERVICE_UUID])
+        .await
+    {
+        Ok(_) => {}
+        Err(Error::Unsupported { feature, .. }) => {
+            assert!(
+                !feature.is_empty(),
+                "contract violation at `system_connected_peripherals`: Unsupported feature must be a non-empty name"
+            );
+        }
+        Err(err) => panic!(
+            "contract violation at `system_connected_peripherals`: expected Ok or Err(Unsupported), got {err:?}"
+        ),
+    }
+
+    let picker_opts = RequestDeviceOptions {
+        services: vec![CONTRACT_SERVICE_UUID],
+        ..RequestDeviceOptions::default()
+    };
+    if caps.has(Capability::RequestDevicePicker) {
+        let picked =
+            require_supported("request_device", adapter.request_device(&picker_opts).await);
+        assert_eq!(
+            picked.id(),
+            &device_id,
+            "contract violation: request_device must pick the fixture peripheral advertising CONTRACT_SERVICE_UUID"
+        );
+    } else {
+        require_unsupported("request_device", adapter.request_device(&picker_opts).await);
+    }
+
     // -- connect -------------------------------------------------------------
     require("connect", peripheral.connect().await);
     let connected = require("is_connected", peripheral.is_connected().await);
@@ -146,6 +193,37 @@ where
         connected,
         "contract violation: is_connected must be true right after connect"
     );
+
+    // -- capability-gated peripheral APIs -------------------------------------
+    if caps.has(Capability::Pairing) {
+        match peripheral.pair().await {
+            Ok(()) | Err(Error::Pairing(_)) => {}
+            Err(Error::Unsupported { platform, feature }) => panic!(
+                "contract violation at `pair`: backend advertised Capability::Pairing but returned Unsupported {{ platform: {platform}, feature: {feature} }}"
+            ),
+            Err(err) => panic!(
+                "contract violation at `pair`: expected Ok or Err(Pairing), got {err:?}"
+            ),
+        }
+    } else {
+        require_unsupported("pair", peripheral.pair().await);
+    }
+
+    if caps.has(Capability::RssiDuringConnection) {
+        let _rssi = require_supported("rssi", peripheral.rssi().await);
+    } else {
+        require_unsupported("rssi", peripheral.rssi().await);
+    }
+
+    if caps.has(Capability::MtuQuery) {
+        let mtu = require_supported("mtu", peripheral.mtu().await);
+        assert!(
+            (MIN_ATT_MTU..=MAX_ATT_MTU).contains(&mtu),
+            "contract violation: mtu {mtu} is outside the ATT_MTU range {MIN_ATT_MTU}..={MAX_ATT_MTU}"
+        );
+    } else {
+        require_unsupported("mtu", peripheral.mtu().await);
+    }
 
     // -- discover services ------------------------------------------------------
     let services = require("discover_services", peripheral.discover_services(&[]).await);
@@ -287,6 +365,38 @@ fn require<T>(step: &str, result: Result<T, Error>) -> T {
     match result {
         Ok(value) => value,
         Err(err) => panic!("contract violation at `{step}`: expected Ok, got {err:?}"),
+    }
+}
+
+/// Asserts that a call rejected because the backend does not advertise the
+/// corresponding [`Capability`] is a non-empty [`Error::Unsupported`], never a
+/// silent `Ok`.
+fn require_unsupported<T>(step: &str, result: Result<T, Error>) {
+    match result {
+        Err(Error::Unsupported { feature, .. }) => {
+            assert!(
+                !feature.is_empty(),
+                "contract violation at `{step}`: Unsupported feature must be a non-empty name"
+            );
+        }
+        Ok(_) => panic!(
+            "contract violation at `{step}`: capability is absent, expected Err(Unsupported), got Ok (silent no-op is forbidden)"
+        ),
+        Err(err) => panic!(
+            "contract violation at `{step}`: capability is absent, expected Err(Unsupported), got {err:?}"
+        ),
+    }
+}
+
+/// Unwraps a backend result on a path the backend advertised a [`Capability`]
+/// for. [`Error::Unsupported`] is a contract violation even if the operation
+/// would otherwise be allowed to fail.
+fn require_supported<T>(step: &str, result: Result<T, Error>) -> T {
+    match result {
+        Err(Error::Unsupported { platform, feature }) => panic!(
+            "contract violation at `{step}`: backend advertised the capability but returned Unsupported {{ platform: {platform}, feature: {feature} }}"
+        ),
+        other => require(step, other),
     }
 }
 
