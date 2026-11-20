@@ -34,9 +34,10 @@ pub enum Capability {
     MtuNegotiation,
     /// Querying the current ATT MTU (read-only property).
     MtuQuery,
-    /// Actively initiating pairing/bonding (`PairAsync` / BlueZ `Pair` /
-    /// `createBond`). iOS/macOS pair implicitly when an encrypted
-    /// characteristic is accessed, so they do not report this.
+    /// Actively initiating or removing a bond (`Peripheral::pair` /
+    /// `Peripheral::unpair`, BlueZ `Device1.Pair` / `Adapter1.RemoveDevice`,
+    /// Android `createBond` / `removeBond`). iOS/macOS pair implicitly when
+    /// an encrypted characteristic is accessed, so they do not report this.
     Pairing,
     /// `BluetoothDevice.watchAdvertisements()` (Chrome, behind a flag).
     WatchAdvertisements,

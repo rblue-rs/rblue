@@ -267,15 +267,11 @@ impl Peripheral for AndroidPeripheral {
     }
 
     async fn pair(&self) -> Result<(), Error> {
-        // Android exposes `createBond`, but the fork's `Peripheral` surface
-        // does not surface it; the capability is reported as absent instead
-        // of pretending. Accessing an encrypted characteristic still
-        // triggers the system pairing flow, and the fork's connect succeeds
-        // with bonds the platform establishes that way.
-        Err(Error::Unsupported {
-            platform: PLATFORM,
-            feature: "pairing",
-        })
+        crate::pairing::pair(self.entry.address()).await
+    }
+
+    async fn unpair(&self) -> Result<(), Error> {
+        crate::pairing::unpair(self.entry.address()).await
     }
 
     async fn rssi(&self) -> Result<i16, Error> {

@@ -60,7 +60,8 @@ Frequently seen ATT codes after normalization:
 | `connect` on a device CoreBluetooth no longer knows (retrieval by identifier returned nothing) | `Error::NotFound(id)` |
 | `peripheral(id)` for a device never sighted by this adapter (any id kind; CoreBluetooth ids are always `DeviceId::Uuid`) | `Error::NotFound(id)` |
 | `mtu()` | `Error::Unsupported { platform: "corebluetooth", feature: "mtu" }` - the ATT MTU is system-managed; use `max_write_len` |
-| `pair()` | `Error::Unsupported { platform: "corebluetooth", feature: "pairing" }` - iOS/macOS pair implicitly on encrypted-characteristic access |
+| `pair()` | `Error::Unsupported { platform: "corebluetooth", feature: "pair" }` - iOS/macOS pair implicitly on encrypted-characteristic access |
+| `unpair()` | `Error::Unsupported { platform: "corebluetooth", feature: "unpair" }` |
 | `request_device(opts)` | `Error::Unsupported { platform: "corebluetooth", feature: "request_device" }` - web-only entry point |
 
 ## Deliberately unused errors

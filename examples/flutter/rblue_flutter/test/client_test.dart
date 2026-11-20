@@ -118,6 +118,20 @@ void main() {
     client.dispose();
   });
 
+  test('pair and unpair use the native request protocol', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+
+    unawaited(quiet(client.pair(device)));
+    unawaited(quiet(client.unpair(device)));
+    expect(bridge.sent[0].method, 'pair');
+    expect(bridge.sent[0].params, contains('random_static'));
+    expect(bridge.sent[1].method, 'unpair');
+    expect(bridge.sent[1].params, contains('random_static'));
+    client.dispose();
+  });
+
   test('status_json maps to typed errors, platform codes preserved', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);

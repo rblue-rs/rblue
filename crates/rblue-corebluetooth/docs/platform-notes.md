@@ -17,7 +17,7 @@ editing fork internals; adapt in the shell.
 | MtuNegotiation | no | macOS/iOS negotiate the ATT MTU automatically; no request API |
 | MtuQuery | no | CoreBluetooth does not expose the negotiated MTU; use `max_write_len` |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
-| Pairing | no | Implicit pairing on encrypted-characteristic access; `pair()` returns `Error::Unsupported` |
+| Pairing | no | Implicit pairing on encrypted-characteristic access; `pair()` / `unpair()` return `Error::Unsupported` with feature `pair` / `unpair` |
 | BackgroundScan | no (conservative) | Possible with the `bluetooth-central` background mode on iOS, but iOS then silently yields nothing without a service-UUID filter (see below). 1.0 reports `false` so callers do not rely on it |
 | PassiveScan | no | CoreBluetooth has no passive scanning |
 | GattServer / Advertise | no | Phase 2 |

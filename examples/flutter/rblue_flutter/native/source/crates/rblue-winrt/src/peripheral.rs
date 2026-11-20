@@ -230,7 +230,14 @@ impl Peripheral for WinRtPeripheral {
         // implicit system pairing dialog on Windows.
         Err(Error::Unsupported {
             platform: PLATFORM,
-            feature: "pairing",
+            feature: "pair",
+        })
+    }
+
+    async fn unpair(&self) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "unpair",
         })
     }
 

@@ -43,7 +43,7 @@ this backend.
 | MtuNegotiation | no | The stack negotiates the ATT MTU automatically; there is no client request API |
 | RssiDuringConnection | no | BlueZ does not update the device `RSSI` property while connected - the value freezes at the last scan-time sighting. `rssi()` reports `Error::Unsupported` instead of presenting stale data |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
-| Pairing | no | BlueZ exposes `org.bluez.Device1.Pair` (and bluez-async wraps it as `pair_with_timeout`), but the fork's `Peripheral` surface does not expose it. Reported as absent rather than faked; `pair()` returns `Error::Unsupported`. Accessing an encrypted characteristic still triggers the system pairing agent |
+| Pairing | yes | Shell-side D-Bus: `org.bluez.Device1.Pair` / `org.bluez.Adapter1.RemoveDevice` (the fork's `Peripheral` surface still does not expose them). `pair()` / `unpair()` do not require an existing GATT connection. Already-paired `pair` and already-unpaired `unpair` succeed without starting a new procedure. `CancelPairing` is not used for unpair. Failures map to `Error::Pairing` / `Error::Permission`. |
 | BackgroundScan | yes | Scanning is a daemon-side activity; a background process keeps receiving sightings as long as the D-Bus connection and the discovery request live (subject to the discovery refcount below and to power management such as `rfkill`/suspend) |
 | PassiveScan | no | The fork always uses `Transport::Auto` |
 | ScanResponse | no | BlueZ merges scan-response payloads into the cumulative device properties; payloads are not delivered separately |
@@ -203,9 +203,11 @@ this backend.
 
 ## Pairing
 
-- No active-pairing API through the fork (see the capability table). BlueZ
-  pairs implicitly through the system pairing agent when an encrypted
-  characteristic is accessed; pairing failures surface as ATT errors
+- Active pairing and unpairing are implemented in the shell over D-Bus
+  (`Device1.Pair` / `Adapter1.RemoveDevice`; see the capability table). The
+  fork still has no pairing API. Encrypted-characteristic access can still
+  trigger the system pairing agent, and failures from that implicit path
+  surface as ATT errors
   (`0x05` insufficient authentication, `0x08` insufficient authorization,
   `0x0F` insufficient encryption) from the characteristic operation, or as
   `org.bluez.Error.NotAuthorized` mappings (see error-mapping.md).

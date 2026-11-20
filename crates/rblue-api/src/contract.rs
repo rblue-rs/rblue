@@ -139,6 +139,39 @@ where
 
     let peripheral = require("peripheral", adapter.peripheral(&device_id).await);
 
+    // -- pair / unpair -------------------------------------------------------
+    // Active pairing can raise a system dialog on real hardware, so the
+    // suite only asserts Unsupported when Capability::Pairing is absent.
+    // Live success and idempotence are covered by the mock unit tests.
+    if adapter.capabilities().has(Capability::Pairing) {
+        // skip live pair/unpair
+    } else {
+        match peripheral.pair().await {
+            Err(Error::Unsupported { feature, .. }) => {
+                assert_eq!(
+                    feature, "pair",
+                    "contract violation at `pair`: feature name"
+                )
+            }
+            other => panic!(
+                "contract violation at `pair`: expected Err(Unsupported) with feature pair, got {:?}",
+                other
+            ),
+        }
+        match peripheral.unpair().await {
+            Err(Error::Unsupported { feature, .. }) => {
+                assert_eq!(
+                    feature, "unpair",
+                    "contract violation at `unpair`: feature name"
+                )
+            }
+            other => panic!(
+                "contract violation at `unpair`: expected Err(Unsupported) with feature unpair, got {:?}",
+                other
+            ),
+        }
+    }
+
     // -- connect -------------------------------------------------------------
     require("connect", peripheral.connect().await);
     let connected = require("is_connected", peripheral.is_connected().await);

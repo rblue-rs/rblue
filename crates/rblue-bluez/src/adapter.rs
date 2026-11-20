@@ -46,7 +46,8 @@ use crate::peripheral::{BluezPeripheral, NotificationHub};
 const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
-    .union(CapabilitySet::bit(Capability::BackgroundScan));
+    .union(CapabilitySet::bit(Capability::BackgroundScan))
+    .union(CapabilitySet::bit(Capability::Pairing));
 
 /// Registry entry for one device ever sighted by this adapter. Lives until
 /// the adapter is dropped: `Error::NotFound` is reserved for devices that
@@ -103,6 +104,12 @@ impl DeviceEntry {
 
     pub(crate) fn id(&self) -> &DeviceId {
         &self.id
+    }
+
+    /// D-Bus object path of the current fork handle, as stored (often
+    /// without the `/org/bluez` prefix). Used by shell-side pairing.
+    pub(crate) fn dbus_path(&self) -> String {
+        self.lock_path().clone()
     }
 
     pub(crate) fn advertisement(&self) -> AdvertisementData {

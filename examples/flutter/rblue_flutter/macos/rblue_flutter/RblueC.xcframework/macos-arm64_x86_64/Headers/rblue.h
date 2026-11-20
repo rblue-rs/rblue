@@ -45,6 +45,8 @@
  *   peripherals        {}                              -> [{"id":..,"name":..}]
  *   connect            {"device": <DeviceId>}          -> (empty)
  *   disconnect         {"device": <DeviceId>}          -> (empty)
+ *   pair               {"device": <DeviceId>}          -> (empty)
+ *   unpair             {"device": <DeviceId>}          -> (empty)
  *   capabilities       {} -> capability bitmask JSON
  *   rssi / mtu         {"device": <DeviceId>} -> integer JSON
  *   max_write_len      {"device":..,"characteristic":..,"mode":..} -> integer JSON

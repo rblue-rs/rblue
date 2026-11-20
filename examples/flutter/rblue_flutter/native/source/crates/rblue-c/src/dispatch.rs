@@ -166,6 +166,16 @@ pub(crate) async fn execute(
             result?;
             Ok(Vec::new())
         }
+        "pair" => {
+            let DeviceParams { device } = parse_params(&params)?;
+            core.peripheral(&device).await?.pair().await?;
+            Ok(Vec::new())
+        }
+        "unpair" => {
+            let DeviceParams { device } = parse_params(&params)?;
+            core.peripheral(&device).await?.unpair().await?;
+            Ok(Vec::new())
+        }
         "discover_services" => {
             let DeviceParams { device } = parse_params(&params)?;
             let services: ServiceSet = core
@@ -571,6 +581,15 @@ mod tests {
                 roundtrip(&mut fixture, 1, "system_connected_peripherals", params, &[]).await;
             assert!(status.is_some_and(|error| error.contains("InvalidArgument")));
         }
+    }
+
+    #[tokio::test]
+    async fn pair_and_unpair_do_not_require_a_connection() {
+        let mut fixture = Fixture::new().await;
+        let (status, _) = roundtrip(&mut fixture, 1, "pair", &device_params(), &[]).await;
+        assert!(status.is_none(), "pair: {status:?}");
+        let (status, _) = roundtrip(&mut fixture, 2, "unpair", &device_params(), &[]).await;
+        assert!(status.is_none(), "unpair: {status:?}");
     }
 
     #[tokio::test]

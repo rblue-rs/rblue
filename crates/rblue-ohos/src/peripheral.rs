@@ -384,7 +384,14 @@ impl Peripheral for OhosPeripheral {
         // accessed; the 1.0 protocol has no initiate-pairing command.
         Err(Error::Unsupported {
             platform: "ohos",
-            feature: "pairing",
+            feature: "pair",
+        })
+    }
+
+    async fn unpair(&self) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: "ohos",
+            feature: "unpair",
         })
     }
 

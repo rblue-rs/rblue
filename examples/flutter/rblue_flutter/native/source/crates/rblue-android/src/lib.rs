@@ -33,8 +33,11 @@
 //! - The ATT MTU is negotiated by the fork's automatic `requestMtu(517)`
 //!   at connect; there is no client request API through the fork's trait
 //!   surface (`Capability::MtuNegotiation` absent, `MtuQuery` present).
-//! - `pair()` reports `Unsupported`: Android's `createBond` is not exposed
-//!   by the fork.
+//! - `pair()` / `unpair()` are implemented in the shell over JNI
+//!   (`BluetoothDevice.createBond` / hidden `removeBond`) and report
+//!   [`Capability::Pairing`](rblue_api::Capability::Pairing). The fork's
+//!   `Peripheral` trait still has no pairing API; vendored Java is left
+//!   untouched.
 //!
 //! See `docs/platform-notes.md` and `docs/error-mapping.md` in the crate
 //! root for the full platform documentation, including the Java helper
@@ -59,6 +62,7 @@
 
 mod hub;
 mod mapping;
+mod pairing;
 
 #[cfg(target_os = "android")]
 mod adapter;

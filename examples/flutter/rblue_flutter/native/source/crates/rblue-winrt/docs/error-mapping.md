@@ -99,7 +99,8 @@ check), `0x0F` insufficient encryption, `0x11` insufficient resources.
 | `connect` on a device whose address the OS does not know in this boot session (`FromBluetoothAddressAsync` failed) | `Error::NotFound(id)` - Windows can only connect to watcher-observed addresses (RPA rotation included); re-scan first. See platform-notes.md |
 | `peripheral(id)` for a device never sighted by this adapter (any id kind; Windows ids are always `DeviceId::Mac`) | `Error::NotFound(id)` |
 | `rssi()` | `Error::Unsupported { platform: "winrt", feature: "rssi" }` - Windows has no connected-RSSI API; the fork would return the last scan-time value, which the shell refuses to present as a connected reading |
-| `pair()` | `Error::Unsupported { platform: "winrt", feature: "pairing" }` - WinRT has `PairAsync` but the fork exposes no API; reported as absent rather than faked |
+| `pair()` | `Error::Unsupported { platform: "winrt", feature: "pair" }` - WinRT has `PairAsync` but the fork exposes no API; reported as absent rather than faked |
+| `unpair()` | `Error::Unsupported { platform: "winrt", feature: "unpair" }` |
 | `request_device(opts)` | `Error::Unsupported { platform: "winrt", feature: "request_device" }` - web-only entry point |
 
 ## Deliberate notes

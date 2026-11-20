@@ -50,7 +50,8 @@ use crate::peripheral::{spawn_notification_forwarder, AndroidPeripheral, Notific
 const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
-    .union(CapabilitySet::bit(Capability::RssiDuringConnection));
+    .union(CapabilitySet::bit(Capability::RssiDuringConnection))
+    .union(CapabilitySet::bit(Capability::Pairing));
 
 /// Registry entry for one device ever sighted by this adapter. Lives until
 /// the adapter is dropped: `Error::NotFound` is reserved for devices that

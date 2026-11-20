@@ -801,6 +801,10 @@ impl Peripheral for MockPeripheral {
         Ok(())
     }
 
+    async fn unpair(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
     async fn rssi(&self) -> Result<i16, Error> {
         let inner = self.lock();
         if !inner.connected {
@@ -1015,5 +1019,16 @@ mod tests {
             device.subscribe(&plain).await,
             Err(Error::InvalidState(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn pair_and_unpair_succeed_without_a_connection() {
+        let (_adapter, device, _, _) = setup();
+        assert!(!device.is_connected().await.expect("is_connected"));
+        device.pair().await.expect("pair");
+        device.pair().await.expect("pair is idempotent");
+        device.unpair().await.expect("unpair");
+        device.unpair().await.expect("unpair is idempotent");
+        assert!(!device.is_connected().await.expect("still disconnected"));
     }
 }

@@ -34,7 +34,7 @@ honest `AdapterState::Unknown` for the collapsed states.
 | MtuNegotiation | no | Windows negotiates the ATT MTU automatically; there is no client request API |
 | RssiDuringConnection | no | No WinRT API; RSSI exists only on advertisements (scan time). The fork's `read_rssi` would return the last scan-time cache value, so `rssi()` reports `Error::Unsupported` instead of presenting stale data |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
-| Pairing | no | WinRT exposes `DeviceInformation.Pairing.PairAsync`, but the fork does not surface it. Reported as absent rather than faked; `pair()` returns `Error::Unsupported`. Accessing an encrypted characteristic still triggers the implicit system pairing dialog |
+| Pairing | no | WinRT exposes `DeviceInformation.Pairing.PairAsync` / `UnpairAsync`, but the fork does not surface them. Reported as absent rather than faked; `pair()` / `unpair()` return `Error::Unsupported` with feature `pair` / `unpair`. Accessing an encrypted characteristic still triggers the implicit system pairing dialog |
 | BackgroundScan | yes | The watcher keeps running in the background subject to platform restrictions: a suspended desktop app needs a `BluetoothLEAdvertisementWatcherTrigger` background task to keep receiving. 1.0 does not register such triggers; foreground apps scan normally |
 | PassiveScan | no | The fork always requests active scanning |
 | ScanResponse | no | The fork consolidates advertisement + scan response into cumulative peripheral properties; payloads are not delivered separately |
@@ -168,8 +168,8 @@ honest `AdapterState::Unknown` for the collapsed states.
 
 ## Pairing
 
-- No active-pairing API through the fork (see the capability table).
-  Windows pairs implicitly when an encrypted characteristic is accessed;
+- No active-pairing or unpair API through the fork (see the capability table);
+  `pair()` / `unpair()` return `Error::Unsupported`. Windows pairs implicitly when an encrypted characteristic is accessed;
   pairing failures surface as ATT errors (`0x05` insufficient
   authentication, `0x0F` insufficient encryption) from the characteristic
   operation.

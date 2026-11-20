@@ -594,6 +594,19 @@ impl Rblue {
         Ok(self.peripheral(&device_json).await?.pair().await?)
     }
 
+    /// Removes an existing bond where the platform has an API.
+    ///
+    /// A device that is not bonded succeeds without doing work.
+    ///
+    /// # Errors
+    ///
+    /// [`RblueError::Pairing`] with the normalized failure status,
+    /// [`RblueError::Unsupported`] on platforms without an active-unpair API.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn unpair(&self, device_json: String) -> Result<(), RblueError> {
+        Ok(self.peripheral(&device_json).await?.unpair().await?)
+    }
+
     /// Web-only entry point: shows the browser's device picker. Must be
     /// called from a user-gesture handler (the TS binding layer provides the
     /// helper for that).

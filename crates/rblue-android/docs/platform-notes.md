@@ -69,7 +69,7 @@ Live `StateChanged` events do not occur on this backend.
 | MtuNegotiation | no | The fork's `Peripheral` trait surface exposes no MTU request API - the fork requests 517 automatically at connect, and the Java-side `requestMtu` is not surfaced. **TODO**: expose it via a fork PR or the Driver-track migration; the unified trait would also need a request method |
 | RssiDuringConnection | yes | `readRemoteRssi` is implemented over the connected link (`rssi()`) |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
-| Pairing | no | Android's `createBond` is not exposed by the fork's `Peripheral` surface. **TODO**: fork PR or Driver-track migration. Accessing an encrypted characteristic still triggers the system pairing flow, and bonds created that way are used transparently |
+| Pairing | yes | Shell-side JNI: `BluetoothDevice.createBond` / hidden `removeBond` (the fork's `Peripheral` surface still does not expose them; vendored Java is left untouched). `pair()` / `unpair()` do not require an existing GATT connection. Already-bonded `pair` and already-unbonded `unpair` succeed without starting a new procedure. Failures map to `Error::Pairing` / `Error::Permission`. |
 | BackgroundScan | no (conservative) | Since API 31, scanning from the background requires a foreground service (`FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_CONNECTED_DEVICE` for connected-device work). The shell reports the capability as absent rather than promising behavior it cannot verify; document the foreground-service route in the app instead |
 | PassiveScan | no | The fork always scans actively |
 | ScanResponse | no | Android merges advertisement and scan response into one `ScanRecord`; payloads are not delivered separately |
@@ -230,9 +230,11 @@ permission, `BluetoothOff` for a powered-off radio).
 
 ## Pairing
 
-- No active-pairing API through the fork (see the capability table). Android
-  pairs implicitly when an encrypted characteristic is accessed and the
-  platform decides bonding is required; pairing failures surface as ATT
+- Active pairing and unpairing are implemented in the shell over JNI
+  (`createBond` / hidden `removeBond`; see the capability table). The fork
+  still has no pairing API. Encrypted-characteristic access can still
+  trigger the system pairing flow, and failures from that implicit path
+  surface as ATT
   errors from the characteristic operation (typically 5 insufficient
   authentication / 8 insufficient authorization as raw GATT statuses in
   `Error::Platform`).
