@@ -15,7 +15,7 @@ use rblue_api::gatt::{
     Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service, ServiceId,
     ServiceSet, WriteMode,
 };
-use rblue_api::peripheral::{NotificationStream, Peripheral};
+use rblue_api::peripheral::{ConnectionPriority, NotificationStream, Peripheral};
 use rblue_api::scan::{AdvertisementData, RequestDeviceOptions, ScanFilter};
 
 use crate::adapter::{AdapterShared, DEFAULT_MAX_WRITE_LEN, DEFAULT_RSSI, MOCK_ATT_MTU};
@@ -178,6 +178,7 @@ impl MockFailure {
 #[derive(Debug)]
 struct PeriphInner {
     connected: bool,
+    connection_priority: Option<ConnectionPriority>,
     name: Option<String>,
     services: Vec<MockService>,
     values: HashMap<CharacteristicId, Vec<u8>>,
@@ -213,6 +214,7 @@ impl MockPeripheral {
             shared,
             state: Mutex::new(PeriphInner {
                 connected: false,
+                connection_priority: None,
                 name: Some(name.to_owned()),
                 services: Vec::new(),
                 values: HashMap::new(),
@@ -243,6 +245,12 @@ impl MockPeripheral {
 
     pub(crate) fn is_connected_now(&self) -> bool {
         self.lock().connected
+    }
+
+    /// Last priority accepted by [`Peripheral::set_connection_priority`], if any.
+    #[must_use]
+    pub fn connection_priority(&self) -> Option<ConnectionPriority> {
+        self.lock().connection_priority
     }
 
     pub(crate) fn current_advertisement(&self) -> AdvertisementData {
@@ -816,6 +824,15 @@ impl Peripheral for MockPeripheral {
         }
         Ok(MOCK_ATT_MTU)
     }
+
+    async fn set_connection_priority(&self, priority: ConnectionPriority) -> Result<(), Error> {
+        let mut inner = self.lock();
+        if !inner.connected {
+            return Err(Error::NotConnected);
+        }
+        inner.connection_priority = Some(priority);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1015,5 +1032,33 @@ mod tests {
             device.subscribe(&plain).await,
             Err(Error::InvalidState(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn set_connection_priority_requires_a_local_session() {
+        let (_adapter, device, _, _) = setup();
+        assert!(matches!(
+            device
+                .set_connection_priority(ConnectionPriority::High)
+                .await,
+            Err(Error::NotConnected)
+        ));
+        assert_eq!(device.connection_priority(), None);
+
+        device.connect().await.expect("connect");
+        device
+            .set_connection_priority(ConnectionPriority::Low)
+            .await
+            .expect("low");
+        assert_eq!(device.connection_priority(), Some(ConnectionPriority::Low));
+        device
+            .set_connection_priority(ConnectionPriority::Balanced)
+            .await
+            .expect("balanced");
+        device
+            .set_connection_priority(ConnectionPriority::High)
+            .await
+            .expect("high");
+        assert_eq!(device.connection_priority(), Some(ConnectionPriority::High));
     }
 }

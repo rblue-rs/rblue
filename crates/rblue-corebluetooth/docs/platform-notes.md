@@ -22,6 +22,7 @@ editing fork internals; adapt in the shell.
 | PassiveScan | no | CoreBluetooth has no passive scanning |
 | GattServer / Advertise | no | Phase 2 |
 | ScanResponse | no | iOS delivers consolidated advertisement data, not separate scan responses |
+| ConnectionPriority | no | CoreBluetooth has no public connection-priority / interval request API; `set_connection_priority` returns `Error::Unsupported` |
 
 ## Runtime requirements
 

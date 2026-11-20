@@ -81,6 +81,7 @@ API-to-browser mapping table lives in `docs/error-mapping.md`.
 | `RssiDuringConnection` | no (`rssi()` unsupported) |
 | `Pairing` | no (`pair()` unsupported; the browser pairs implicitly when an encrypted characteristic is accessed) |
 | `GattServer` / `Advertise` | Phase 2 |
+| `ConnectionPriority` | no (`set_connection_priority` returns `Error::Unsupported`; Web Bluetooth has no equivalent API) |
 
 ## Build and runtime notes
 

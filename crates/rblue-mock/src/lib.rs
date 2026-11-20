@@ -28,6 +28,9 @@
 //!   contract fixture requires.
 //! - [Manual notifications](MockPeripheral::push_notify): push values to
 //!   subscribers as if the peripheral had sent them.
+//! - [Connection priority](rblue_api::Peripheral::set_connection_priority):
+//!   records the requested [`ConnectionPriority`](rblue_api::ConnectionPriority)
+//!   once the mock session is connected.
 //!
 //! [`MockAdapter::with_contract_fixture`] builds the fixture the
 //! `rblue_api::contract` suite requires, and the mock reports every

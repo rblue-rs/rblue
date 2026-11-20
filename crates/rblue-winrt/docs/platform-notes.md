@@ -40,6 +40,7 @@ honest `AdapterState::Unknown` for the collapsed states.
 | ScanResponse | no | The fork consolidates advertisement + scan response into cumulative peripheral properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | yes | WinRT `RequestPreferredConnectionParameters` via the fork: `Low` → `PowerOptimized`, `Balanced` → `Balanced`, `High` → `ThroughputOptimized`. Requires an established local connection |
 
 ## Device identity and the RPA rule
 

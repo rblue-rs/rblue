@@ -49,6 +49,7 @@ this backend.
 | ScanResponse | no | BlueZ merges scan-response payloads into the cumulative device properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 (this is exactly what the `bluer` migration unlocks) |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | no | The fork does not expose a stable BlueZ connection-parameter request; `set_connection_priority` returns `Error::Unsupported` |
 
 ## Device identity and the RPA rule
 

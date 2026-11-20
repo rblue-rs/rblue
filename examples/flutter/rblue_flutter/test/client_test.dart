@@ -58,6 +58,21 @@ void main() {
     },
   );
 
+  test('setConnectionPriority sends the snake_case enum', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.uuid('00000000-0000-0000-0000-00000000180f');
+    final pending = client.setConnectionPriority(
+      device,
+      ConnectionPriority.high,
+    );
+    expect(bridge.sent.last.method, 'set_connection_priority');
+    expect(bridge.sent.last.params, contains('"priority":"high"'));
+    bridge.respondTo(bridge.sent.last.reqId);
+    await pending;
+    client.dispose();
+  });
+
   test('device metrics use the native request protocol', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);

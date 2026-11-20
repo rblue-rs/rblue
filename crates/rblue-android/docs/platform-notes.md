@@ -75,6 +75,7 @@ Live `StateChanged` events do not occur on this backend.
 | ScanResponse | no | Android merges advertisement and scan response into one `ScanRecord`; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | yes | `BluetoothGatt.requestConnectionPriority`: `Low` → `CONNECTION_PRIORITY_LOW_POWER`, `Balanced` → `BALANCED`, `High` → `HIGH`. This is a request; the controller may ignore it. Requires an established local connection (`Error::NotConnected` otherwise) |
 
 ## Permissions matrix (write these into the app manifest)
 

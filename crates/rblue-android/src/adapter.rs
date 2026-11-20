@@ -46,11 +46,13 @@ use crate::peripheral::{spawn_notification_forwarder, AndroidPeripheral, Notific
 /// API through the fork's trait surface (it negotiates automatically at
 /// connect), active pairing (`createBond` is not exposed), background
 /// scanning (API 31+ requires a foreground service - conservative), and the
-/// web-only picker.
+/// web-only picker. `ConnectionPriority` is honored through the fork's
+/// `request_connection_parameters` mapping onto `requestConnectionPriority`.
 const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
-    .union(CapabilitySet::bit(Capability::RssiDuringConnection));
+    .union(CapabilitySet::bit(Capability::RssiDuringConnection))
+    .union(CapabilitySet::bit(Capability::ConnectionPriority));
 
 /// Registry entry for one device ever sighted by this adapter. Lives until
 /// the adapter is dropped: `Error::NotFound` is reserved for devices that

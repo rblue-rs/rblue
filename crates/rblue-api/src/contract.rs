@@ -31,8 +31,8 @@ use futures_timer::Delay;
 
 use crate::adapter::AdapterEventStream;
 use crate::{
-    Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties, DeviceId, Error,
-    ScanFilter, ServiceId, WriteMode,
+    Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties,
+    ConnectionPriority, DeviceId, Error, ScanFilter, ServiceId, WriteMode,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -139,6 +139,17 @@ where
 
     let peripheral = require("peripheral", adapter.peripheral(&device_id).await);
 
+    match peripheral
+        .set_connection_priority(ConnectionPriority::Balanced)
+        .await
+    {
+        Err(Error::NotConnected) => {}
+        other => panic!(
+            "contract violation at `set_connection_priority` before connect: expected Err(NotConnected), got {:?}",
+            other
+        ),
+    }
+
     // -- connect -------------------------------------------------------------
     require("connect", peripheral.connect().await);
     let connected = require("is_connected", peripheral.is_connected().await);
@@ -146,6 +157,33 @@ where
         connected,
         "contract violation: is_connected must be true right after connect"
     );
+
+    // -- connection priority ----------------------------------------------------
+    if adapter.capabilities().has(Capability::ConnectionPriority) {
+        for priority in [
+            ConnectionPriority::Low,
+            ConnectionPriority::Balanced,
+            ConnectionPriority::High,
+        ] {
+            require(
+                "set_connection_priority",
+                peripheral.set_connection_priority(priority).await,
+            );
+        }
+    } else {
+        match peripheral
+            .set_connection_priority(ConnectionPriority::Balanced)
+            .await
+        {
+            Err(Error::Unsupported { feature, .. }) => {
+                assert_eq!(feature, "set_connection_priority")
+            }
+            other => panic!(
+                "contract violation at `set_connection_priority` without the capability: expected Err(Unsupported), got {:?}",
+                other
+            ),
+        }
+    }
 
     // -- discover services ------------------------------------------------------
     let services = require("discover_services", peripheral.discover_services(&[]).await);

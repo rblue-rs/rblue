@@ -24,7 +24,7 @@ platform support is declared here only after Flutter packaging exists.
 Implemented operations include adapter initialization, scan/start/stop,
 peripheral lookup, connect/disconnect, service discovery, characteristic
 read/write, subscribe/unsubscribe, RSSI, MTU query, maximum write length,
-capabilities, connection state, and Apple system-connected peripheral lookup.
+capabilities, connection state, Apple system-connected peripheral lookup, and connection priority.
 
 ## Installation
 

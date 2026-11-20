@@ -76,6 +76,16 @@ struct CharacteristicParams {
     characteristic: CharacteristicId,
 }
 
+/// Connection-priority parameters
+/// (`{"device": <DeviceId>, "priority": "low"|"balanced"|"high"}`).
+#[derive(serde::Deserialize)]
+struct ConnectionPriorityParams {
+    /// The connected device.
+    device: DeviceId,
+    /// Requested connection trade-off.
+    priority: ConnectionPriority,
+}
+
 /// Write parameters: like [`CharacteristicParams`] plus the write mode.
 #[derive(serde::Deserialize)]
 struct WriteParams {
@@ -248,6 +258,14 @@ pub(crate) async fn execute(
             let connected = core.peripheral(&device).await?.is_connected().await?;
             Ok(json_payload(&connected))
         }
+        "set_connection_priority" => {
+            let ConnectionPriorityParams { device, priority } = parse_params(&params)?;
+            core.peripheral(&device)
+                .await?
+                .set_connection_priority(priority)
+                .await?;
+            Ok(Vec::new())
+        }
         unknown => Err(RequestFailure::InvalidArgument(format!(
             "unknown method {unknown:?}"
         ))),
@@ -393,7 +411,7 @@ mod tests {
         assert!(status.is_some());
         let (status, capabilities) = roundtrip(&mut fixture, 2, "capabilities", "{}", &[]).await;
         assert!(status.is_none());
-        assert!(serde_json::from_slice::<u16>(&capabilities).unwrap() > 0);
+        assert!(serde_json::from_slice::<u32>(&capabilities).unwrap() > 0);
         roundtrip(&mut fixture, 3, "connect", &device_params(), &[]).await;
         for (id, method, params) in [
             (4, "rssi", device_params()),
@@ -590,6 +608,48 @@ mod tests {
             roundtrip(&mut fixture, 3, "is_connected", &device_params(), &[]).await;
         assert!(status.is_none());
         assert_eq!(payload, b"true");
+    }
+
+    #[tokio::test]
+    async fn set_connection_priority_requires_connection_and_valid_enum() {
+        let mut fixture = Fixture::new().await;
+        let params = format!(
+            r#"{{"device":{},"priority":"high"}}"#,
+            serde_json::to_string(&device_id()).expect("device JSON")
+        );
+        let (status, _) = roundtrip(&mut fixture, 1, "set_connection_priority", &params, &[]).await;
+        assert!(
+            status
+                .as_deref()
+                .is_some_and(|error| error.contains("NotConnected")),
+            "{status:?}"
+        );
+
+        roundtrip(&mut fixture, 2, "connect", &device_params(), &[]).await;
+        let (status, _) = roundtrip(&mut fixture, 3, "set_connection_priority", &params, &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(
+            fixture.device.connection_priority(),
+            Some(ConnectionPriority::High)
+        );
+
+        let (status, _) = roundtrip(
+            &mut fixture,
+            4,
+            "set_connection_priority",
+            &format!(
+                r#"{{"device":{},"priority":"turbo"}}"#,
+                serde_json::to_string(&device_id()).expect("device JSON")
+            ),
+            &[],
+        )
+        .await;
+        assert!(
+            status
+                .as_deref()
+                .is_some_and(|error| error.contains("InvalidArgument")),
+            "{status:?}"
+        );
     }
 
     #[tokio::test]
