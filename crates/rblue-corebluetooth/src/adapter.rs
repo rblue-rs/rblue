@@ -39,7 +39,8 @@ use crate::peripheral::{CoreBluetoothPeripheral, NotificationHub};
 /// service-UUID filter and macOS needs the bluetooth-central background mode.
 const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
-    .union(CapabilitySet::bit(Capability::RssiDuringConnection));
+    .union(CapabilitySet::bit(Capability::RssiDuringConnection))
+    .union(CapabilitySet::bit(Capability::SystemConnectedPeripherals));
 
 /// How a btleplug sighting mutates the registry entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -805,6 +806,7 @@ mod tests {
         assert!(caps.has(Capability::ActiveScan));
         assert!(caps.has(Capability::GattClient));
         assert!(caps.has(Capability::RssiDuringConnection));
+        assert!(caps.has(Capability::SystemConnectedPeripherals));
         assert!(!caps.has(Capability::MtuNegotiation));
         assert!(!caps.has(Capability::MtuQuery));
         assert!(!caps.has(Capability::Pairing));

@@ -75,6 +75,24 @@ Live `StateChanged` events do not occur on this backend.
 | ScanResponse | no | Android merges advertisement and scan response into one `ScanRecord`; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| SystemConnectedPeripherals | yes | Shell-side `BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)`, filtered by cached `BluetoothDevice.getUuids()`. See "System-connected peripherals" below |
+
+## System-connected peripherals
+
+The fork does not implement `retrieve_peripherals`. The shell queries
+`BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)` over JNI
+(without editing the vendored fork Java), then asks the fork to
+`add_peripheral` for each match so the caller can `connect()` locally.
+The rblue session is not marked connected by the lookup itself.
+
+Service matching is strict: a connected device is returned only when
+`BluetoothDevice.getUuids()` is nonempty and intersects the requested
+list. That cache is populated from SDP/bond data and is often empty for
+devices that have never disclosed their GATT services to the system, so
+those devices are omitted rather than returned as false positives. API 31+
+requires the `BLUETOOTH_CONNECT` runtime permission; a denial surfaces as
+`Error::Permission(BluetoothPermissionDenied)`. An empty service list
+returns `Error::InvalidState`.
 
 ## Permissions matrix (write these into the app manifest)
 

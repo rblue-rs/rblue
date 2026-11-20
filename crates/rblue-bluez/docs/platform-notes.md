@@ -49,6 +49,15 @@ this backend.
 | ScanResponse | no | BlueZ merges scan-response payloads into the cumulative device properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 (this is exactly what the `bluer` migration unlocks) |
 | WatchAdvertisements | no | Web-only concept |
+| SystemConnectedPeripherals | yes | The fork's BlueZ `retrieve_peripherals` lists connected devices whose `UUIDs` property matches any requested service; returned handles still need a local `connect()` before GATT |
+
+## System-connected peripherals
+
+`Adapter::system_connected_peripherals` is implemented on top of the fork's
+`retrieve_peripherals` (connected BlueZ devices filtered by the `UUIDs`
+property). Matches are inserted into the shell registry without marking the
+rblue session connected; the caller must still `connect()` locally before
+GATT operations. An empty service list returns `Error::InvalidState`.
 
 ## Device identity and the RPA rule
 

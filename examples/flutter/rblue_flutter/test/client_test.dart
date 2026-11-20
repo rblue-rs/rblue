@@ -58,6 +58,22 @@ void main() {
     },
   );
 
+  test('systemConnectedPeripherals sends the service filter', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    const service = '0000180f-0000-1000-8000-00805f9b34fb';
+    final pending = client.systemConnectedPeripherals([service]);
+    expect(bridge.sent.last.method, 'system_connected_peripherals');
+    expect(bridge.sent.last.params, contains(service));
+    bridge.respondTo(
+      bridge.sent.last.reqId,
+      '[{"id":{"uuid":"device"},"name":"bonded"}]'.codeUnits,
+    );
+    final result = await pending;
+    expect(result.single.name, 'bonded');
+    client.dispose();
+  });
+
   test('device metrics use the native request protocol', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);

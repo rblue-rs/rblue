@@ -40,6 +40,7 @@ honest `AdapterState::Unknown` for the collapsed states.
 | ScanResponse | no | The fork consolidates advertisement + scan response into cumulative peripheral properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| SystemConnectedPeripherals | no | The forked WinRT backend already exposes `retrieve_peripherals`, but this backend keeps `Error::Unsupported` until a dedicated follow-up wires it through the shell |
 
 ## Device identity and the RPA rule
 

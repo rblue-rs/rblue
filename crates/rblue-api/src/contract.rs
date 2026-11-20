@@ -139,6 +139,49 @@ where
 
     let peripheral = require("peripheral", adapter.peripheral(&device_id).await);
 
+    // -- system-connected peripherals ---------------------------------------
+    // Empty service list is invalid even on backends that do not implement
+    // the lookup; a platform gap is reported only after a nonempty filter.
+    match adapter.system_connected_peripherals(&[]).await {
+        Err(Error::InvalidState(message)) => assert!(
+            message.contains("at least one service UUID"),
+            "contract violation: empty system_connected_peripherals must mention the required UUID list, got {message:?}"
+        ),
+        other => panic!(
+            "contract violation at `system_connected_peripherals([])`: expected Err(InvalidState), got {:?}",
+            other.as_ref().map(|_| ())
+        ),
+    }
+    if adapter
+        .capabilities()
+        .has(Capability::SystemConnectedPeripherals)
+    {
+        let connected = require(
+            "system_connected_peripherals",
+            adapter
+                .system_connected_peripherals(&[CONTRACT_SERVICE_UUID])
+                .await,
+        );
+        // The fixture is not necessarily system-connected, so the list may
+        // be empty. Identities of any returned handles must be usable.
+        for found in &connected {
+            let _ = found.id();
+        }
+    } else {
+        match adapter
+            .system_connected_peripherals(&[CONTRACT_SERVICE_UUID])
+            .await
+        {
+            Err(Error::Unsupported { feature, .. }) => {
+                assert_eq!(feature, "system_connected_peripherals")
+            }
+            other => panic!(
+                "contract violation at `system_connected_peripherals` without the capability: expected Err(Unsupported), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+    }
+
     // -- connect -------------------------------------------------------------
     require("connect", peripheral.connect().await);
     let connected = require("is_connected", peripheral.is_connected().await);

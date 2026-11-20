@@ -119,8 +119,12 @@ class RblueClient {
   /// Snapshot of the devices known to the adapter.
   Future<List<PeripheralInfo>> peripherals() => _peripheralList('peripherals');
 
-  /// Finds BLE devices already connected to the system by GATT service UUID.
-  /// On iOS, call [connect] before discovering or reading GATT services.
+  /// Finds BLE devices already connected to the system that match any of
+  /// [services]. The list must be nonempty.
+  ///
+  /// Supported on Apple, Android, and Linux; other platforms return
+  /// `Unsupported`. On Android, devices whose system UUID cache is empty are
+  /// omitted. The caller must still [connect] locally before GATT operations.
   Future<List<PeripheralInfo>> systemConnectedPeripherals(
     List<String> services,
   ) => _peripheralList('system_connected_peripherals', {'services': services});

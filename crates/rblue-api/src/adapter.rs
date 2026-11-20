@@ -118,12 +118,25 @@ pub trait Adapter: Send + Sync {
 
     /// Retrieves system-connected BLE peripherals matching any of `services`.
     ///
-    /// The list must be nonempty. The caller still needs to connect locally
-    /// before GATT operations. Returns [`Error::Unsupported`] on other backends.
+    /// `services` must be nonempty: an empty list returns
+    /// [`Error::InvalidState`]. The result is the set of BLE peripherals the
+    /// operating system already considers connected that match any given
+    /// service UUID. The caller still needs to [`Peripheral::connect`]
+    /// locally before GATT operations.
+    ///
+    /// Backends that cannot honor the lookup return [`Error::Unsupported`]
+    /// with `feature: "system_connected_peripherals"`. Check
+    /// [`Capability::SystemConnectedPeripherals`] first when the caller
+    /// wants to degrade gracefully.
     async fn system_connected_peripherals(
         &self,
-        _services: &[uuid::Uuid],
+        services: &[uuid::Uuid],
     ) -> Result<Vec<Arc<dyn Peripheral>>, Error> {
+        if services.is_empty() {
+            return Err(Error::InvalidState(
+                "at least one service UUID is required".into(),
+            ));
+        }
         Err(Error::Unsupported {
             platform: std::env::consts::OS,
             feature: "system_connected_peripherals",

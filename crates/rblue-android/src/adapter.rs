@@ -46,11 +46,14 @@ use crate::peripheral::{spawn_notification_forwarder, AndroidPeripheral, Notific
 /// API through the fork's trait surface (it negotiates automatically at
 /// connect), active pairing (`createBond` is not exposed), background
 /// scanning (API 31+ requires a foreground service - conservative), and the
-/// web-only picker.
+/// web-only picker. `SystemConnectedPeripherals` is honored via a shell-side
+/// `BluetoothManager.getConnectedDevices(GATT)` query filtered by cached
+/// `BluetoothDevice.getUuids()`.
 const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
-    .union(CapabilitySet::bit(Capability::RssiDuringConnection));
+    .union(CapabilitySet::bit(Capability::RssiDuringConnection))
+    .union(CapabilitySet::bit(Capability::SystemConnectedPeripherals));
 
 /// Registry entry for one device ever sighted by this adapter. Lives until
 /// the adapter is dropped: `Error::NotFound` is reserved for devices that
@@ -511,6 +514,30 @@ impl AndroidAdapter {
 }
 
 #[async_trait::async_trait]
+
+/// Constructs a fork peripheral for `address`. droidplug's `PeripheralId`
+/// field is `pub(super)`, so the shell rebuilds the id through the type's
+/// serde representation (the colon-delimited MAC string).
+async fn fork_peripheral_from_address(
+    adapter: &btleplug::platform::Adapter,
+    address: [u8; 6],
+) -> Result<btleplug::platform::Peripheral, Error> {
+    let id = peripheral_id_from_mac(address)?;
+    match adapter.peripheral(&id).await {
+        Ok(existing) => Ok(existing),
+        Err(_) => adapter
+            .add_peripheral(&id)
+            .await
+            .map_err(map_btleplug_error),
+    }
+}
+
+fn peripheral_id_from_mac(address: [u8; 6]) -> Result<btleplug::platform::PeripheralId, Error> {
+    let formatted = btleplug::api::BDAddr::from(address).to_string();
+    serde_json::from_str(&format!("\"{formatted}\""))
+        .map_err(|err| Error::Backend(format!("android peripheral id: {err}")))
+}
+
 impl Adapter for AndroidAdapter {
     fn id(&self) -> &AdapterId {
         &self.shared.adapter_id
@@ -606,6 +633,48 @@ impl Adapter for AndroidAdapter {
             .iter()
             .map(|entry| Arc::new(AndroidPeripheral::new(entry.clone())) as Arc<dyn Peripheral>)
             .collect())
+    }
+
+    async fn system_connected_peripherals(
+        &self,
+        services: &[uuid::Uuid],
+    ) -> Result<Vec<Arc<dyn Peripheral>>, Error> {
+        if services.is_empty() {
+            return Err(Error::InvalidState(
+                "at least one service UUID is required".into(),
+            ));
+        }
+        let adapter = self.initialized_adapter().await?;
+        let reported = crate::system_connected::query_gatt_connected()?;
+        let mut results: Vec<Arc<dyn Peripheral>> = Vec::new();
+        for device in reported {
+            if !crate::system_connected::matches_requested_services(&device.services, services) {
+                continue;
+            }
+            let peripheral = fork_peripheral_from_address(&adapter, device.address).await?;
+            let advertisement = AdvertisementData {
+                local_name: device.name.clone(),
+                services: device.services.clone(),
+                ..AdvertisementData::default()
+            };
+            let device_id = device_id_from(btleplug::api::BDAddr::from(device.address));
+            let mut inner = self.shared.lock_state();
+            let entry = if let Some(entry) = inner.find(&device.address) {
+                entry.ensure_handle(peripheral);
+                entry
+            } else {
+                let entry = Arc::new(DeviceEntry::new(
+                    device_id,
+                    device.address,
+                    peripheral,
+                    advertisement,
+                ));
+                inner.devices.push(entry.clone());
+                entry
+            };
+            results.push(Arc::new(AndroidPeripheral::new(entry)) as Arc<dyn Peripheral>);
+        }
+        Ok(results)
     }
 
     async fn peripheral(&self, id: &DeviceId) -> Result<Arc<dyn Peripheral>, Error> {
