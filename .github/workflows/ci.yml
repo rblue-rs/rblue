@@ -64,6 +64,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # rblue-bluez rustdoc compiles the Linux glue; libdbus is needed by
+      # btleplug's bluez implementation.
+      - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
@@ -77,14 +80,18 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      # Platform shells (winrt/corebluetooth/bluez/android) are single-platform
-      # by design and stay out of the wasm32 matrix; see AGENTS.md.
+      # Platform shells (winrt/corebluetooth/bluez/android) and the
+      # Kotlin/Swift/C FFI facades (rblue-ffi, rblue-c) stay out of the wasm32
+      # matrix; the web facade is the aggregate crate's `web` feature. See
+      # AGENTS.md.
       - run: >-
           cargo check --workspace
           --exclude rblue-winrt
           --exclude rblue-corebluetooth
           --exclude rblue-bluez
           --exclude rblue-android
+          --exclude rblue-ffi
+          --exclude rblue-c
           --target wasm32-unknown-unknown
 
   cross-apple:
