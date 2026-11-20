@@ -93,6 +93,27 @@ jobs:
               raise SystemExit("Expected a 160/160 pana score")
           PY
 
+  # The development app under examples/flutter and the packaged copy under
+  # rblue_flutter/example are near-duplicates (import paths and some
+  # formatting differ). Both suites are run on purpose so neither tree can
+  # drift untested. These are widget/state tests with fake bridges; no
+  # Bluetooth hardware is required.
+  example-app-tests:
+    name: Flutter example app tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Test development example (examples/flutter/test)
+        working-directory: examples/flutter
+        run: flutter test
+      - name: Test packaged example (examples/flutter/rblue_flutter/example/test)
+        working-directory: ${{ env.EXAMPLE_DIR }}
+        run: flutter test
+
   android-minimum:
     name: Android (Flutter 3.41.7 compatibility)
     runs-on: ubuntu-latest
@@ -254,7 +275,7 @@ jobs:
   publish:
     name: Publish rblue_flutter to pub.dev
     if: startsWith(github.ref, 'refs/tags/rblue_flutter-v')
-    needs: [rust-tests, package, android-minimum, android, apple, windows]
+    needs: [rust-tests, package, example-app-tests, android-minimum, android, apple, windows]
     permissions:
       id-token: write
       contents: read
