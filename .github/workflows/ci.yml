@@ -55,7 +55,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      # Default quality gate: the workspace run now includes
+      # tests/contract_mock.rs (MockAdapter::with_contract_fixture). The
+      # explicit follow-up keeps that suite visible in CI logs and honors
+      # the historical `--features contract` invocation.
       - run: cargo test --workspace
+      - name: Mock contract suite
+        run: cargo test -p rblue-api --features contract --test contract_mock
 
   docs:
     name: rustdoc

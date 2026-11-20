@@ -46,7 +46,6 @@
 pub mod adapter;
 pub mod cache;
 pub mod capability;
-#[cfg(any(test, feature = "contract"))]
 pub mod contract;
 pub mod debounce;
 pub mod device;
@@ -95,7 +94,6 @@ pub mod prelude {
 pub use crate::adapter::{Adapter, AdapterEventStream};
 pub use crate::cache::{ServiceCache, ServiceCacheConfig, ValidationEvidence};
 pub use crate::capability::{Capability, CapabilitySet};
-#[cfg(any(test, feature = "contract"))]
 pub use crate::contract::{
     run_contract_suite, CONTRACT_CHARACTERISTIC_UUID, CONTRACT_SERVICE_UUID,
 };
