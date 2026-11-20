@@ -16,6 +16,78 @@ use crate::gatt::{CharacteristicId, Notification, ServiceSet, WriteMode};
 /// value-add layer layers configurable buffering on top.
 pub type NotificationStream = BoxStream<'static, Notification>;
 
+/// Options for [`Peripheral::connect_with`].
+///
+/// `auto_connect` is the **platform/stack** background-connection flag
+/// (Android `connectGatt(autoConnect=true)` and equivalents). It is not
+/// [`crate::SupervisorHandle::auto_connect`], which is the application-level
+/// reconnect supervisor (backoff, GATT 133 breaker, [`crate::ReconnectPolicy`]).
+///
+/// `mtu` reserves the connect-time ATT MTU request from the `request_mtu`
+/// issue. Backends that do not yet implement an explicit MTU request return
+/// [`Error::Unsupported`] with `feature: "request_mtu"` when this is `Some`.
+///
+/// [`Peripheral::connect`] is equivalent to
+/// `connect_with(&ConnectOptions::default())` (`auto_connect: false`,
+/// `mtu: None`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
+pub struct ConnectOptions {
+    /// When `true`, request the platform's background/auto connection
+    /// behaviour. When `false`, perform a direct connection attempt.
+    ///
+    /// Callers should check [`crate::Capability::AutoConnect`] first. A
+    /// backend without a stack-level auto-connect API returns
+    /// [`Error::Unsupported`] with `feature: "auto_connect"` if this is
+    /// `true`; `false` must not fail for that reason.
+    pub auto_connect: bool,
+    /// Optional ATT MTU to request as part of the connection. `None`
+    /// leaves MTU negotiation to the backend default.
+    pub mtu: Option<u16>,
+}
+
+impl Default for ConnectOptions {
+    fn default() -> Self {
+        Self {
+            auto_connect: false,
+            mtu: None,
+        }
+    }
+}
+
+impl ConnectOptions {
+    /// Returns `true` when these options are equivalent to
+    /// [`Peripheral::connect`] (no platform auto-connect, no explicit MTU).
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
+        !self.auto_connect && self.mtu.is_none()
+    }
+
+    /// Returns [`Error::Unsupported`] for any option this backend does not
+    /// implement; `Ok(())` when [`Self::is_default`] holds.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Unsupported`] with `feature: "auto_connect"` or
+    /// `feature: "request_mtu"`.
+    pub fn reject_unsupported(&self, platform: &'static str) -> Result<(), Error> {
+        if self.auto_connect {
+            return Err(Error::Unsupported {
+                platform,
+                feature: "auto_connect",
+            });
+        }
+        if self.mtu.is_some() {
+            return Err(Error::Unsupported {
+                platform,
+                feature: "request_mtu",
+            });
+        }
+        Ok(())
+    }
+}
+
 /// A GATT client session with one peripheral.
 ///
 /// Obtained from [`crate::Adapter::peripheral`] /
@@ -65,6 +137,8 @@ pub trait Peripheral: Send + Sync {
 
     /// Connects (or re-connects) to the peripheral.
     ///
+    /// Equivalent to [`Peripheral::connect_with`] with
+    /// [`ConnectOptions::default()`] (`auto_connect: false`, `mtu: None`).
     /// Resolves once the link is up; the GATT tree is *not* discovered here -
     /// call [`Peripheral::discover_services`] next. Directly connecting to an
     /// address the adapter has not observed may be impossible (Windows only
@@ -78,6 +152,29 @@ pub trait Peripheral: Send + Sync {
     /// `Error::Platform{code}` with raw status codes such as Android GATT
     /// status 133.
     async fn connect(&self) -> Result<(), Error>;
+
+    /// Connects (or re-connects) to the peripheral with [`ConnectOptions`].
+    ///
+    /// `opts.auto_connect` selects the platform/stack background connection
+    /// flag, not the reconnect supervisor. Use
+    /// [`crate::SupervisorHandle::auto_connect`] for supervised retries.
+    ///
+    /// The default implementation calls [`Peripheral::connect`] when
+    /// [`ConnectOptions::is_default`] is true, and otherwise returns
+    /// [`Error::Unsupported`] for `auto_connect` or `request_mtu`. Backends
+    /// that support a flag override this method and should still reject
+    /// options they do not implement rather than ignoring them.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Unsupported`] when a requested option is not available on
+    /// this backend, plus the same failures as [`Peripheral::connect`].
+    async fn connect_with(&self, opts: &ConnectOptions) -> Result<(), Error> {
+        if opts.is_default() {
+            return self.connect().await;
+        }
+        opts.reject_unsupported("unknown")
+    }
 
     /// Disconnects from the peripheral. Idempotent: disconnecting an already
     /// disconnected peripheral succeeds.
@@ -199,4 +296,125 @@ pub trait Peripheral: Send + Sync {
     /// [`Error::Unsupported`] where the platform does not expose the value
     /// (iOS: system-managed, web); use [`Peripheral::max_write_len`] instead.
     async fn mtu(&self) -> Result<u16, Error>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::{AddressType, DeviceId};
+    use crate::gatt::ServiceSet;
+    use futures::{FutureExt, StreamExt};
+
+    struct Stub;
+
+    #[async_trait::async_trait]
+    impl Peripheral for Stub {
+        fn id(&self) -> &DeviceId {
+            static ID: std::sync::OnceLock<DeviceId> = std::sync::OnceLock::new();
+            ID.get_or_init(|| DeviceId::Mac([0; 6], AddressType::Public))
+        }
+        fn name(&self) -> Option<String> {
+            None
+        }
+        async fn is_connected(&self) -> Result<bool, Error> {
+            Ok(false)
+        }
+        async fn connect(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn disconnect(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn discover_services(&self, _filter: &[uuid::Uuid]) -> Result<ServiceSet, Error> {
+            Ok(ServiceSet::default())
+        }
+        async fn read(&self, _ch: &CharacteristicId) -> Result<Vec<u8>, Error> {
+            Ok(Vec::new())
+        }
+        async fn write(
+            &self,
+            _ch: &CharacteristicId,
+            _data: &[u8],
+            _mode: WriteMode,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn max_write_len(
+            &self,
+            _ch: &CharacteristicId,
+            _mode: WriteMode,
+        ) -> Result<usize, Error> {
+            Ok(20)
+        }
+        async fn subscribe(&self, _ch: &CharacteristicId) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn unsubscribe(&self, _ch: &CharacteristicId) -> Result<(), Error> {
+            Ok(())
+        }
+        fn notifications(&self) -> NotificationStream {
+            futures::stream::empty().boxed()
+        }
+        async fn pair(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn rssi(&self) -> Result<i16, Error> {
+            Ok(0)
+        }
+        async fn mtu(&self) -> Result<u16, Error> {
+            Ok(23)
+        }
+    }
+
+    #[test]
+    fn default_options_are_direct_connect() {
+        let opts = ConnectOptions::default();
+        assert!(!opts.auto_connect);
+        assert_eq!(opts.mtu, None);
+        assert!(opts.is_default());
+    }
+
+    #[test]
+    fn default_connect_with_delegates_to_connect() {
+        let result = Stub.connect_with(&ConnectOptions::default()).now_or_never();
+        assert!(matches!(result, Some(Ok(()))));
+    }
+
+    #[test]
+    fn connect_with_rejects_auto_connect_without_backend_support() {
+        let opts = ConnectOptions {
+            auto_connect: true,
+            mtu: None,
+        };
+        let result = Stub.connect_with(&opts).now_or_never();
+        assert!(
+            matches!(
+                result,
+                Some(Err(Error::Unsupported {
+                    platform: "unknown",
+                    feature: "auto_connect",
+                }))
+            ),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn connect_with_rejects_mtu_until_request_mtu_is_implemented() {
+        let opts = ConnectOptions {
+            auto_connect: false,
+            mtu: Some(512),
+        };
+        let result = Stub.connect_with(&opts).now_or_never();
+        assert!(
+            matches!(
+                result,
+                Some(Err(Error::Unsupported {
+                    platform: "unknown",
+                    feature: "request_mtu",
+                }))
+            ),
+            "{result:?}"
+        );
+    }
 }

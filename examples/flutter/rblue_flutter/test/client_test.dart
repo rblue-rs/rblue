@@ -216,6 +216,50 @@ void main() {
     client.dispose();
   });
 
+  test('connect sends auto_connect and reserved mtu options', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+    unawaited(quiet(client.connect(device, autoConnect: true, mtu: 512)));
+    expect(bridge.sent.single.method, 'connect');
+    expect(bridge.sent.single.params, contains('"auto_connect":true'));
+    expect(bridge.sent.single.params, contains('"mtu":512'));
+    client.dispose();
+  });
+
+  test('supervisor auto_connect and unwatch use rust method names', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+    unawaited(
+      quiet(
+        client.autoConnect(
+          device,
+          policy: const ReconnectPolicy(
+            initialBackoff: Duration(milliseconds: 10),
+            maxBackoff: Duration(milliseconds: 100),
+            jitterFraction: 0,
+          ),
+        ),
+      ),
+    );
+    expect(bridge.sent.single.method, 'auto_connect');
+    expect(bridge.sent.single.params, contains('"initial_backoff_ms":10'));
+    expect(bridge.sent.single.params, contains('"max_backoff_ms":100'));
+    unawaited(quiet(client.unwatch(device)));
+    expect(bridge.sent.last.method, 'unwatch');
+
+    final events = <SupervisorEvent>[];
+    final done = client.supervisorEvents.take(1).forEach(events.add);
+    bridge.emitEvent(
+      '{"type":"supervisor_event","event":{"connected":'
+      '{"mac":[[2,0,0,0,0,1],"random_static"]}}}',
+    );
+    await done;
+    expect(events.single, isA<SupervisorConnected>());
+    client.dispose();
+  });
+
   test('dispose closes the handle and fails later calls', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);
