@@ -51,7 +51,8 @@ pub(crate) fn native_init<'caller>(mut unowned_env: EnvUnowned<'caller>) -> jboo
 ///
 /// # Safety
 ///
-/// `env` must be a valid `JNIEnv*` for the current thread's JNI attachment.
+/// `env` must be a valid, non-null `JNIEnv*` for the current thread, which
+/// must be attached to the JVM for the duration of the call.
 /// `class` is the JNI class argument and is unused.
 pub(crate) unsafe fn native_init_from_raw(env: *mut c_void, _class: *mut c_void) -> jboolean {
     let unowned_env = unsafe { EnvUnowned::from_raw(env as *mut JNIEnv) };

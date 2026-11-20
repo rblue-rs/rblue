@@ -49,6 +49,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Verify committed native artifact checksums
         run: python3 examples/flutter/tools/verify-native-artifacts.py
+      - name: Verify native source snapshot matches workspace crates
+        run: bash examples/flutter/tools/check-snapshot-sync.sh
       - name: Analyze and test package
         working-directory: ${{ env.PACKAGE_DIR }}
         run: |
@@ -164,7 +166,10 @@ jobs:
       - name: Rebuild packaged Android C ABI
         run: examples/flutter/tools/build-libs.sh --android-only
       - name: Free Rust target directory after staging JNI libraries
-        run: rm -rf target
+        # build-libs.sh builds the package-local snapshot workspace, so its
+        # artifacts live under native/source/target; the staged copies in
+        # android/src/main/jniLibs are all later steps need.
+        run: rm -rf "$PACKAGE_DIR/native/source/target"
       - name: Verify generated Dart bindings
         working-directory: examples/flutter
         run: |
@@ -180,17 +185,29 @@ jobs:
           rm -f build/app/outputs/flutter-apk/app-debug.apk
           flutter build apk --release
       - name: Verify packaged ABIs, exports, and JNI helpers
+        shell: bash
         run: |
+          set -euo pipefail
           apk="$EXAMPLE_DIR/build/app/outputs/flutter-apk/app-release.apk"
           unzip -l "$apk" | grep 'lib/arm64-v8a/librblue_c.so'
           unzip -l "$apk" | grep 'lib/armeabi-v7a/librblue_c.so'
           unzip -l "$apk" | grep 'lib/x86_64/librblue_c.so'
-          for library in "$PACKAGE_DIR"/android/src/main/jniLibs/*/librblue_c.so; do
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            library="$PACKAGE_DIR/android/src/main/jniLibs/$abi/librblue_c.so"
+            test -f "$library"
+            # Capture first, then match a here-string: `nm | grep -q` under
+            # pipefail can fail on SIGPIPE once grep exits early.
+            exports="$(nm -D --defined-only "$library")"
             for symbol in rblue_new rblue_shutdown rblue_free rblue_request \
               rblue_set_event_callback rblue_set_owned_response_callback \
-              rblue_set_response_callback rblue_free_string rblue_free_payload; do
-              nm -D --defined-only "$library" | grep -q " $symbol$"
+              rblue_set_response_callback rblue_free_string rblue_free_payload \
+              Java_com_rblue_RblueNative_nativeInit; do
+              if ! grep -q " $symbol$" <<<"$exports"; then
+                echo "::error::$abi/librblue_c.so does not export $symbol"
+                exit 1
+              fi
             done
+            echo "$abi/librblue_c.so exports the C ABI and JNI nativeInit"
           done
           python3 examples/flutter/tools/check-android-jni.py "$apk"
 

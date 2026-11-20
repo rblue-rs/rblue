@@ -122,7 +122,8 @@ pub fn init(env: &mut jni::Env<'_>) -> Result<(), Error> {
 ///
 /// # Safety
 ///
-/// `env` must be a valid `JNIEnv*` for the current thread's JNI attachment.
+/// `env` must be a valid, non-null `JNIEnv*` for the current thread, which
+/// must be attached to the JVM for the duration of the call.
 /// `class` is the JNI class argument and is unused.
 #[cfg(target_os = "android")]
 pub unsafe fn native_init_from_raw(
