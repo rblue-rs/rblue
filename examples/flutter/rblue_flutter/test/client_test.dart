@@ -118,6 +118,27 @@ void main() {
     client.dispose();
   });
 
+  test('write forwards allow_long_write and defaults it to false', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+    unawaited(quiet(client.write(device, _characteristic(), [1, 2, 3])));
+    expect(bridge.sent.single.method, 'write');
+    expect(bridge.sent.single.params, contains('"allow_long_write":false'));
+    unawaited(
+      quiet(
+        client.write(
+          device,
+          _characteristic(),
+          List.filled(600, 1),
+          allowLongWrite: true,
+        ),
+      ),
+    );
+    expect(bridge.sent.last.params, contains('"allow_long_write":true'));
+    client.dispose();
+  });
+
   test('status_json maps to typed errors, platform codes preserved', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);

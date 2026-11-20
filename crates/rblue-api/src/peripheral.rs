@@ -16,6 +16,34 @@ use crate::gatt::{CharacteristicId, Notification, ServiceSet, WriteMode};
 /// value-add layer layers configurable buffering on top.
 pub type NotificationStream = BoxStream<'static, Notification>;
 
+/// Options for [`Peripheral::write_with`].
+///
+/// `allow_long_write` enables sequential, MTU-sized writes when `data`
+/// exceeds [`Peripheral::max_write_len`]. This is an option on
+/// [`Peripheral::write_with`], not a second public method name such as
+/// `mtu_split` or `chunked_write`.
+///
+/// [`Peripheral::write`] keeps the unified default: oversize payloads
+/// return [`Error::InvalidLength`] and are never silently truncated or
+/// chunked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
+pub struct WriteOptions {
+    /// When `true`, payloads longer than [`Peripheral::max_write_len`] are
+    /// written as sequential chunks of that length. When `false`, oversize
+    /// payloads fail with [`Error::InvalidLength`].
+    pub allow_long_write: bool,
+}
+
+impl Default for WriteOptions {
+    fn default() -> Self {
+        Self {
+            allow_long_write: false,
+        }
+    }
+}
+
 /// A GATT client session with one peripheral.
 ///
 /// Obtained from [`crate::Adapter::peripheral`] /
@@ -130,6 +158,54 @@ pub trait Peripheral: Send + Sync {
     async fn write(&self, ch: &CharacteristicId, data: &[u8], mode: WriteMode)
         -> Result<(), Error>;
 
+    /// Writes `data` with [`WriteOptions`].
+    ///
+    /// When [`WriteOptions::allow_long_write`] is `false`, this is
+    /// equivalent to [`Peripheral::write`] (oversize payloads still return
+    /// [`Error::InvalidLength`]).
+    ///
+    /// When it is `true` and `data` is longer than the current
+    /// [`Peripheral::max_write_len`], the payload is written as sequential
+    /// chunks. `max_write_len` is re-queried before every chunk because the
+    /// ATT MTU may change. A failed chunk stops the transfer and is
+    /// returned; earlier chunks are not rolled back. The last chunk is the
+    /// remainder of `data` and is never truncated.
+    ///
+    /// Backends that cannot reliably chunk the chosen [`WriteMode`] should
+    /// override this method and return [`Error::Unsupported`] with
+    /// `feature: "allow_long_write"` when the option is `true`; the default
+    /// [`Peripheral::write`] path must still return [`Error::InvalidLength`].
+    ///
+    /// # Errors
+    ///
+    /// The same failures as [`Peripheral::write`], plus
+    /// [`Error::Unsupported`] when a backend cannot honor long writes.
+    async fn write_with(
+        &self,
+        ch: &CharacteristicId,
+        data: &[u8],
+        mode: WriteMode,
+        opts: &WriteOptions,
+    ) -> Result<(), Error> {
+        if !opts.allow_long_write {
+            return self.write(ch, data, mode).await;
+        }
+        let mut offset = 0;
+        while offset < data.len() {
+            let max = self.max_write_len(ch, mode).await?;
+            if max == 0 {
+                return Err(Error::InvalidLength {
+                    len: data.len() - offset,
+                    max: 0,
+                });
+            }
+            let end = offset.saturating_add(max).min(data.len());
+            self.write(ch, &data[offset..end], mode).await?;
+            offset = end;
+        }
+        Ok(())
+    }
+
     /// Maximum payload accepted by [`Peripheral::write`] for this
     /// characteristic and mode, in bytes.
     ///
@@ -199,4 +275,207 @@ pub trait Peripheral: Send + Sync {
     /// [`Error::Unsupported`] where the platform does not expose the value
     /// (iOS: system-managed, web); use [`Peripheral::max_write_len`] instead.
     async fn mtu(&self) -> Result<u16, Error>;
+}
+
+#[cfg(test)]
+mod write_with_tests {
+    use super::*;
+    use crate::device::{AddressType, DeviceId};
+    use crate::gatt::ServiceSet;
+    use futures::{FutureExt, StreamExt};
+    use std::sync::Mutex;
+
+    struct ScriptedWriter {
+        id: DeviceId,
+        max: Mutex<Vec<usize>>,
+        current_max: Mutex<usize>,
+        writes: Mutex<Vec<Vec<u8>>>,
+        fail_at: Option<usize>,
+    }
+
+    impl ScriptedWriter {
+        fn new(max_sequence: Vec<usize>) -> Self {
+            let current = max_sequence.first().copied().unwrap_or(20);
+            Self {
+                id: DeviceId::Mac([0; 6], AddressType::Public),
+                max: Mutex::new(max_sequence),
+                current_max: Mutex::new(current),
+                writes: Mutex::new(Vec::new()),
+                fail_at: None,
+            }
+        }
+
+        fn written(&self) -> Vec<Vec<u8>> {
+            self.writes.lock().expect("writes").clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Peripheral for ScriptedWriter {
+        fn id(&self) -> &DeviceId {
+            &self.id
+        }
+        fn name(&self) -> Option<String> {
+            None
+        }
+        async fn is_connected(&self) -> Result<bool, Error> {
+            Ok(true)
+        }
+        async fn connect(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn disconnect(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn discover_services(&self, _filter: &[uuid::Uuid]) -> Result<ServiceSet, Error> {
+            Ok(ServiceSet::default())
+        }
+        async fn read(&self, _ch: &CharacteristicId) -> Result<Vec<u8>, Error> {
+            Ok(Vec::new())
+        }
+        async fn write(
+            &self,
+            _ch: &CharacteristicId,
+            data: &[u8],
+            _mode: WriteMode,
+        ) -> Result<(), Error> {
+            let max = *self.current_max.lock().expect("current_max");
+            if data.len() > max {
+                return Err(Error::InvalidLength {
+                    len: data.len(),
+                    max,
+                });
+            }
+            let mut writes = self.writes.lock().expect("writes");
+            if self.fail_at == Some(writes.len()) {
+                return Err(Error::Disconnected);
+            }
+            writes.push(data.to_vec());
+            Ok(())
+        }
+        async fn max_write_len(
+            &self,
+            _ch: &CharacteristicId,
+            _mode: WriteMode,
+        ) -> Result<usize, Error> {
+            let mut seq = self.max.lock().expect("max");
+            let value = if seq.len() <= 1 {
+                seq.first().copied().unwrap_or(20)
+            } else {
+                seq.remove(0)
+            };
+            *self.current_max.lock().expect("current_max") = value;
+            Ok(value)
+        }
+        async fn subscribe(&self, _ch: &CharacteristicId) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn unsubscribe(&self, _ch: &CharacteristicId) -> Result<(), Error> {
+            Ok(())
+        }
+        fn notifications(&self) -> NotificationStream {
+            futures::stream::empty().boxed()
+        }
+        async fn pair(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn rssi(&self) -> Result<i16, Error> {
+            Ok(0)
+        }
+        async fn mtu(&self) -> Result<u16, Error> {
+            Ok(23)
+        }
+    }
+
+    fn characteristic() -> CharacteristicId {
+        CharacteristicId {
+            service: crate::gatt::ServiceId {
+                uuid: uuid::Uuid::nil(),
+                instance: 0,
+            },
+            uuid: uuid::Uuid::nil(),
+            instance: 0,
+        }
+    }
+
+    #[test]
+    fn default_options_reject_oversize() {
+        let writer = ScriptedWriter::new(vec![4]);
+        let data = vec![1, 2, 3, 4, 5];
+        let result = writer
+            .write_with(
+                &characteristic(),
+                &data,
+                WriteMode::WithResponse,
+                &WriteOptions::default(),
+            )
+            .now_or_never()
+            .expect("ready");
+        assert!(
+            matches!(result, Err(Error::InvalidLength { len: 5, max: 4 })),
+            "{result:?}"
+        );
+        assert!(writer.written().is_empty());
+    }
+
+    #[test]
+    fn long_write_chunks_sequentially_without_truncating() {
+        let writer = ScriptedWriter::new(vec![3]);
+        let data = vec![1, 2, 3, 4, 5, 6, 7];
+        let result = writer
+            .write_with(
+                &characteristic(),
+                &data,
+                WriteMode::WithResponse,
+                &WriteOptions {
+                    allow_long_write: true,
+                },
+            )
+            .now_or_never()
+            .expect("ready");
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(
+            writer.written(),
+            vec![vec![1, 2, 3], vec![4, 5, 6], vec![7]]
+        );
+    }
+
+    #[test]
+    fn long_write_requeries_max_write_len_before_each_chunk() {
+        let writer = ScriptedWriter::new(vec![3, 1, 10]);
+        let data = vec![1, 2, 3, 4, 5, 6];
+        let result = writer
+            .write_with(
+                &characteristic(),
+                &data,
+                WriteMode::WithoutResponse,
+                &WriteOptions {
+                    allow_long_write: true,
+                },
+            )
+            .now_or_never()
+            .expect("ready");
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(writer.written(), vec![vec![1, 2, 3], vec![4], vec![5, 6]]);
+    }
+
+    #[test]
+    fn long_write_stops_after_a_failed_chunk() {
+        let mut writer = ScriptedWriter::new(vec![2]);
+        writer.fail_at = Some(1);
+        let data = vec![1, 2, 3, 4, 5];
+        let result = writer
+            .write_with(
+                &characteristic(),
+                &data,
+                WriteMode::WithResponse,
+                &WriteOptions {
+                    allow_long_write: true,
+                },
+            )
+            .now_or_never()
+            .expect("ready");
+        assert!(matches!(result, Err(Error::Disconnected)), "{result:?}");
+        assert_eq!(writer.written(), vec![vec![1, 2]]);
+    }
 }

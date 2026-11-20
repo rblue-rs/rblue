@@ -87,6 +87,10 @@ struct WriteParams {
     /// `with_response`.
     #[serde(default)]
     mode: WriteMode,
+    /// When `true`, oversize payloads are written as sequential MTU-sized
+    /// chunks. Defaults to `false` (`InvalidLength`).
+    #[serde(default)]
+    allow_long_write: bool,
 }
 
 /// Summary of one known device, the result shape of the `peripherals` method.
@@ -191,10 +195,16 @@ pub(crate) async fn execute(
                 device,
                 characteristic,
                 mode,
+                allow_long_write,
             } = parse_params(&params)?;
             core.peripheral(&device)
                 .await?
-                .write(&characteristic, &payload, mode)
+                .write_with(
+                    &characteristic,
+                    &payload,
+                    mode,
+                    &WriteOptions { allow_long_write },
+                )
                 .await?;
             Ok(Vec::new())
         }
@@ -234,6 +244,7 @@ pub(crate) async fn execute(
                 device,
                 characteristic,
                 mode,
+                ..
             } = parse_params(&params)?;
             Ok(json_payload(
                 &core
@@ -482,6 +493,20 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&status).expect("status JSON");
         assert_eq!(value["InvalidLength"]["len"], 600, "{status}");
         assert_eq!(value["InvalidLength"]["max"], 514, "{status}");
+    }
+
+    #[tokio::test]
+    async fn allow_long_write_chunks_oversize_payloads() {
+        let mut fixture = Fixture::new().await;
+        roundtrip(&mut fixture, 1, "connect", &device_params(), &[]).await;
+        let oversize = vec![0u8; 600];
+        let mut params: serde_json::Value = serde_json::from_str(&characteristic_params()).unwrap();
+        params["allow_long_write"] = serde_json::json!(true);
+        let (status, _) = roundtrip(&mut fixture, 2, "write", &params.to_string(), &oversize).await;
+        assert!(
+            status.is_none(),
+            "allow_long_write should succeed: {status:?}"
+        );
     }
 
     #[tokio::test]
