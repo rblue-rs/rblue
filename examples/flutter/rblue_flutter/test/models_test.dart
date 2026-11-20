@@ -243,4 +243,23 @@ void main() {
       expect(notification.id.uuid, '00000000-0000-0000-0000-000000002a19');
     });
   });
+
+  group('Capability', () {
+    test('keeps published bit positions and reserves bit 13', () {
+      expect(Capability.passiveScan, 1 << 0);
+      expect(Capability.backgroundScan, 1 << 12);
+      expect(Capability.adapterPowerControl, 1 << 14);
+      expect(
+        Capability.has(
+          Capability.adapterPowerControl,
+          Capability.adapterPowerControl,
+        ),
+        isTrue,
+      );
+      expect(
+        Capability.has(Capability.gattClient, Capability.adapterPowerControl),
+        isFalse,
+      );
+    });
+  });
 }

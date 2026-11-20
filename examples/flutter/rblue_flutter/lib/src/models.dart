@@ -916,3 +916,55 @@ class AdapterDeviceDisconnected extends AdapterEvent {
   /// Builds the event.
   const AdapterDeviceDisconnected(this.id, this.reason);
 }
+
+/// Bit constants for `rblue_api::Capability`, matching the Rust bit
+/// positions. The mask itself is a `u32`.
+abstract final class Capability {
+  /// See `Capability::PassiveScan`.
+  static const int passiveScan = 1 << 0;
+
+  /// See `Capability::ActiveScan`.
+  static const int activeScan = 1 << 1;
+
+  /// See `Capability::ScanResponse`.
+  static const int scanResponse = 1 << 2;
+
+  /// See `Capability::GattClient`.
+  static const int gattClient = 1 << 3;
+
+  /// See `Capability::GattServer`.
+  static const int gattServer = 1 << 4;
+
+  /// See `Capability::Advertise`.
+  static const int advertise = 1 << 5;
+
+  /// See `Capability::RssiDuringConnection`.
+  static const int rssiDuringConnection = 1 << 6;
+
+  /// See `Capability::MtuNegotiation`.
+  static const int mtuNegotiation = 1 << 7;
+
+  /// See `Capability::MtuQuery`.
+  static const int mtuQuery = 1 << 8;
+
+  /// See `Capability::Pairing`.
+  static const int pairing = 1 << 9;
+
+  /// See `Capability::WatchAdvertisements`.
+  static const int watchAdvertisements = 1 << 10;
+
+  /// See `Capability::RequestDevicePicker`.
+  static const int requestDevicePicker = 1 << 11;
+
+  /// See `Capability::BackgroundScan`.
+  static const int backgroundScan = 1 << 12;
+
+  /// Bit 13 is reserved for `Capability::AutoConnect` in PR #23.
+
+  /// Programmatic radio on/off (`Adapter::set_powered`). Querying
+  /// [RblueClient.state] does not require this bit.
+  static const int adapterPowerControl = 1 << 14;
+
+  /// Returns whether [bits] includes [capability].
+  static bool has(int bits, int capability) => (bits & capability) != 0;
+}

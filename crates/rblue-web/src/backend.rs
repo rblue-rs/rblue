@@ -303,6 +303,37 @@ impl WebAdapter {
     fn bluetooth(&self) -> Option<&Bluetooth> {
         self.bluetooth.as_ref()
     }
+
+    /// Best-effort radio probe. Failures (insecure context, missing API)
+    /// leave the state [`AdapterState::Unknown`] and are not fatal.
+    async fn probe_availability(&self) -> AdapterState {
+        let Some(bluetooth) = self.bluetooth() else {
+            return AdapterState::Unavailable;
+        };
+        match bluetooth.get_availability() {
+            Ok(promise) => match JsSend::new(JsFuture::from(promise)).await {
+                Ok(available) => {
+                    if let Some(available) = available.as_bool() {
+                        if available {
+                            AdapterState::PoweredOn
+                        } else {
+                            AdapterState::PoweredOff
+                        }
+                    } else {
+                        AdapterState::Unknown
+                    }
+                }
+                Err(js) => {
+                    tracing::debug!(?js, "navigator.bluetooth.getAvailability() rejected");
+                    AdapterState::Unknown
+                }
+            },
+            Err(js) => {
+                tracing::debug!(?js, "navigator.bluetooth.getAvailability() threw");
+                AdapterState::Unknown
+            }
+        }
+    }
 }
 
 /// Reads `navigator.bluetooth` from the global window; `None` where the
@@ -549,35 +580,32 @@ impl Adapter for WebAdapter {
     }
 
     async fn initialize(&self) -> Result<(), Error> {
-        let Some(bluetooth) = self.bluetooth() else {
+        if self.bluetooth().is_none() {
             return Err(Error::Unsupported {
                 platform: PLATFORM,
                 feature: "bluetooth",
             });
-        };
-        // The availability probe reflects radio state where supported;
-        // failures (e.g. insecure context) leave the state Unknown and are
-        // not fatal.
-        match bluetooth.get_availability() {
-            Ok(promise) => match JsSend::new(JsFuture::from(promise)).await {
-                Ok(available) => {
-                    if let Some(available) = available.as_bool() {
-                        let state = if available {
-                            AdapterState::PoweredOn
-                        } else {
-                            AdapterState::PoweredOff
-                        };
-                        self.events
-                            .publish(AdapterEvent::StateChanged(state), Delivery::Guaranteed);
-                    }
-                }
-                Err(js) => {
-                    tracing::debug!(?js, "navigator.bluetooth.getAvailability() rejected")
-                }
-            },
-            Err(js) => tracing::debug!(?js, "navigator.bluetooth.getAvailability() threw"),
+        }
+        let state = self.probe_availability().await;
+        if state != AdapterState::Unknown {
+            self.events
+                .publish(AdapterEvent::StateChanged(state), Delivery::Guaranteed);
         }
         Ok(())
+    }
+
+    async fn state(&self) -> Result<AdapterState, Error> {
+        if self.bluetooth().is_none() {
+            return Ok(AdapterState::Unavailable);
+        }
+        Ok(self.probe_availability().await)
+    }
+
+    async fn set_powered(&self, _powered: bool) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "set_powered",
+        })
     }
 
     async fn start_scan(&self, _filter: &ScanFilter) -> Result<(), Error> {

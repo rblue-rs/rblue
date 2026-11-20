@@ -41,3 +41,15 @@ pub extern "system" fn Java_com_rblue_RblueNative_nativeInit<'caller>(
         .resolve::<LogErrorAndDefault>();
     ok
 }
+
+/// JNI entry: `com.rblue.RblueNative.nativeOnAdapterStateChanged(int)`.
+/// Called from [`AdapterStateMonitor`] with `BluetoothAdapter` state codes
+/// (or the shell sentinels `-2` / `-3`).
+#[no_mangle]
+pub extern "system" fn Java_com_rblue_RblueNative_nativeOnAdapterStateChanged<'caller>(
+    _unowned_env: jni::EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    state: jni::sys::jint,
+) {
+    crate::radio::apply_native_state(state);
+}

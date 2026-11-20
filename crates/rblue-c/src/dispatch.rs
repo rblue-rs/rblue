@@ -66,6 +66,13 @@ struct DeviceParams {
     device: DeviceId,
 }
 
+/// Parameters for [`Adapter::set_powered`] (`{"powered": true|false}`).
+#[derive(serde::Deserialize)]
+struct PoweredParams {
+    /// `true` to turn the radio on, `false` to turn it off.
+    powered: bool,
+}
+
 /// Characteristic-addressing parameters
 /// (`{"device": <DeviceId>, "characteristic": <CharacteristicId>}`).
 #[derive(serde::Deserialize)]
@@ -118,6 +125,12 @@ pub(crate) async fn execute(
         "capabilities" => Ok(json_payload(&core.adapter().capabilities().bits())),
         "initialize" => {
             core.adapter().initialize().await?;
+            Ok(Vec::new())
+        }
+        "state" => Ok(json_payload(&core.adapter().state().await?)),
+        "set_powered" => {
+            let PoweredParams { powered } = parse_params(&params)?;
+            core.adapter().set_powered(powered).await?;
             Ok(Vec::new())
         }
         "start_scan" => {
@@ -387,13 +400,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn state_and_set_powered_roundtrip_on_the_mock() {
+        let mut fixture = Fixture::new().await;
+        let (status, payload) = roundtrip(&mut fixture, 1, "state", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(
+            serde_json::from_slice::<rblue_api::AdapterState>(&payload).unwrap(),
+            rblue_api::AdapterState::Unknown
+        );
+
+        let (status, _) = roundtrip(&mut fixture, 2, "initialize", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        let (status, payload) = roundtrip(&mut fixture, 3, "state", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(
+            serde_json::from_slice::<rblue_api::AdapterState>(&payload).unwrap(),
+            rblue_api::AdapterState::PoweredOn
+        );
+
+        let (status, _) =
+            roundtrip(&mut fixture, 4, "set_powered", r#"{"powered":false}"#, &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        let (status, payload) = roundtrip(&mut fixture, 5, "state", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(
+            serde_json::from_slice::<rblue_api::AdapterState>(&payload).unwrap(),
+            rblue_api::AdapterState::PoweredOff
+        );
+
+        let missing = roundtrip(&mut fixture, 6, "set_powered", "{}", &[]).await.0;
+        let status = missing.as_deref().expect("invalid argument");
+        assert!(
+            status.contains("InvalidArgument"),
+            "missing powered flag must not reach the backend: {status}"
+        );
+    }
+
+    #[tokio::test]
     async fn metrics_are_returned_as_json_and_require_a_connection() {
         let mut fixture = Fixture::new().await;
         let (status, _) = roundtrip(&mut fixture, 1, "rssi", &device_params(), &[]).await;
         assert!(status.is_some());
         let (status, capabilities) = roundtrip(&mut fixture, 2, "capabilities", "{}", &[]).await;
         assert!(status.is_none());
-        assert!(serde_json::from_slice::<u16>(&capabilities).unwrap() > 0);
+        assert!(serde_json::from_slice::<u32>(&capabilities).unwrap() > 0);
         roundtrip(&mut fixture, 3, "connect", &device_params(), &[]).await;
         for (id, method, params) in [
             (4, "rssi", device_params()),
