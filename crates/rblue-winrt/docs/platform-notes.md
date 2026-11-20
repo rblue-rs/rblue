@@ -31,7 +31,7 @@ honest `AdapterState::Unknown` for the collapsed states.
 | ActiveScan | yes | The fork sets `BluetoothLEScanningMode::Active` on every scan |
 | GattClient | yes | Central role |
 | MtuQuery | yes | `GattSession.MaxPduSize`, tracked live by the fork's `MaxPduSizeChanged` handler; `mtu()` returns it while connected |
-| MtuNegotiation | no | Windows negotiates the ATT MTU automatically; there is no client request API |
+| MtuNegotiation | no | Windows negotiates the ATT MTU automatically; `request_mtu` and `ConnectOptions.mtu = Some(_)` return `Error::Unsupported { feature: "request_mtu" }`. `mtu = None` must not fail for that reason |
 | RssiDuringConnection | no | No WinRT API; RSSI exists only on advertisements (scan time). The fork's `read_rssi` would return the last scan-time cache value, so `rssi()` reports `Error::Unsupported` instead of presenting stale data |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
 | Pairing | no | WinRT exposes `DeviceInformation.Pairing.PairAsync`, but the fork does not surface it. Reported as absent rather than faked; `pair()` returns `Error::Unsupported`. Accessing an encrypted characteristic still triggers the implicit system pairing dialog |

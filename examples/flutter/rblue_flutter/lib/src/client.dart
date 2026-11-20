@@ -95,6 +95,16 @@ class RblueClient {
   Future<int> mtu(DeviceId device) =>
       _request('mtu', params: {'device': device.json}, decode: _decodeInt);
 
+  /// Requests an ATT MTU change and returns the negotiated value.
+  ///
+  /// Check [Capability.mtuNegotiation] first; backends without a request
+  /// API return `Unsupported` with feature `request_mtu`.
+  Future<int> requestMtu(DeviceId device, int mtu) => _request(
+    'request_mtu',
+    params: {'device': device.json, 'mtu': mtu},
+    decode: _decodeInt,
+  );
+
   /// Maximum payload accepted for a characteristic and write mode.
   Future<int> maxWriteLength(
     DeviceId device,
@@ -154,8 +164,9 @@ class RblueClient {
   /// backends without that capability return `Unsupported`. This is not
   /// [RblueClient.autoConnect], which enables the reconnect supervisor.
   ///
-  /// [mtu] is reserved for a connect-time ATT MTU request; backends that
-  /// do not implement it return `Unsupported` with feature `request_mtu`.
+  /// [mtu] requests that ATT MTU after the link is up (`ConnectOptions.mtu`).
+  /// Backends without [`Capability.mtuNegotiation`] return `Unsupported`
+  /// with feature `request_mtu`. Omitting it leaves the backend default.
   Future<void> connect(DeviceId device, {bool autoConnect = false, int? mtu}) =>
       _request(
         'connect',

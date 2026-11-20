@@ -40,7 +40,7 @@ this backend.
 | ActiveScan | yes | BlueZ performs active LE scanning by default (scan requests for scan responses); the fork sets `Transport::Auto` |
 | GattClient | yes | Central role |
 | MtuQuery | yes | The D-Bus `MTU` property on `org.bluez.GattCharacteristic1` (BlueZ around 5.62+); see "Writes and MTU" for the fallback |
-| MtuNegotiation | no | The stack negotiates the ATT MTU automatically; there is no client request API |
+| MtuNegotiation | no | The stack negotiates the ATT MTU automatically; `request_mtu` and `ConnectOptions.mtu = Some(_)` return `Error::Unsupported { feature: "request_mtu" }`. `mtu = None` must not fail for that reason |
 | RssiDuringConnection | no | BlueZ does not update the device `RSSI` property while connected - the value freezes at the last scan-time sighting. `rssi()` reports `Error::Unsupported` instead of presenting stale data |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
 | Pairing | no | BlueZ exposes `org.bluez.Device1.Pair` (and bluez-async wraps it as `pair_with_timeout`), but the fork's `Peripheral` surface does not expose it. Reported as absent rather than faked; `pair()` returns `Error::Unsupported`. Accessing an encrypted characteristic still triggers the system pairing agent |

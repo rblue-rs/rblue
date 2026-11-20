@@ -29,8 +29,9 @@ pub enum Capability {
     Advertise,
     /// Reading RSSI for an already-connected peripheral.
     RssiDuringConnection,
-    /// Actively requesting an MTU (`requestMtu` / `setBLEMtuSize`). Windows,
-    /// macOS, and Linux negotiate automatically and have no request API.
+    /// Actively requesting an ATT MTU ([`crate::Peripheral::request_mtu`],
+    /// Android `requestMtu`, OHOS `setBLEMtuSize`). Windows, macOS, and
+    /// Linux negotiate automatically and have no request API.
     MtuNegotiation,
     /// Querying the current ATT MTU (read-only property).
     MtuQuery,

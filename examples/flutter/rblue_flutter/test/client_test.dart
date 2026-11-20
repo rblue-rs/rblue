@@ -216,13 +216,23 @@ void main() {
     client.dispose();
   });
 
-  test('connect sends auto_connect and reserved mtu options', () async {
+  test('connect sends auto_connect and mtu options', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);
     final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
     unawaited(quiet(client.connect(device, autoConnect: true, mtu: 512)));
     expect(bridge.sent.single.method, 'connect');
     expect(bridge.sent.single.params, contains('"auto_connect":true'));
+    expect(bridge.sent.single.params, contains('"mtu":512'));
+    client.dispose();
+  });
+
+  test('requestMtu uses the rust request_mtu method name', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+    unawaited(quiet(client.requestMtu(device, 512)));
+    expect(bridge.sent.single.method, 'request_mtu');
     expect(bridge.sent.single.params, contains('"mtu":512'));
     client.dispose();
   });

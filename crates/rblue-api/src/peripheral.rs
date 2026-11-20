@@ -16,6 +16,27 @@ use crate::gatt::{CharacteristicId, Notification, ServiceSet, WriteMode};
 /// value-add layer layers configurable buffering on top.
 pub type NotificationStream = BoxStream<'static, Notification>;
 
+/// Smallest ATT MTU defined by the Bluetooth Core Specification.
+pub const ATT_MTU_MIN: u16 = 23;
+/// Largest ATT MTU defined by the Bluetooth Core Specification.
+pub const ATT_MTU_MAX: u16 = 517;
+
+/// Returns [`Error::InvalidState`] when `mtu` is outside
+/// [`ATT_MTU_MIN`]..=[`ATT_MTU_MAX`].
+///
+/// # Errors
+///
+/// [`Error::InvalidState`] when the value is below 23 or above 517.
+pub fn reject_invalid_att_mtu(mtu: u16) -> Result<(), Error> {
+    if (ATT_MTU_MIN..=ATT_MTU_MAX).contains(&mtu) {
+        Ok(())
+    } else {
+        Err(Error::InvalidState(format!(
+            "ATT MTU {mtu} is outside the valid range {ATT_MTU_MIN}..={ATT_MTU_MAX}"
+        )))
+    }
+}
+
 /// Options for [`Peripheral::connect_with`].
 ///
 /// `auto_connect` is the **platform/stack** background-connection flag
@@ -23,9 +44,12 @@ pub type NotificationStream = BoxStream<'static, Notification>;
 /// [`crate::SupervisorHandle::auto_connect`], which is the application-level
 /// reconnect supervisor (backoff, GATT 133 breaker, [`crate::ReconnectPolicy`]).
 ///
-/// `mtu` reserves the connect-time ATT MTU request from the `request_mtu`
-/// issue. Backends that do not yet implement an explicit MTU request return
-/// [`Error::Unsupported`] with `feature: "request_mtu"` when this is `Some`.
+/// `mtu` is an optional ATT MTU to request after the link is up, gated by
+/// [`crate::Capability::MtuNegotiation`]. `Some(n)` requests `n` on backends
+/// that implement [`Peripheral::request_mtu`]; backends without a request
+/// API return [`Error::Unsupported`] with `feature: "request_mtu"`. `None`
+/// leaves negotiation to the backend default and must not fail for lack of
+/// a request API.
 ///
 /// [`Peripheral::connect`] is equivalent to
 /// `connect_with(&ConnectOptions::default())` (`auto_connect: false`,
@@ -162,8 +186,9 @@ pub trait Peripheral: Send + Sync {
     /// The default implementation calls [`Peripheral::connect`] when
     /// [`ConnectOptions::is_default`] is true, and otherwise returns
     /// [`Error::Unsupported`] for `auto_connect` or `request_mtu`. Backends
-    /// that support a flag override this method and should still reject
-    /// options they do not implement rather than ignoring them.
+    /// that implement a flag or [`Peripheral::request_mtu`] override this
+    /// method and should still reject options they do not implement rather
+    /// than ignoring them.
     ///
     /// # Errors
     ///
@@ -296,6 +321,32 @@ pub trait Peripheral: Send + Sync {
     /// [`Error::Unsupported`] where the platform does not expose the value
     /// (iOS: system-managed, web); use [`Peripheral::max_write_len`] instead.
     async fn mtu(&self) -> Result<u16, Error>;
+
+    /// Requests a new ATT MTU and returns the value actually negotiated.
+    ///
+    /// Gated by [`crate::Capability::MtuNegotiation`]. Platforms that
+    /// negotiate automatically and have no request API (Windows, Apple,
+    /// Linux, Web) return [`Error::Unsupported`] with
+    /// `feature: "request_mtu"`. `mtu` must be in
+    /// [`ATT_MTU_MIN`]..=[`ATT_MTU_MAX`]; the peer may still negotiate a
+    /// smaller value than requested.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotConnected`] when called while disconnected,
+    /// [`Error::InvalidState`] when `mtu` is out of range,
+    /// [`Error::Unsupported`] when the backend has no request API, or a
+    /// platform failure.
+    async fn request_mtu(&self, mtu: u16) -> Result<u16, Error> {
+        if !self.is_connected().await? {
+            return Err(Error::NotConnected);
+        }
+        let _ = mtu;
+        Err(Error::Unsupported {
+            platform: "unknown",
+            feature: "request_mtu",
+        })
+    }
 }
 
 #[cfg(test)]
@@ -406,6 +457,105 @@ mod tests {
             mtu: Some(512),
         };
         let result = Stub.connect_with(&opts).now_or_never();
+        assert!(
+            matches!(
+                result,
+                Some(Err(Error::Unsupported {
+                    platform: "unknown",
+                    feature: "request_mtu",
+                }))
+            ),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn reject_invalid_att_mtu_enforces_spec_range() {
+        assert!(reject_invalid_att_mtu(ATT_MTU_MIN).is_ok());
+        assert!(reject_invalid_att_mtu(ATT_MTU_MAX).is_ok());
+        assert!(reject_invalid_att_mtu(512).is_ok());
+        assert!(matches!(
+            reject_invalid_att_mtu(ATT_MTU_MIN - 1),
+            Err(Error::InvalidState(_))
+        ));
+        assert!(matches!(
+            reject_invalid_att_mtu(ATT_MTU_MAX + 1),
+            Err(Error::InvalidState(_))
+        ));
+    }
+
+    #[test]
+    fn default_request_mtu_requires_a_connection() {
+        let result = Stub.request_mtu(512).now_or_never();
+        assert!(
+            matches!(result, Some(Err(Error::NotConnected))),
+            "{result:?}"
+        );
+    }
+
+    struct ConnectedStub;
+
+    #[async_trait::async_trait]
+    impl Peripheral for ConnectedStub {
+        fn id(&self) -> &DeviceId {
+            Stub.id()
+        }
+        fn name(&self) -> Option<String> {
+            None
+        }
+        async fn is_connected(&self) -> Result<bool, Error> {
+            Ok(true)
+        }
+        async fn connect(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn disconnect(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn discover_services(&self, _filter: &[uuid::Uuid]) -> Result<ServiceSet, Error> {
+            Ok(ServiceSet::default())
+        }
+        async fn read(&self, _ch: &CharacteristicId) -> Result<Vec<u8>, Error> {
+            Ok(Vec::new())
+        }
+        async fn write(
+            &self,
+            _ch: &CharacteristicId,
+            _data: &[u8],
+            _mode: WriteMode,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn max_write_len(
+            &self,
+            _ch: &CharacteristicId,
+            _mode: WriteMode,
+        ) -> Result<usize, Error> {
+            Ok(20)
+        }
+        async fn subscribe(&self, _ch: &CharacteristicId) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn unsubscribe(&self, _ch: &CharacteristicId) -> Result<(), Error> {
+            Ok(())
+        }
+        fn notifications(&self) -> NotificationStream {
+            futures::stream::empty().boxed()
+        }
+        async fn pair(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn rssi(&self) -> Result<i16, Error> {
+            Ok(0)
+        }
+        async fn mtu(&self) -> Result<u16, Error> {
+            Ok(23)
+        }
+    }
+
+    #[test]
+    fn default_request_mtu_is_unsupported_when_connected() {
+        let result = ConnectedStub.request_mtu(512).now_or_never();
         assert!(
             matches!(
                 result,

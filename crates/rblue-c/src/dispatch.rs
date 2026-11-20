@@ -79,6 +79,15 @@ struct ConnectParams {
     mtu: Option<u16>,
 }
 
+/// `request_mtu` parameters: a device plus the requested ATT MTU.
+#[derive(serde::Deserialize)]
+struct RequestMtuParams {
+    /// The connected device.
+    device: DeviceId,
+    /// Requested ATT MTU.
+    mtu: u16,
+}
+
 /// Supervisor `auto_connect` parameters: a device plus optional policy.
 #[derive(serde::Deserialize)]
 struct SupervisorAutoConnectParams {
@@ -270,6 +279,12 @@ pub(crate) async fn execute(
             } else {
                 Ok(json_payload(&peripheral.mtu().await?))
             }
+        }
+        "request_mtu" => {
+            let RequestMtuParams { device, mtu } = parse_params(&params)?;
+            Ok(json_payload(
+                &core.peripheral(&device).await?.request_mtu(mtu).await?,
+            ))
         }
         "max_write_len" => {
             let WriteParams {
@@ -726,6 +741,31 @@ mod tests {
         let status = status.expect("mock has no platform auto_connect");
         assert!(status.contains("Unsupported"), "{status}");
         assert!(status.contains("auto_connect"), "{status}");
+    }
+
+    #[tokio::test]
+    async fn request_mtu_and_connect_time_mtu_are_honored_on_mock() {
+        let mut fixture = Fixture::new().await;
+        let (status, _) = roundtrip(&mut fixture, 1, "connect", &device_params(), &[]).await;
+        assert!(status.is_none(), "connect: {status:?}");
+        let mut request: serde_json::Value = serde_json::from_str(&device_params()).unwrap();
+        request["mtu"] = serde_json::json!(185);
+        let (status, payload) =
+            roundtrip(&mut fixture, 2, "request_mtu", &request.to_string(), &[]).await;
+        assert!(status.is_none(), "request_mtu: {status:?}");
+        assert_eq!(serde_json::from_slice::<u16>(&payload).unwrap(), 185);
+        let (status, payload) = roundtrip(&mut fixture, 3, "mtu", &device_params(), &[]).await;
+        assert!(status.is_none(), "mtu: {status:?}");
+        assert_eq!(serde_json::from_slice::<u16>(&payload).unwrap(), 185);
+
+        roundtrip(&mut fixture, 4, "disconnect", &device_params(), &[]).await;
+        let mut connect: serde_json::Value = serde_json::from_str(&device_params()).unwrap();
+        connect["mtu"] = serde_json::json!(512);
+        let (status, _) = roundtrip(&mut fixture, 5, "connect", &connect.to_string(), &[]).await;
+        assert!(status.is_none(), "connect mtu: {status:?}");
+        let (status, payload) = roundtrip(&mut fixture, 6, "mtu", &device_params(), &[]).await;
+        assert!(status.is_none(), "mtu after connect: {status:?}");
+        assert_eq!(serde_json::from_slice::<u16>(&payload).unwrap(), 512);
     }
 
     #[tokio::test]

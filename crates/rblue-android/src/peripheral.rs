@@ -18,7 +18,7 @@ use futures::stream::StreamExt;
 use rblue_api::device::DeviceId;
 use rblue_api::error::{AttError, Error};
 use rblue_api::gatt::{CharacteristicId, Notification, ServiceSet, WriteMode};
-use rblue_api::peripheral::{NotificationStream, Peripheral};
+use rblue_api::peripheral::{ConnectOptions, NotificationStream, Peripheral};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
@@ -108,19 +108,50 @@ impl Peripheral for AndroidPeripheral {
     }
 
     async fn connect(&self) -> Result<(), Error> {
-        if self.entry.is_connected().await? {
-            return Ok(());
+        self.connect_with(&ConnectOptions::default()).await
+    }
+
+    async fn connect_with(&self, opts: &ConnectOptions) -> Result<(), Error> {
+        if opts.auto_connect {
+            return Err(Error::Unsupported {
+                platform: PLATFORM,
+                feature: "auto_connect",
+            });
         }
+        let desired = match opts.mtu {
+            Some(mtu) => Some(mtu),
+            None => crate::connect_mtu(),
+        };
+        if let Some(mtu) = desired {
+            rblue_api::reject_invalid_att_mtu(mtu)?;
+        }
+
+        let already_connected = self.entry.is_connected().await?;
         let Some(peripheral) = self.entry.current_handle() else {
             return Err(Error::NotFound(self.entry.id().clone()));
         };
+        if already_connected {
+            // Zero-arg / default reconnects stay no-ops. An explicit
+            // `ConnectOptions.mtu` still requests that MTU on the live link.
+            if opts.mtu.is_some() {
+                if let Some(mtu) = desired {
+                    peripheral
+                        .request_mtu(mtu)
+                        .await
+                        .map_err(map_btleplug_error)?;
+                }
+            }
+            return Ok(());
+        }
+
         // The fork's Java layer retries the fast-failing GATT status 133 /
         // HCI 0x3E connect attempts itself (up to 3 attempts) and then
         // reports `NotConnectedException` - the raw status number of the
         // failed connection attempt does not survive into Rust (fork
         // limitation, see docs/error-mapping.md). A connect that got the
-        // link up but failed the fork's automatic `requestMtu(517)` does
+        // link up but failed the configured connect-time MTU request does
         // carry its status: `Error::Platform`.
+        peripheral.set_connect_mtu(desired);
         peripheral.connect().await.map_err(map_btleplug_error)?;
         // The fork refreshed its properties snapshot with the system-cached
         // GAP name; mirror it so name-based reconnect filtering sees the
@@ -216,10 +247,10 @@ impl Peripheral for AndroidPeripheral {
     async fn max_write_len(&self, ch: &CharacteristicId, _mode: WriteMode) -> Result<usize, Error> {
         let peripheral = self.entry.connected_handle().await?;
         self.resolve_characteristic(ch)?;
-        // The fork's MTU is the value its automatic requestMtu(517)
-        // negotiated at connect (ATT default 23 until then), so this is the
-        // conservative 20 only before the first connect. Both write modes
-        // share the limit. See docs/platform-notes.md.
+        // The fork's MTU is the value negotiated at connect (ATT default
+        // 23 until then), so this is the conservative 20 only before the
+        // first connect. Both write modes share the limit. See
+        // docs/platform-notes.md.
         Ok(max_write_len_from_mtu(peripheral.mtu()))
     }
 
@@ -287,11 +318,20 @@ impl Peripheral for AndroidPeripheral {
     }
 
     async fn mtu(&self) -> Result<u16, Error> {
-        // The negotiated ATT MTU, as stored by the fork's automatic
-        // requestMtu(517) at connect; it changes when the stack renegotiates
-        // or a later request succeeds. See docs/platform-notes.md.
+        // The negotiated ATT MTU cached by the fork after the connect-time
+        // or explicit request; it changes when the stack renegotiates or a
+        // later request succeeds. See docs/platform-notes.md.
         let peripheral = self.entry.connected_handle().await?;
         Ok(peripheral.mtu())
+    }
+
+    async fn request_mtu(&self, mtu: u16) -> Result<u16, Error> {
+        let peripheral = self.entry.connected_handle().await?;
+        rblue_api::reject_invalid_att_mtu(mtu)?;
+        peripheral
+            .request_mtu(mtu)
+            .await
+            .map_err(map_btleplug_error)
     }
 }
 

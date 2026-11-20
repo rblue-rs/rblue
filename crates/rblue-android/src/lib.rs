@@ -30,9 +30,11 @@
 //! - Android is MAC-first, but the fork never reports the address kind, so
 //!   every identity carries `AddressType::Unknown` and must not be used as
 //!   a persistent key across RPA rotations.
-//! - The ATT MTU is negotiated by the fork's automatic `requestMtu(517)`
-//!   at connect; there is no client request API through the fork's trait
-//!   surface (`Capability::MtuNegotiation` absent, `MtuQuery` present).
+//! - After the link is up, the shell requests a configurable connect-time
+//!   ATT MTU (recommended default 512, replacing the fork's historical
+//!   hardcoded 517). `set_connect_mtu(None)` disables that automatic
+//!   request. Explicit requests go through [`rblue_api::Peripheral::request_mtu`]
+//!   (`Capability::MtuNegotiation` and `MtuQuery` are both present).
 //! - `pair()` reports `Unsupported`: Android's `createBond` is not exposed
 //!   by the fork.
 //!
@@ -70,14 +72,47 @@ mod peripheral;
 #[cfg(target_os = "android")]
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rblue_api::adapter::Adapter;
 use rblue_api::error::Error;
 
+/// Recommended ATT MTU requested after `connect` / `connect_with` when
+/// [`rblue_api::ConnectOptions::mtu`] is `None`.
+pub const RECOMMENDED_CONNECT_MTU: u16 = 512;
+
+static CONNECT_MTU: Mutex<Option<u16>> = Mutex::new(Some(RECOMMENDED_CONNECT_MTU));
+
+/// ATT MTU requested after a successful connect when
+/// [`rblue_api::ConnectOptions::mtu`] is `None`.
+///
+/// `Some(n)` requests `n`. `None` means no automatic connect-time request.
+/// The initial value is [`RECOMMENDED_CONNECT_MTU`].
+#[must_use]
+pub fn connect_mtu() -> Option<u16> {
+    *CONNECT_MTU.lock().expect("connect_mtu lock")
+}
+
+/// Configures the ATT MTU requested after a successful `connect` /
+/// `connect_with` when [`rblue_api::ConnectOptions::mtu`] is `None`.
+///
+/// `Some(n)` must be in [`rblue_api::ATT_MTU_MIN`]..=[`rblue_api::ATT_MTU_MAX`].
+/// `None` disables the automatic connect-time request.
+///
+/// # Errors
+///
+/// [`Error::InvalidState`] when `mtu` is out of the ATT range.
+pub fn set_connect_mtu(mtu: Option<u16>) -> Result<(), Error> {
+    if let Some(mtu) = mtu {
+        rblue_api::reject_invalid_att_mtu(mtu)?;
+    }
+    *CONNECT_MTU.lock().expect("connect_mtu lock") = mtu;
+    Ok(())
+}
+
 /// Version string of this backend: the shell crate version plus the pinned
 /// btleplug fork revision (see the `btleplug` git dependency in Cargo.toml).
-pub const BACKEND_VERSION: &str = "android/btleplug 1af8299c291f24fca68dfb6b7ef1b5c0475892e1";
+pub const BACKEND_VERSION: &str = "android/btleplug 983f3f1346bb1646281e0faf345a21c4a787833d";
 
 #[cfg(target_os = "android")]
 static JNI_INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -198,11 +233,35 @@ pub fn backend_version() -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    struct ConnectMtuRestore(Option<u16>);
+
+    impl Drop for ConnectMtuRestore {
+        fn drop(&mut self) {
+            let _ = super::set_connect_mtu(self.0);
+        }
+    }
+
+    #[test]
+    fn connect_mtu_defaults_to_recommended_512_and_can_be_disabled() {
+        let _restore = ConnectMtuRestore(Some(super::RECOMMENDED_CONNECT_MTU));
+        super::set_connect_mtu(Some(super::RECOMMENDED_CONNECT_MTU)).expect("reset");
+        assert_eq!(super::connect_mtu(), Some(512));
+        super::set_connect_mtu(Some(185)).expect("set");
+        assert_eq!(super::connect_mtu(), Some(185));
+        super::set_connect_mtu(None).expect("disable");
+        assert_eq!(super::connect_mtu(), None);
+        assert!(matches!(
+            super::set_connect_mtu(Some(22)),
+            Err(rblue_api::Error::InvalidState(_))
+        ));
+        assert_eq!(super::connect_mtu(), None);
+    }
+
     #[test]
     fn backend_version_names_the_pinned_revision() {
         assert_eq!(
             super::backend_version(),
-            "android/btleplug 1af8299c291f24fca68dfb6b7ef1b5c0475892e1"
+            "android/btleplug 983f3f1346bb1646281e0faf345a21c4a787833d"
         );
     }
 
