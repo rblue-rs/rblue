@@ -1,0 +1,126 @@
+name: CI hosted
+
+# Original GitHub-hosted Linux/Windows (and hosted macOS) jobs from ci.yml.
+# Automatic pull_request/push triggers are disabled because GitHub-hosted
+# runners currently fail immediately due to account billing. This workflow
+# is workflow_dispatch only so those failures do not fail every PR, and so
+# a skipped or absent hosted job is not mistaken for a platform pass.
+# Linux and Windows runtime coverage remains uncovered until hosted billing
+# is restored or another honest runner exists for those OSes.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: rustfmt (hosted ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - run: cargo test --workspace
+
+  docs:
+    name: rustdoc (hosted ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  wasm32:
+    name: check (wasm32-unknown-unknown, hosted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: >-
+          cargo check --workspace
+          --exclude rblue-winrt
+          --exclude rblue-corebluetooth
+          --exclude rblue-bluez
+          --exclude rblue-android
+          --exclude rblue-ffi
+          --exclude rblue-c
+          --target wasm32-unknown-unknown
+
+  cross-apple:
+    name: check (aarch64-apple-ios, hosted)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - run: cargo check -p rblue-corebluetooth --target aarch64-apple-ios
+
+  cross-windows:
+    name: check (x86_64-pc-windows-msvc, hosted)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check -p rblue-winrt
+
+  cross-android:
+    name: check (aarch64-linux-android, hosted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - run: cargo check -p rblue-android --target aarch64-linux-android
+
+  cross-ohos:
+    name: check (aarch64-unknown-linux-ohos, hosted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-ohos
+      - run: cargo check -p rblue-ohos --target aarch64-unknown-linux-ohos
