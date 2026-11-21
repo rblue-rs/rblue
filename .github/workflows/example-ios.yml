@@ -6,6 +6,10 @@
 # device acceptance is documented in examples/ios/README.md.
 name: example-ios
 
+# Runs on the repository-only rblue-m4 self-hosted runner. Trusted-code
+# only (same-repository heads). No pull_request_target. No GitHub cache
+# or artifact uploads (avoid storage fees). This does not cover Android,
+# Windows, or Flutter package jobs.
 on:
   push:
     branches: [main]
@@ -24,24 +28,28 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "examples/ios/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build-and-test:
-    runs-on: macos-latest
+    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Install Rust iOS targets
+      - name: Ensure Rust iOS targets
         run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
 
-      - name: Cache cargo build
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Ensure XcodeGen
+        run: command -v xcodegen >/dev/null || brew install xcodegen
 
       - name: Build XCFramework and Swift bindings
         run: examples/ios/scripts/build-frameworks.sh

@@ -2,20 +2,12 @@ name: Flutter package
 
 # Build and inspect the exact native artifacts distributed by rblue_flutter.
 # Physical-radio acceptance remains a separate manual/self-hosted concern.
+# GitHub-hosted jobs in this file are workflow_dispatch only while
+# hosted billing is blocked. An absent automatic run is not a pass.
+# Flutter is not installed on the current self-hosted runner, and
+# Windows/Linux Flutter package jobs cannot run there.
 on:
-  push:
-    branches: [main]
-    tags:
-      - "rblue_flutter-v[0-9]+.[0-9]+.[0-9]+*"
-  pull_request:
-    paths:
-      - ".github/workflows/example-flutter.yml"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/rblue*/**"
-      - "bindings/c/**"
-      - "examples/flutter/**"
-
+  workflow_dispatch:
 permissions:
   contents: read
 
