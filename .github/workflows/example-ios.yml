@@ -81,23 +81,44 @@ jobs:
           -derivedDataPath build/DerivedData build CODE_SIGNING_ALLOWED=NO
 
       # Unit tests are mock-level (fakes + JSON contract) and run on any
-      # simulator; pick the first available iPhone runtime-agnostically.
+      # available iPhone simulator. Select a concrete UDID that exists on a
+      # real runtime; do not pair the first simctl iPhone name with OS=latest.
       - name: Pick a simulator
         id: sim
         run: |
-          device="$(xcrun simctl list devices available \
-            | awk -F' \\(' '/iPhone/ { print $1 }' | head -1 | xargs)"
-          if [ -z "$device" ]; then
-            echo "no available iPhone simulator found" >&2
-            exit 1
-          fi
-          echo "device=$device" >> "$GITHUB_OUTPUT"
-          echo "using simulator: $device"
+          set -euo pipefail
+          python3 <<'PY'
+          import json, os, subprocess, sys
+
+          data = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"],
+              text=True,
+          ))
+          candidates = []
+          for runtime, devices in data.get("devices", {}).items():
+              if "iOS" not in runtime:
+                  continue
+              for device in devices:
+                  name = device.get("name", "")
+                  if device.get("isAvailable") and "iPhone" in name:
+                      candidates.append((runtime, name, device["udid"]))
+          if not candidates:
+              print("no available iPhone simulator found", file=sys.stderr)
+              sys.exit(1)
+          candidates.sort(key=lambda item: (item[0], item[1]))
+          latest_runtime = candidates[-1][0]
+          runtime, name, udid = next(
+              item for item in candidates if item[0] == latest_runtime
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"udid={udid}\n")
+          print(f"using simulator: {name} ({runtime}) {udid}")
+          PY
 
       - name: Run unit tests
         working-directory: examples/ios
         run: >-
           xcodebuild -project RblueExample.xcodeproj -scheme RblueExample
-          -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }},OS=latest"
+          -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}"
           -derivedDataPath build/DerivedData
           test CODE_SIGNING_ALLOWED=NO
