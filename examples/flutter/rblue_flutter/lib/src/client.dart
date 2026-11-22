@@ -172,17 +172,21 @@ class RblueClient {
       );
 
   /// Writes [data] to the characteristic. Oversize payloads fail with
-  /// [RblueErrorKind.invalidLength] - never truncated, never chunked.
+  /// [RblueErrorKind.invalidLength] - never truncated, never chunked -
+  /// unless [allowLongWrite] is true, in which case the payload is written
+  /// as sequential MTU-sized chunks (`WriteOptions.allow_long_write`).
   Future<void> write(
     DeviceId device,
     CharacteristicId characteristic,
     List<int> data, {
     WriteMode mode = WriteMode.withResponse,
+    bool allowLongWrite = false,
   }) => _request(
     'write',
     params: {
       ..._characteristicParams(device, characteristic),
       'mode': mode.toJson(),
+      'allow_long_write': allowLongWrite,
     },
     payload: data,
     decode: _noPayload,
