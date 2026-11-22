@@ -5,6 +5,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use futures::channel::oneshot;
 use futures::stream::StreamExt;
 use uuid::Uuid;
 
@@ -124,6 +125,8 @@ impl MockService {
 /// GATT client operation kind used to key injected failures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MockOp {
+    /// `Peripheral::connect`.
+    Connect,
     /// `Peripheral::read`.
     Read,
     /// `Peripheral::write`, both modes.
@@ -188,6 +191,8 @@ struct PeriphInner {
     script_position: usize,
     visible: bool,
     rssi: i16,
+    writes_held: bool,
+    write_waiters: Vec<oneshot::Sender<()>>,
 }
 
 /// A simulated peripheral: implements the full [`Peripheral`] trait surface
@@ -228,6 +233,8 @@ impl MockPeripheral {
                 script_position: 0,
                 visible: true,
                 rssi: DEFAULT_RSSI,
+                writes_held: false,
+                write_waiters: Vec::new(),
             }),
             notifications: BroadcastHub::default(),
         }
@@ -397,9 +404,10 @@ impl MockPeripheral {
         ));
     }
 
-    /// Injects a failure for a GATT client operation. `characteristic = None`
-    /// applies to every characteristic of this peripheral; a specific UUID
-    /// overrides the blanket entry. `failure = None` clears the injection.
+    /// Injects a failure for a client operation. `characteristic = None`
+    /// applies to every characteristic of this peripheral (and is the only
+    /// meaningful key for [`MockOp::Connect`]); a specific UUID overrides
+    /// the blanket entry. `failure = None` clears the injection.
     ///
     /// Precedence per operation: disconnected check, injected failure,
     /// property/permission synthesis, payload-length check.
@@ -423,6 +431,41 @@ impl MockPeripheral {
     /// Clears every injected failure of this peripheral.
     pub fn clear_failures(&self) {
         self.lock().failures.clear();
+    }
+
+    /// Parks subsequent [`Peripheral::write`] calls until
+    /// [`Self::release_writes`] so a test can disconnect mid-write.
+    pub fn hold_writes(&self) {
+        self.lock().writes_held = true;
+    }
+
+    /// Releases every write parked by [`Self::hold_writes`]. Writes that
+    /// start after this call run immediately unless held again.
+    pub fn release_writes(&self) {
+        let mut inner = self.lock();
+        inner.writes_held = false;
+        for waiter in inner.write_waiters.drain(..) {
+            let _ = waiter.send(());
+        }
+    }
+
+    /// Number of `write` calls currently waiting on [`Self::hold_writes`].
+    #[must_use]
+    pub fn waiting_writes(&self) -> usize {
+        self.lock().write_waiters.len()
+    }
+
+    async fn wait_if_writes_held(&self) {
+        let rx = {
+            let mut inner = self.lock();
+            if !inner.writes_held {
+                return;
+            }
+            let (tx, rx) = oneshot::channel();
+            inner.write_waiters.push(tx);
+            rx
+        };
+        let _ = rx.await;
     }
 
     fn injected_failure(
@@ -653,11 +696,15 @@ impl Peripheral for MockPeripheral {
 
     async fn connect(&self) -> Result<(), Error> {
         let mut inner = self.lock();
-        if !inner.connected {
-            inner.connected = true;
-            self.shared
-                .publish(AdapterEvent::DeviceConnected(self.id.clone()));
+        if inner.connected {
+            return Ok(());
         }
+        if let Some(failure) = Self::injected_failure(&inner, MockOp::Connect, Uuid::nil()) {
+            return Err(failure.into_error());
+        }
+        inner.connected = true;
+        self.shared
+            .publish(AdapterEvent::DeviceConnected(self.id.clone()));
         Ok(())
     }
 
@@ -719,6 +766,7 @@ impl Peripheral for MockPeripheral {
         data: &[u8],
         mode: WriteMode,
     ) -> Result<(), Error> {
+        self.wait_if_writes_held().await;
         let mut inner = self.lock();
         if !inner.connected {
             return Err(Error::NotConnected);
@@ -1071,5 +1119,50 @@ mod tests {
             device.subscribe(&plain).await,
             Err(Error::InvalidState(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn injected_connect_failure_is_platform_133() {
+        let (_adapter, device, _, _) = setup();
+        device.set_failure(MockOp::Connect, None, Some(MockFailure::platform(133)));
+        assert!(matches!(
+            device.connect().await,
+            Err(Error::Platform { code: 133, .. })
+        ));
+        assert!(!device.is_connected().await.expect("is_connected"));
+
+        device.clear_failures();
+        device.connect().await.expect("connect after clearing 133");
+        assert!(device.is_connected().await.expect("is_connected"));
+    }
+
+    #[tokio::test]
+    async fn held_write_sees_force_disconnect_as_not_connected() {
+        let (_adapter, device, echo, _) = setup();
+        device.connect().await.expect("connect");
+        device.hold_writes();
+
+        let writer = Arc::clone(&device);
+        let write = tokio::spawn(async move {
+            writer
+                .write(&echo, b"in-flight", WriteMode::WithResponse)
+                .await
+        });
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while device.waiting_writes() == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("write parked on the hold");
+
+        device.force_disconnect(DisconnectReason::Remote);
+        device.release_writes();
+        assert!(matches!(
+            write.await.expect("join"),
+            Err(Error::NotConnected)
+        ));
+        assert!(!device.is_connected().await.expect("is_connected"));
     }
 }
