@@ -1,4 +1,4 @@
-//! Cross-backend contract test suite for the [`Adapter`]/[`Peripheral`]
+//! Cross-backend contract test suite for the [`Adapter`]/[`Peripheral`](crate::Peripheral)
 //! semantics.
 //!
 //! The suite asserts *semantics*, not implementation details, and is the
@@ -462,6 +462,9 @@ mod tests {
     use super::*;
     use crate::fake::FakeAdapter;
 
+    /// Bootstrap self-test of the suite against the in-crate fake backend.
+    /// The CI default fixture is the mock integration test in
+    /// `tests/contract_mock.rs`.
     #[test]
     fn contract_suite_passes_on_fake_backend() {
         let result = futures::executor::block_on(run_contract_suite(|| async {

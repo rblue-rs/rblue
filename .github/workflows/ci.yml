@@ -59,6 +59,12 @@ jobs:
           persist-credentials: false
       - name: Test the workspace on this macOS host
         run: cargo test --workspace
+      # Default quality gate: the workspace run now includes
+      # tests/contract_mock.rs (MockAdapter::with_contract_fixture). The
+      # explicit follow-up keeps that suite visible in CI logs and honors
+      # the historical `--features contract` invocation.
+      - name: Mock contract suite
+        run: cargo test -p rblue-api --features contract --test contract_mock
 
   docs:
     name: rustdoc (macos-host)
