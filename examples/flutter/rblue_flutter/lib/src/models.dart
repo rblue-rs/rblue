@@ -916,3 +916,241 @@ class AdapterDeviceDisconnected extends AdapterEvent {
   /// Builds the event.
   const AdapterDeviceDisconnected(this.id, this.reason);
 }
+
+/// Bit positions of `rblue_api::Capability`, packed in the `capabilities`
+/// bitmask (stored as a `u32` on the Rust side).
+abstract final class Capability {
+  /// See `Capability::PassiveScan`.
+  static const int passiveScan = 1 << 0;
+
+  /// See `Capability::ActiveScan`.
+  static const int activeScan = 1 << 1;
+
+  /// See `Capability::ScanResponse`.
+  static const int scanResponse = 1 << 2;
+
+  /// See `Capability::GattClient`.
+  static const int gattClient = 1 << 3;
+
+  /// See `Capability::GattServer`.
+  static const int gattServer = 1 << 4;
+
+  /// See `Capability::Advertise`.
+  static const int advertise = 1 << 5;
+
+  /// See `Capability::RssiDuringConnection`.
+  static const int rssiDuringConnection = 1 << 6;
+
+  /// See `Capability::MtuNegotiation`.
+  static const int mtuNegotiation = 1 << 7;
+
+  /// See `Capability::MtuQuery`.
+  static const int mtuQuery = 1 << 8;
+
+  /// See `Capability::Pairing`.
+  static const int pairing = 1 << 9;
+
+  /// See `Capability::WatchAdvertisements`.
+  static const int watchAdvertisements = 1 << 10;
+
+  /// See `Capability::RequestDevicePicker`.
+  static const int requestDevicePicker = 1 << 11;
+
+  /// See `Capability::BackgroundScan`.
+  static const int backgroundScan = 1 << 12;
+
+  /// Platform/stack background connection (`ConnectOptions.auto_connect`).
+  /// This is not [RblueClient.autoConnect], which is the reconnect supervisor.
+  static const int autoConnect = 1 << 13;
+
+  /// Returns whether [bits] includes [capability].
+  static bool has(int bits, int capability) => (bits & capability) != 0;
+}
+
+/// Serde shape of `rblue_api::ReconnectPolicy`. Durations are milliseconds.
+/// Omitted fields keep the supervisor defaults.
+class ReconnectPolicy {
+  /// Backoff before the first retry.
+  final Duration? initialBackoff;
+
+  /// Cap for the base backoff.
+  final Duration? maxBackoff;
+
+  /// Growth factor per consecutive failure.
+  final double? multiplier;
+
+  /// Relative jitter applied to the base delay (0..=1).
+  final double? jitterFraction;
+
+  /// Base backoff after an Android GATT status 133 failure.
+  final Duration? gatt133Backoff;
+
+  /// Consecutive failures that open the circuit breaker; `null` disables it
+  /// only when explicitly set in [toJson] via [breakerThresholdSet].
+  final int? breakerThreshold;
+
+  /// Whether [breakerThreshold] should be serialized, including a null.
+  final bool _includeBreakerThreshold;
+
+  /// Consecutive failures after which the supervisor gives up; `null` retries
+  /// forever.
+  final int? maxAttempts;
+
+  /// Whether a local disconnect schedules a reconnect.
+  final bool? reconnectOnLocalDisconnect;
+
+  /// Optional jitter seed for reproducible tests.
+  final int? jitterSeed;
+
+  /// Builds a policy; omitted fields are left off the wire so the native
+  /// defaults apply.
+  const ReconnectPolicy({
+    this.initialBackoff,
+    this.maxBackoff,
+    this.multiplier,
+    this.jitterFraction,
+    this.gatt133Backoff,
+    this.breakerThreshold,
+    bool includeBreakerThreshold = false,
+    this.maxAttempts,
+    this.reconnectOnLocalDisconnect,
+    this.jitterSeed,
+  }) : _includeBreakerThreshold =
+           includeBreakerThreshold || breakerThreshold != null;
+
+  /// The `*_ms` serde object sent as `auto_connect`'s `policy` field.
+  Map<String, Object?> toJson() {
+    return {
+      if (initialBackoff != null)
+        'initial_backoff_ms': initialBackoff!.inMilliseconds,
+      if (maxBackoff != null) 'max_backoff_ms': maxBackoff!.inMilliseconds,
+      if (multiplier != null) 'multiplier': multiplier,
+      if (jitterFraction != null) 'jitter_fraction': jitterFraction,
+      if (gatt133Backoff != null)
+        'gatt_133_backoff_ms': gatt133Backoff!.inMilliseconds,
+      if (_includeBreakerThreshold) 'breaker_threshold': breakerThreshold,
+      if (maxAttempts != null) 'max_attempts': maxAttempts,
+      if (reconnectOnLocalDisconnect != null)
+        'reconnect_on_local_disconnect': reconnectOnLocalDisconnect,
+      if (jitterSeed != null) 'jitter_seed': jitterSeed,
+    };
+  }
+}
+
+/// One event from the application-level connection supervisor.
+sealed class SupervisorEvent {
+  /// Builds a supervisor event.
+  const SupervisorEvent();
+
+  /// Parses one `SupervisorEvent` object (the envelope's `event` field).
+  factory SupervisorEvent.fromJson(Object json) {
+    final map = json as Map<String, Object?>;
+    final tag = map.keys.single;
+    final payload = map[tag];
+    switch (tag) {
+      case 'connected':
+        return SupervisorConnected(DeviceId.fromJson(payload!));
+      case 'reconnect_scheduled':
+        final object = (payload! as Map).cast<String, Object?>();
+        return SupervisorReconnectScheduled(
+          DeviceId.fromJson(object['id']!),
+          Duration(milliseconds: object['delay']! as int),
+          object['attempt']! as int,
+        );
+      case 'attempt_failed':
+        final object = (payload! as Map).cast<String, Object?>();
+        final next = object['next_retry'];
+        return SupervisorAttemptFailed(
+          DeviceId.fromJson(object['id']!),
+          platform133: object['platform_133']! as bool,
+          attempt: object['attempt']! as int,
+          nextRetry: next == null ? null : Duration(milliseconds: next as int),
+        );
+      case 'breaker_open':
+        final object = (payload! as Map).cast<String, Object?>();
+        return SupervisorBreakerOpen(
+          DeviceId.fromJson(object['id']!),
+          object['consecutive_failures']! as int,
+        );
+      case 'gave_up':
+        final object = (payload! as Map).cast<String, Object?>();
+        return SupervisorGaveUp(
+          DeviceId.fromJson(object['id']!),
+          object['consecutive_failures']! as int,
+        );
+      default:
+        throw RblueContractError('unknown SupervisorEvent tag: $tag');
+    }
+  }
+}
+
+/// A watched device connected (or re-connected).
+class SupervisorConnected extends SupervisorEvent {
+  /// The device.
+  final DeviceId id;
+
+  /// Builds the event.
+  const SupervisorConnected(this.id);
+}
+
+/// A watched device dropped and a reconnect was scheduled.
+class SupervisorReconnectScheduled extends SupervisorEvent {
+  /// The device that dropped.
+  final DeviceId id;
+
+  /// Backoff before the next attempt.
+  final Duration delay;
+
+  /// Consecutive failure count at scheduling time.
+  final int attempt;
+
+  /// Builds the event.
+  const SupervisorReconnectScheduled(this.id, this.delay, this.attempt);
+}
+
+/// A connection attempt failed.
+class SupervisorAttemptFailed extends SupervisorEvent {
+  /// The device whose attempt failed.
+  final DeviceId id;
+
+  /// Whether the failure was Android GATT status 133.
+  final bool platform133;
+
+  /// Consecutive failure count after this failure.
+  final int attempt;
+
+  /// When the next attempt is scheduled, if any.
+  final Duration? nextRetry;
+
+  /// Builds the event.
+  const SupervisorAttemptFailed(
+    this.id, {
+    required this.platform133,
+    required this.attempt,
+    this.nextRetry,
+  });
+}
+
+/// The circuit breaker opened for this device.
+class SupervisorBreakerOpen extends SupervisorEvent {
+  /// The device.
+  final DeviceId id;
+
+  /// Consecutive failures at trip time.
+  final int consecutiveFailures;
+
+  /// Builds the event.
+  const SupervisorBreakerOpen(this.id, this.consecutiveFailures);
+}
+
+/// The supervisor gave up on this device.
+class SupervisorGaveUp extends SupervisorEvent {
+  /// The device.
+  final DeviceId id;
+
+  /// Consecutive failures at give-up time.
+  final int consecutiveFailures;
+
+  /// Builds the event.
+  const SupervisorGaveUp(this.id, this.consecutiveFailures);
+}

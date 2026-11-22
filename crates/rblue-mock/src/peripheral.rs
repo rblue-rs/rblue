@@ -15,7 +15,7 @@ use rblue_api::gatt::{
     Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service, ServiceId,
     ServiceSet, WriteMode,
 };
-use rblue_api::peripheral::{NotificationStream, Peripheral};
+use rblue_api::peripheral::{ConnectOptions, NotificationStream, Peripheral};
 use rblue_api::scan::{AdvertisementData, RequestDeviceOptions, ScanFilter};
 
 use crate::adapter::{AdapterShared, DEFAULT_MAX_WRITE_LEN, DEFAULT_RSSI, MOCK_ATT_MTU};
@@ -661,6 +661,11 @@ impl Peripheral for MockPeripheral {
         Ok(())
     }
 
+    async fn connect_with(&self, opts: &ConnectOptions) -> Result<(), Error> {
+        // The mock has no platform/stack auto-connect or MTU request API.
+        opts.reject_unsupported("mock")?;
+        self.connect().await
+    }
     async fn disconnect(&self) -> Result<(), Error> {
         self.drop_connection(DisconnectReason::Local);
         Ok(())

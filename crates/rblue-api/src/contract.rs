@@ -31,8 +31,8 @@ use futures_timer::Delay;
 
 use crate::adapter::AdapterEventStream;
 use crate::{
-    Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties, DeviceId, Error,
-    ScanFilter, ServiceId, WriteMode, WriteOptions,
+    Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties, ConnectOptions,
+    DeviceId, Error, ScanFilter, ServiceId, WriteMode, WriteOptions,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -138,6 +138,75 @@ where
     );
 
     let peripheral = require("peripheral", adapter.peripheral(&device_id).await);
+
+    // -- connect_with --------------------------------------------------------
+    // Default options are equivalent to connect(); non-default options that
+    // the backend does not advertise must return Unsupported, never succeed
+    // silently.
+    require(
+        "connect_with default",
+        peripheral.connect_with(&ConnectOptions::default()).await,
+    );
+    let connected = require(
+        "is_connected after connect_with default",
+        peripheral.is_connected().await,
+    );
+    assert!(
+        connected,
+        "contract violation: connect_with(default) must connect"
+    );
+    require(
+        "disconnect after connect_with default",
+        peripheral.disconnect().await,
+    );
+
+    if adapter.capabilities().has(Capability::AutoConnect) {
+        // A live auto_connect=true attempt may wait for the device to appear
+        // and is not required here; the capability bit is the advertised
+        // contract.
+    } else {
+        match peripheral
+            .connect_with(&ConnectOptions {
+                auto_connect: true,
+                mtu: None,
+            })
+            .await
+        {
+            Err(Error::Unsupported {
+                feature: "auto_connect",
+                ..
+            }) => {}
+            other => panic!(
+                "contract violation at `connect_with auto_connect`: expected Err(Unsupported {{ feature: auto_connect }}), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+    }
+
+    match peripheral
+        .connect_with(&ConnectOptions {
+            auto_connect: false,
+            mtu: Some(512),
+        })
+        .await
+    {
+        Err(Error::Unsupported {
+            feature: "request_mtu",
+            ..
+        }) => {}
+        Ok(()) => panic!(
+            "contract violation at `connect_with mtu`: request_mtu must not be silently ignored"
+        ),
+        other => {
+            // A backend that later implements request_mtu may succeed; only
+            // a silent accept without doing the request is forbidden. Until
+            // that lands, success is unexpected in this suite.
+            panic!(
+                "contract violation at `connect_with mtu`: expected Err(Unsupported {{ feature: request_mtu }}), got {:?}",
+                other.as_ref().map(|_| ())
+            );
+        }
+    }
 
     // -- connect -------------------------------------------------------------
     require("connect", peripheral.connect().await);
