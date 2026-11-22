@@ -78,7 +78,7 @@ pub mod prelude {
         Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service,
         ServiceId, ServiceSet, WriteMode,
     };
-    pub use crate::peripheral::{NotificationStream, Peripheral};
+    pub use crate::peripheral::{ConnectOptions, NotificationStream, Peripheral, WriteOptions};
     pub use crate::queue::{GattOpPriority, GattOpQueue, GattOperation, OpHandle, QueueConfig};
     pub use crate::scan::{
         AdvertisementData, DiscoveredDevice, ManufacturerFilter, RequestDeviceOptions, ScanFilter,
@@ -105,7 +105,7 @@ pub use crate::gatt::{
     Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service, ServiceId,
     ServiceSet, WriteMode,
 };
-pub use crate::peripheral::{NotificationStream, Peripheral};
+pub use crate::peripheral::{ConnectOptions, NotificationStream, Peripheral, WriteOptions};
 pub use crate::queue::{GattOpPriority, GattOpQueue, GattOperation, OpHandle, QueueConfig};
 pub use crate::scan::{
     AdvertisementData, DiscoveredDevice, ManufacturerFilter, RequestDeviceOptions, ScanFilter,

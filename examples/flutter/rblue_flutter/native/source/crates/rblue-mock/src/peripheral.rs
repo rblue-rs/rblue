@@ -533,15 +533,11 @@ fn matches_request_options(advertisement: &AdvertisementData, opts: &RequestDevi
             return false;
         }
     }
-    if !opts.services.is_empty()
-        && !opts
+    opts.services.is_empty()
+        || opts
             .services
             .iter()
             .any(|uuid| advertisement.services.contains(uuid))
-    {
-        return false;
-    }
-    true
 }
 
 /// Resolves the first characteristic with `uuid` to its session id: the

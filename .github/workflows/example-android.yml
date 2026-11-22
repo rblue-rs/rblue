@@ -10,25 +10,11 @@
 # examples/android/README.md.
 name: example-android
 
+# GitHub-hosted jobs in this file are workflow_dispatch only while
+# hosted billing is blocked. An absent automatic run is not a pass.
+# These jobs assume a Linux hosted image with the Android SDK/NDK.
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/example-android.yml"
-      - "bindings/kotlin/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "examples/android/**"
-  pull_request:
-    paths:
-      - ".github/workflows/example-android.yml"
-      - "bindings/kotlin/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "examples/android/**"
-
+  workflow_dispatch:
 env:
   CARGO_TERM_COLOR: always
 
