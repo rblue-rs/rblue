@@ -26,7 +26,7 @@ pub type NotificationStream = BoxStream<'static, Notification>;
 /// [`Peripheral::write`] keeps the unified default: oversize payloads
 /// return [`Error::InvalidLength`] and are never silently truncated or
 /// chunked.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(default))]
 pub struct WriteOptions {
@@ -34,14 +34,6 @@ pub struct WriteOptions {
     /// written as sequential chunks of that length. When `false`, oversize
     /// payloads fail with [`Error::InvalidLength`].
     pub allow_long_write: bool,
-}
-
-impl Default for WriteOptions {
-    fn default() -> Self {
-        Self {
-            allow_long_write: false,
-        }
-    }
 }
 
 /// A GATT client session with one peripheral.
