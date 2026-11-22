@@ -37,8 +37,8 @@ use futures_timer::Delay;
 
 use crate::adapter::AdapterEventStream;
 use crate::{
-    Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties, DeviceId, Error,
-    RequestDeviceOptions, ScanFilter, ServiceId, WriteMode,
+    Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties, ConnectOptions,
+    DeviceId, Error, RequestDeviceOptions, ScanFilter, ServiceId, WriteMode, WriteOptions,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -55,13 +55,11 @@ pub const CONTRACT_CHARACTERISTIC_UUID: uuid::Uuid =
 /// Largest ATT_MTU allowed by the Bluetooth spec (517); sanity bound for
 /// reported `max_write_len` values.
 const MAX_REASONABLE_WRITE_LEN: usize = 517;
-
 /// Minimum ATT_MTU defined by the Bluetooth spec.
 const MIN_ATT_MTU: u16 = 23;
 /// Largest ATT_MTU allowed by the Bluetooth spec.
 const MAX_ATT_MTU: u16 = 517;
 
-/// Payload written to trigger the notification echo.
 const ECHO_PAYLOAD: &[u8] = b"rblue-contract-echo";
 
 const SCAN_EVENT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -184,6 +182,75 @@ where
         );
     } else {
         require_unsupported("request_device", adapter.request_device(&picker_opts).await);
+    }
+
+    // -- connect_with --------------------------------------------------------
+    // Default options are equivalent to connect(); non-default options that
+    // the backend does not advertise must return Unsupported, never succeed
+    // silently.
+    require(
+        "connect_with default",
+        peripheral.connect_with(&ConnectOptions::default()).await,
+    );
+    let connected = require(
+        "is_connected after connect_with default",
+        peripheral.is_connected().await,
+    );
+    assert!(
+        connected,
+        "contract violation: connect_with(default) must connect"
+    );
+    require(
+        "disconnect after connect_with default",
+        peripheral.disconnect().await,
+    );
+
+    if adapter.capabilities().has(Capability::AutoConnect) {
+        // A live auto_connect=true attempt may wait for the device to appear
+        // and is not required here; the capability bit is the advertised
+        // contract.
+    } else {
+        match peripheral
+            .connect_with(&ConnectOptions {
+                auto_connect: true,
+                mtu: None,
+            })
+            .await
+        {
+            Err(Error::Unsupported {
+                feature: "auto_connect",
+                ..
+            }) => {}
+            other => panic!(
+                "contract violation at `connect_with auto_connect`: expected Err(Unsupported {{ feature: auto_connect }}), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+    }
+
+    match peripheral
+        .connect_with(&ConnectOptions {
+            auto_connect: false,
+            mtu: Some(512),
+        })
+        .await
+    {
+        Err(Error::Unsupported {
+            feature: "request_mtu",
+            ..
+        }) => {}
+        Ok(()) => panic!(
+            "contract violation at `connect_with mtu`: request_mtu must not be silently ignored"
+        ),
+        other => {
+            // A backend that later implements request_mtu may succeed; only
+            // a silent accept without doing the request is forbidden. Until
+            // that lands, success is unexpected in this suite.
+            panic!(
+                "contract violation at `connect_with mtu`: expected Err(Unsupported {{ feature: request_mtu }}), got {:?}",
+                other.as_ref().map(|_| ())
+            );
+        }
     }
 
     // -- connect -------------------------------------------------------------
@@ -312,6 +379,52 @@ where
             "write (in bounds)",
             peripheral.write(&char_id, &in_bounds, mode).await,
         );
+
+        // Default write_with keeps the unified InvalidLength semantics.
+        match peripheral
+            .write_with(
+                &char_id,
+                &oversize,
+                mode,
+                &WriteOptions {
+                    allow_long_write: false,
+                },
+            )
+            .await
+        {
+            Err(Error::InvalidLength { len, max }) => {
+                assert_eq!(len, max_len + 1);
+                assert_eq!(max, max_len);
+            }
+            other => panic!(
+                "contract violation at `write_with default oversize ({mode:?})`: expected Err(InvalidLength), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+
+        // Long writes are chunked by the current max_write_len; a backend
+        // that cannot chunk this WriteMode may return Unsupported.
+        match peripheral
+            .write_with(
+                &char_id,
+                &oversize,
+                mode,
+                &WriteOptions {
+                    allow_long_write: true,
+                },
+            )
+            .await
+        {
+            Ok(()) => {}
+            Err(Error::Unsupported {
+                feature: "allow_long_write",
+                ..
+            }) => {}
+            other => panic!(
+                "contract violation at `write_with allow_long_write ({mode:?})`: expected Ok or Unsupported, got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
     }
 
     // -- subscribe and notification echo -----------------------------------
@@ -360,14 +473,6 @@ where
     Ok(())
 }
 
-/// Unwraps a backend result, panicking with the step name on error.
-fn require<T>(step: &str, result: Result<T, Error>) -> T {
-    match result {
-        Ok(value) => value,
-        Err(err) => panic!("contract violation at `{step}`: expected Ok, got {err:?}"),
-    }
-}
-
 /// Asserts that a call rejected because the backend does not advertise the
 /// corresponding [`Capability`] is a non-empty [`Error::Unsupported`], never a
 /// silent `Ok`.
@@ -397,6 +502,14 @@ fn require_supported<T>(step: &str, result: Result<T, Error>) -> T {
             "contract violation at `{step}`: backend advertised the capability but returned Unsupported {{ platform: {platform}, feature: {feature} }}"
         ),
         other => require(step, other),
+    }
+}
+
+/// Unwraps a backend result, panicking with the step name on error.
+fn require<T>(step: &str, result: Result<T, Error>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(err) => panic!("contract violation at `{step}`: expected Ok, got {err:?}"),
     }
 }
 
