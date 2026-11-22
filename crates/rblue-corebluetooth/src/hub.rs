@@ -1,5 +1,10 @@
 //! Broadcast fan-out for adapter events and GATT notifications.
 
+#![cfg_attr(
+    not(any(target_os = "macos", target_os = "ios")),
+    allow(dead_code, unused_imports)
+)]
+
 use std::sync::{Mutex, MutexGuard};
 
 use futures::stream::StreamExt;

@@ -42,6 +42,10 @@
 //! ([`SupervisorEvent::GaveUp`]). Calling `auto_connect` again re-arms a
 //! device.
 //!
+//! This supervisor method is not the platform/stack background-connection
+//! flag. That flag lives on [`crate::ConnectOptions::auto_connect`] and is
+//! selected through [`crate::Peripheral::connect_with`].
+//!
 //! # RPA rotation and `reconnect_by_filter`
 //!
 //! Resolvable private addresses rotate roughly every 15 minutes, so a
@@ -139,12 +143,22 @@ pub enum SupervisionPhase {
 /// initial backoff, x2 growth, 30 s cap, +/-20% jitter, a longer base for
 /// Android GATT status 133, and a circuit breaker at 5 consecutive
 /// failures.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 pub struct ReconnectPolicy {
     /// Backoff before the first retry after a failure (500 ms by default).
+    #[cfg_attr(
+        feature = "serde",
+        serde(rename = "initial_backoff_ms", with = "duration_millis")
+    )]
     pub initial_backoff: Duration,
     /// Hard cap for the *base* backoff (30 s by default); jitter may push
     /// the effective delay up to `max_backoff * (1 + jitter_fraction)`.
+    #[cfg_attr(
+        feature = "serde",
+        serde(rename = "max_backoff_ms", with = "duration_millis")
+    )]
     pub max_backoff: Duration,
     /// Growth factor per consecutive failure (2.0 by default). Values < 1
     /// are clamped to 1.
@@ -154,6 +168,10 @@ pub struct ReconnectPolicy {
     pub jitter_fraction: f64,
     /// Base backoff used after an Android GATT status 133 failure
     /// (5 s by default); grows with the same multiplier and cap.
+    #[cfg_attr(
+        feature = "serde",
+        serde(rename = "gatt_133_backoff_ms", with = "duration_millis")
+    )]
     pub gatt_133_backoff: Duration,
     /// Number of consecutive failures that opens the circuit breaker
     /// (5 by default); `None` disables the breaker.
@@ -184,6 +202,54 @@ impl Default for ReconnectPolicy {
             reconnect_on_local_disconnect: false,
             jitter_seed: None,
         }
+    }
+}
+
+#[cfg(feature = "serde")]
+mod duration_millis {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u64(as_millis_u64(*duration))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Duration::from_millis(u64::deserialize(deserializer)?))
+    }
+
+    pub(super) fn as_millis_u64(duration: Duration) -> u64 {
+        u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+    }
+}
+
+#[cfg(feature = "serde")]
+mod option_duration_millis {
+    use super::duration_millis::as_millis_u64;
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S>(value: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(duration) => serializer.serialize_some(&as_millis_u64(*duration)),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Option::<u64>::deserialize(deserializer)?.map(Duration::from_millis))
     }
 }
 
@@ -459,6 +525,8 @@ impl SupervisionState {
 /// Events surfaced by the supervisor loop for applications (session
 /// restore, UI state).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum SupervisorEvent {
     /// A watched device connected (link established or re-established).
     Connected(DeviceId),
@@ -467,6 +535,7 @@ pub enum SupervisorEvent {
         /// Device that dropped.
         id: DeviceId,
         /// Backoff before the next attempt.
+        #[cfg_attr(feature = "serde", serde(with = "duration_millis"))]
         delay: Duration,
         /// Consecutive failure count at scheduling time.
         attempt: u32,
@@ -481,6 +550,7 @@ pub enum SupervisorEvent {
         attempt: u32,
         /// When the next attempt is scheduled; `None` when the breaker
         /// opened or the supervisor gave up.
+        #[cfg_attr(feature = "serde", serde(with = "option_duration_millis"))]
         next_retry: Option<Duration>,
     },
     /// The circuit breaker opened for this device.
@@ -806,6 +876,9 @@ impl SupervisorHandle {
     /// Registers `id` for supervision and starts a connection attempt
     /// immediately; re-arms a device whose breaker opened or that the
     /// supervisor gave up on.
+    ///
+    /// This is the application-level reconnect supervisor, not the
+    /// platform/stack `ConnectOptions.auto_connect` flag.
     ///
     /// # Errors
     ///

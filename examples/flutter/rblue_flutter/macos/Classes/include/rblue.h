@@ -29,8 +29,9 @@
  *   unparseable params) never reach the backend and are reported as
  *   `{"InvalidArgument":{"message":...}}`.
  * - `event_json`: a tagged envelope,
- *   `{"type":"adapter_event","event":<AdapterEvent JSON>}` or
- *   `{"type":"notification","device":<DeviceId JSON>,"notification":<Notification JSON>}`.
+ *   `{"type":"adapter_event","event":<AdapterEvent JSON>}`,
+ *   `{"type":"notification","device":<DeviceId JSON>,"notification":<Notification JSON>}`,
+ *   or `{"type":"supervisor_event","event":<SupervisorEvent JSON>}`.
  *   `AdapterEvent` uses its serde form, e.g.
  *   `{"device_discovered":{"id":...,"advertisement":...}}`,
  *   `{"device_disconnected":[<DeviceId>,null|"local"|"remote"|"timed_out"|"platform"]}`.
@@ -43,14 +44,25 @@
  *   stop_scan          {}                              -> (empty)
  *   system_connected_peripherals {"services":[<UUID>,...]} -> [{ "id":..,"name":.. }] (CoreBluetooth)
  *   peripherals        {}                              -> [{"id":..,"name":..}]
- *   connect            {"device": <DeviceId>}          -> (empty)
+ *   connect            {"device": <DeviceId>, "auto_connect"?: bool, "mtu"?: u16}
+ *                                          -> (empty)
+ *                      auto_connect defaults to false (platform/stack
+ *                      background connection, not the supervisor).
+ *   auto_connect       {"device": <DeviceId>, "policy"?: ReconnectPolicy}
+ *                                          -> (empty)
+ *                      Application-level SupervisorHandle::auto_connect.
+ *                      policy uses *_ms duration fields; omitted fields keep
+ *                      defaults. A later call with a different policy fails.
+ *   unwatch            {"device": <DeviceId>}          -> (empty)
+ *                      Stops supervising the device (SupervisorHandle::unwatch).
  *   disconnect         {"device": <DeviceId>}          -> (empty)
- *   capabilities       {} -> capability bitmask JSON
+ *   capabilities       {} -> capability bitmask JSON (u32)
  *   rssi / mtu         {"device": <DeviceId>} -> integer JSON
  *   max_write_len      {"device":..,"characteristic":..,"mode":..} -> integer JSON
  *   discover_services  {"device": <DeviceId>}          -> ServiceSet JSON
  *   read               {"device":..,"characteristic":..} -> raw value bytes
- *   write              {"device":..,"characteristic":..,"mode":..} + payload -> (empty)
+ *   write              {"device":..,"characteristic":..,"mode":.., "allow_long_write"?: bool} + payload -> (empty)
+ *                      allow_long_write defaults to false (oversize -> InvalidLength).
  *   subscribe          {"device":..,"characteristic":..} -> (empty)
  *   unsubscribe        {"device":..,"characteristic":..} -> (empty)
  *   is_connected       {"device": <DeviceId>}          -> true|false
