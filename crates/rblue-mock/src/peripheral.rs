@@ -533,15 +533,11 @@ fn matches_request_options(advertisement: &AdvertisementData, opts: &RequestDevi
             return false;
         }
     }
-    if !opts.services.is_empty()
-        && !opts
+    opts.services.is_empty()
+        || opts
             .services
             .iter()
             .any(|uuid| advertisement.services.contains(uuid))
-    {
-        return false;
-    }
-    true
 }
 
 /// Resolves the first characteristic with `uuid` to its session id: the
@@ -829,6 +825,7 @@ mod tests {
     use std::time::Duration;
 
     use rblue_api::device::AddressType;
+    use rblue_api::peripheral::WriteOptions;
     use rblue_api::Adapter;
 
     use crate::MockAdapter;
@@ -1010,6 +1007,60 @@ mod tests {
         assert_eq!(notification.data, b"ping");
         // The write also updated the readable value.
         assert_eq!(device.read(&echo).await.expect("read"), b"ping");
+    }
+
+    #[tokio::test]
+    async fn write_with_allow_long_write_chunks_without_truncating() {
+        let adapter = MockAdapter::new();
+        let device = adapter.add_device(
+            DeviceId::Mac([0x02, 0, 0, 0, 0, 1], AddressType::RandomStatic),
+            "long-write",
+        );
+        device.add_service(
+            MockService::new(SERVICE_UUID).characteristic(
+                MockCharacteristic::new(
+                    ECHO_UUID,
+                    CharacteristicProperties::READ
+                        | CharacteristicProperties::WRITE
+                        | CharacteristicProperties::NOTIFY,
+                )
+                .with_max_write_len(4)
+                .with_echo(),
+            ),
+        );
+        let echo = device
+            .find_characteristic(ECHO_UUID)
+            .expect("echo characteristic registered");
+        device.connect().await.expect("connect");
+        device.subscribe(&echo).await.expect("subscribe");
+        let mut notifications = device.notifications();
+
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
+        assert!(matches!(
+            device.write(&echo, &data, WriteMode::WithResponse).await,
+            Err(Error::InvalidLength { len: 9, max: 4 })
+        ));
+
+        device
+            .write_with(
+                &echo,
+                &data,
+                WriteMode::WithResponse,
+                &WriteOptions {
+                    allow_long_write: true,
+                },
+            )
+            .await
+            .expect("long write");
+
+        let mut echoed = Vec::new();
+        for _ in 0..3 {
+            let notification = notifications.next().await.expect("chunk notification");
+            echoed.extend_from_slice(&notification.data);
+        }
+        assert_eq!(echoed, data);
+        // The stored value is the last chunk (each write is a single ATT write).
+        assert_eq!(device.read(&echo).await.expect("read"), vec![9]);
     }
 
     #[tokio::test]

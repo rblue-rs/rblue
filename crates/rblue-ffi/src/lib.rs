@@ -87,3 +87,37 @@ pub use facade::{EventSink, Rblue};
 
 #[cfg(not(target_arch = "wasm32"))]
 uniffi::setup_scaffolding!();
+
+/// JNI entry: `com.rblue.RblueNative.nativeInit()`.
+///
+/// Defined in this cdylib so rustc includes the symbol in the
+/// `librblue_ffi.so` export list. The implementation lives in `rblue-android`.
+///
+/// # Safety
+///
+/// This is a JNI entry point and is meant to be called only by the JVM when
+/// Java/Kotlin code invokes `RblueNative.nativeInit()`. `env` must be a valid,
+/// non-null `JNIEnv*` belonging to the calling thread, which must be attached
+/// to the JVM for the duration of the call. `class` must be the valid `jclass`
+/// local reference the JVM passes for `com.rblue.RblueNative` (it is unused).
+/// Calling this from Rust with any other pointers is undefined behavior.
+#[cfg(all(feature = "android", target_os = "android"))]
+#[no_mangle]
+pub unsafe extern "system" fn Java_com_rblue_RblueNative_nativeInit(
+    env: *mut std::ffi::c_void,
+    class: *mut std::ffi::c_void,
+) -> bool {
+    // SAFETY: the caller (the JVM) upholds this function's safety contract,
+    // which is exactly the contract of `jni_native_init`.
+    unsafe { rblue::platform::android::jni_native_init(env, class) }
+}
+
+/// Prevent the linker from dropping `Java_com_rblue_RblueNative_nativeInit`
+/// as unused. Complements the `-u` / `--export-dynamic-symbol` flags in
+/// `build.rs` on Android targets that still omit an unreferenced export.
+#[cfg(all(feature = "android", target_os = "android"))]
+#[used]
+static KEEP_JNI_NATIVE_INIT: unsafe extern "system" fn(
+    *mut std::ffi::c_void,
+    *mut std::ffi::c_void,
+) -> bool = Java_com_rblue_RblueNative_nativeInit;

@@ -32,7 +32,7 @@ use futures_timer::Delay;
 use crate::adapter::AdapterEventStream;
 use crate::{
     Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties, ConnectOptions,
-    DeviceId, Error, ScanFilter, ServiceId, WriteMode,
+    DeviceId, Error, ScanFilter, ServiceId, WriteMode, WriteOptions,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -303,6 +303,52 @@ where
             "write (in bounds)",
             peripheral.write(&char_id, &in_bounds, mode).await,
         );
+
+        // Default write_with keeps the unified InvalidLength semantics.
+        match peripheral
+            .write_with(
+                &char_id,
+                &oversize,
+                mode,
+                &WriteOptions {
+                    allow_long_write: false,
+                },
+            )
+            .await
+        {
+            Err(Error::InvalidLength { len, max }) => {
+                assert_eq!(len, max_len + 1);
+                assert_eq!(max, max_len);
+            }
+            other => panic!(
+                "contract violation at `write_with default oversize ({mode:?})`: expected Err(InvalidLength), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+
+        // Long writes are chunked by the current max_write_len; a backend
+        // that cannot chunk this WriteMode may return Unsupported.
+        match peripheral
+            .write_with(
+                &char_id,
+                &oversize,
+                mode,
+                &WriteOptions {
+                    allow_long_write: true,
+                },
+            )
+            .await
+        {
+            Ok(()) => {}
+            Err(Error::Unsupported {
+                feature: "allow_long_write",
+                ..
+            }) => {}
+            other => panic!(
+                "contract violation at `write_with allow_long_write ({mode:?})`: expected Ok or Unsupported, got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
     }
 
     // -- subscribe and notification echo -----------------------------------

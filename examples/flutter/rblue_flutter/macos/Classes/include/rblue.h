@@ -61,7 +61,8 @@
  *   max_write_len      {"device":..,"characteristic":..,"mode":..} -> integer JSON
  *   discover_services  {"device": <DeviceId>}          -> ServiceSet JSON
  *   read               {"device":..,"characteristic":..} -> raw value bytes
- *   write              {"device":..,"characteristic":..,"mode":..} + payload -> (empty)
+ *   write              {"device":..,"characteristic":..,"mode":.., "allow_long_write"?: bool} + payload -> (empty)
+ *                      allow_long_write defaults to false (oversize -> InvalidLength).
  *   subscribe          {"device":..,"characteristic":..} -> (empty)
  *   unsubscribe        {"device":..,"characteristic":..} -> (empty)
  *   is_connected       {"device": <DeviceId>}          -> true|false
