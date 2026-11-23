@@ -1,6 +1,6 @@
 {
-  "source_commit": "ba801b5251198dfbb6f60bb14b87eaa76380e585",
-  "source_tree": "94c4ae67085a9349fb10acaa3738779deabf806d",
+  "source_commit": "c3802ca60eca0fef8384caade280e0bff6723e4d",
+  "source_tree": "89594bff03fe1b97eb67f0584e80bc6547f72c26",
   "source_files": {
     "Cargo.lock": "2030a5b424e33a2be49dbdccdea482e72bd1c751bcd82c0b6ee5d2699123412d",
     "Cargo.toml": "3e355455baa867615e5e659fa048eb67188b9415934f8810ed26b6a95f950536",
@@ -17,7 +17,7 @@
     "crates/rblue-android/src/radio.rs": "2ecf0de91404a07421953b821e2ac9e478b3001f5f14dc8fdf13f8c6e4378533",
     "crates/rblue-android/src/system_connected.rs": "f5acfa0b622fbcfa1ac95c6eea2a8881a83f6b988627073ee6ff0e64b3345e58",
     "crates/rblue-api/Cargo.toml": "83c4196a3b39b4210a546a01ebd179099664dc9168eadd9dcc18e1f08c4bbaf5",
-    "crates/rblue-api/src/adapter.rs": "7df876c7a3ffaeab8d5e6e5076977ef69a5ca09658412b934a99f6f932ef84e0",
+    "crates/rblue-api/src/adapter.rs": "6784a8c19950ba904e9b38576e736873f93c3f0ac9b364cf9a85b5638a52134c",
     "crates/rblue-api/src/cache.rs": "ed572b68a05885516720ebf5d343a1e0fdb8221f3fb1a279a0775e1814d9e178",
     "crates/rblue-api/src/capability.rs": "633f18a0b69a8937aeb3acd62e10eb487a176309960ebf6336c6711f9b4fb39e",
     "crates/rblue-api/src/contract.rs": "9972e24577f157c0a8a8604a8dfb139f7a27ba9ef4cac38581587416e8344571",
@@ -64,20 +64,20 @@
     "crates/rblue-winrt/src/peripheral.rs": "76ed24b90dae2874e9b3a901aaba4abd9f012cb9b0bf6b5437b8db4c2c1cf4b1"
   },
   "build_inputs": {
-    "examples/flutter/rblue_flutter/native/source": "94c4ae67085a9349fb10acaa3738779deabf806d",
+    "examples/flutter/rblue_flutter/native/source": "89594bff03fe1b97eb67f0584e80bc6547f72c26",
     "examples/flutter/rblue_flutter/native/include": "df90a5ac03b9783f892157110af1456e44ae1f9b",
     "examples/flutter/tools/build-libs.sh": "77136f22f08e357df924bdd62ab55d62b3db2dba",
     "examples/flutter/tools/build-windows.ps1": "e2325e5a09a8dafc404315af373dc736ef7182dd",
     "examples/flutter/tools/record-native-rebuild.py": "f30faf8953e235917c1a20dba4a1d30f024205cd"
   },
-  "workflow_run": "https://github.com/rblue-rs/rblue/actions/runs/45172049872",
+  "workflow_run": "https://github.com/rblue-rs/rblue/actions/runs/45174606229",
   "run_attempt": "1",
   "platform": "windows",
   "host": "Windows-2025Server-10.0.26100-SP0",
   "rustc": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
   "cargo": "cargo 1.100.0 (3acc79c0c 2026-11-05)",
   "sha256": {
-    "windows/x64/rblue_c.dll": "ae119954a3cb2d15ffd1582b4d609d0e2200fbb9173567111354859ef430f98c"
+    "windows/x64/rblue_c.dll": "92ca8ed0b3d302dfc31ae6b8e9b07d985ab8d28209622afdaa309cea7f4cd704"
   },
   "visual_studio": "[\n  {\n    \"instanceId\": \"f77a293c\",\n    \"installDate\": \"2026-11-16T22:22:19Z\",\n    \"installationName\": \"VisualStudio/18.12.0+12405.243\",\n    \"installationPath\": \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Enterprise\",\n    \"installationVersion\": \"18.12.12405.243\",\n    \"productId\": \"Microsoft.VisualStudio.Product.Enterprise\",\n    \"productPath\": \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Enterprise\\\\Common7\\\\IDE\\\\devenv.exe\",\n    \"state\": 4294967295,\n    \"isComplete\": true,\n    \"isLaunchable\": true,\n    \"isPrerelease\": false,\n    \"isRebootRequired\": false,\n    \"displayName\": \"Visual Studio Enterprise 2026\",\n    \"description\": \"Built for scale, security, and speed \u00e2\u20ac\u201c the IDE for complex, high-impact development.\",\n    \"channelId\": \"VisualStudio.18.Release\",\n    \"channelUri\": \"https://aka.ms/vs/18/stable/channel\",\n    \"enginePath\": \"C:\\\\Program Files (x86)\\\\Microsoft Visual Studio\\\\Installer\\\\resources\\\\app\\\\ServiceHub\\\\Services\\\\Microsoft.VisualStudio.Setup.Service\",\n    \"expirationDate\": \"2027-05-04T17:00:00+00:00\",\n    \"installChannelUri\": \"https://aka.ms/vs/18/stable/channel\",\n    \"installedChannelId\": \"VisualStudio.18.Release\",\n    \"installedChannelUri\": \"https://aka.ms/vs/18/stable/channel\",\n    \"releaseNotes\": \"https://docs.microsoft.com/en-us/visualstudio/releases/18/release-notes-v18.12#18.12.0\",\n    \"resolvedInstallationPath\": \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Enterprise\",\n    \"thirdPartyNotices\": \"https://go.microsoft.com/fwlink/?LinkId=661480\",\n    \"updateDate\": \"2026-11-16T22:22:19.9907003Z\",\n    \"catalog\": {\n      \"buildBranch\": \"stable\",\n      \"buildVersion\": \"18.12.12405.243\",\n      \"featureReleaseMonth\": \"11\",\n      \"featureReleaseYear\": \"2026\",\n      \"id\": \"VisualStudio/18.12.0+12405.243\",\n      \"includeBuildVersionInDisplayVersion\": \"False\",\n      \"localBuild\": \"build-lab\",\n      \"manifestName\": \"VisualStudio\",\n      \"manifestType\": \"installer\",\n      \"productDisplayVersion\": \"18.12.0\",\n      \"productLine\": \"Dev18\",\n      \"productLineVersion\": \"18\",\n      \"productMilestone\": \"RTW\",\n      \"productMilestoneIsPreRelease\": \"False\",\n      \"productName\": \"Visual Studio\",\n      \"productPatchVersion\": \"0\",\n      \"productPreReleaseMilestoneSuffix\": \"5.0\",\n      \"productRelease\": \"RTW\",\n      \"productSemanticVersion\": \"18.12.0+12405.243\",\n      \"requiredEngineVersion\": \"4.12.34.54489\"\n    },\n    \"properties\": {\n      \"campaignId\": \"\",\n      \"channelManifestId\": \"VisualStudio.18.Release/18.12.0+12405.243\",\n      \"includeRecommended\": \"1\",\n      \"nickname\": \"\",\n      \"setupEngineFilePath\": \"C:\\\\Program Files (x86)\\\\Microsoft Visual Studio\\\\Installer\\\\setup.exe\"\n    }\n  }\n]"
 }
