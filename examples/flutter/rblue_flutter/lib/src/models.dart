@@ -1021,18 +1021,15 @@ class ReconnectPolicy {
   /// The `*_ms` serde object sent as `auto_connect`'s `policy` field.
   Map<String, Object?> toJson() {
     return {
-      if (initialBackoff != null)
-        'initial_backoff_ms': initialBackoff!.inMilliseconds,
-      if (maxBackoff != null) 'max_backoff_ms': maxBackoff!.inMilliseconds,
-      if (multiplier != null) 'multiplier': multiplier,
-      if (jitterFraction != null) 'jitter_fraction': jitterFraction,
-      if (gatt133Backoff != null)
-        'gatt_133_backoff_ms': gatt133Backoff!.inMilliseconds,
+      'initial_backoff_ms': ?initialBackoff?.inMilliseconds,
+      'max_backoff_ms': ?maxBackoff?.inMilliseconds,
+      'multiplier': ?multiplier,
+      'jitter_fraction': ?jitterFraction,
+      'gatt_133_backoff_ms': ?gatt133Backoff?.inMilliseconds,
       if (_includeBreakerThreshold) 'breaker_threshold': breakerThreshold,
-      if (maxAttempts != null) 'max_attempts': maxAttempts,
-      if (reconnectOnLocalDisconnect != null)
-        'reconnect_on_local_disconnect': reconnectOnLocalDisconnect,
-      if (jitterSeed != null) 'jitter_seed': jitterSeed,
+      'max_attempts': ?maxAttempts,
+      'reconnect_on_local_disconnect': ?reconnectOnLocalDisconnect,
+      'jitter_seed': ?jitterSeed,
     };
   }
 }

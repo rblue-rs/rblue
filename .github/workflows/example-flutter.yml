@@ -2,12 +2,17 @@ name: Flutter package
 
 # Build and inspect the exact native artifacts distributed by rblue_flutter.
 # Physical-radio acceptance remains a separate manual/self-hosted concern.
-# GitHub-hosted jobs in this file are workflow_dispatch only while
-# hosted billing is blocked. An absent automatic run is not a pass.
-# Flutter is not installed on the current self-hosted runner, and
-# Windows/Linux Flutter package jobs cannot run there.
+# Standard hosted build/test checks only. No package publishing or deployment.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+    inputs:
+      rebuild_native:
+        description: Record rebuilt native binaries on the CI repair branch (no artifact storage)
+        type: boolean
+        default: false
 permissions:
   contents: read
 
@@ -23,8 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo test -p rblue-c
       - run: cargo clippy -p rblue-c --all-targets --no-deps -- -D warnings
 
@@ -33,13 +39,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Verify committed native artifact checksums
+      - name: Verify native provenance validator regression tests
+        run: python3 -m unittest discover -s examples/flutter/tools -p 'test_*native*.py'
+      - name: Verify committed native artifact checksums and source provenance
         run: python3 examples/flutter/tools/verify-native-artifacts.py
       - name: Verify native source snapshot matches workspace crates
         run: bash examples/flutter/tools/check-snapshot-sync.sh
@@ -88,11 +97,36 @@ jobs:
               raise SystemExit("Expected a 160/160 pana score")
           PY
 
+  # The development app under examples/flutter and the packaged copy under
+  # rblue_flutter/example are near-duplicates (import paths and some
+  # formatting differ). Both suites are run on purpose so neither tree can
+  # drift untested. These are widget/state tests with fake bridges; no
+  # Bluetooth hardware is required.
+  example-app-tests:
+    name: Flutter example app tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: false
+      - name: Test development example (examples/flutter/test)
+        working-directory: examples/flutter
+        run: flutter test
+      - name: Test packaged example (examples/flutter/rblue_flutter/example/test)
+        working-directory: ${{ env.EXAMPLE_DIR }}
+        run: flutter test
+
   android-minimum:
     name: Android (Flutter 3.41.7 compatibility)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -100,7 +134,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.41.7"
-          cache: true
+          cache: false
       - name: Build against packaged Android libraries
         working-directory: ${{ env.EXAMPLE_DIR }}
         run: flutter build apk --debug
@@ -127,26 +161,16 @@ jobs:
           status=$?
           cp -a "$package_copy/example/build" "$agp_log_dir/" 2>/dev/null || true
           exit "$status"
-      - name: Upload Flutter 3.41.7 logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-minimum-logs
-          path: |
-            ${{ env.EXAMPLE_DIR }}/build
-            android-minimum-agp9-logs
-          if-no-files-found: ignore
-          retention-days: 7
-
   android:
     name: Android artifacts and release APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -154,7 +178,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: false
       - name: Rebuild packaged Android C ABI
         run: examples/flutter/tools/build-libs.sh --android-only
       - name: Free Rust target directory after staging JNI libraries
@@ -208,14 +232,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: false
       - name: Rebuild packaged Apple C ABI and XCFrameworks
         run: examples/flutter/tools/build-libs.sh --apple-only
       - name: Validate package manifests and podspecs
@@ -265,14 +290,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
-      - uses: Swatinem/rust-cache@v2
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: false
       - name: Rebuild and verify packaged WinRT DLL
         shell: pwsh
         run: ./examples/flutter/tools/build-windows.ps1
@@ -288,14 +314,64 @@ jobs:
           if (-not $dlls) { throw "Flutter build did not install rblue_c.dll" }
           $dlls | ForEach-Object { Write-Host $_.FullName }
 
-  publish:
-    name: Publish rblue_flutter to pub.dev
-    if: startsWith(github.ref, 'refs/tags/rblue_flutter-v')
-    needs: [rust-tests, package, android-minimum, android, apple, windows]
+  # Explicit opt-in maintenance only; ordinary CI never writes repository contents.
+  # Direct Git commits avoid metered Actions artifact storage entirely.
+  rebuild-native:
+    name: Record rebuilt native binaries (${{ matrix.platform }})
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.rebuild_native &&
+      github.repository == 'rblue-rs/rblue' &&
+      github.ref == 'refs/heads/ci/free-standard-hosted'
     permissions:
-      id-token: write
-      contents: read
-    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
-    with:
-      working-directory: examples/flutter/rblue_flutter
-      environment: pub.dev
+      contents: write
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    concurrency:
+      group: rblue-native-binary-recording
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+            targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          - platform: apple
+            os: macos-latest
+            targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-apple-darwin,x86_64-apple-darwin
+          - platform: windows
+            os: windows-latest
+            targets: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+      - name: Verify source snapshot and recorder safety tests
+        shell: bash
+        run: |
+          bash examples/flutter/tools/check-snapshot-sync.sh
+          python3 -m unittest discover -s examples/flutter/tools -p test_record_native_rebuild.py
+      - name: Rebuild Android libraries
+        if: matrix.platform == 'android'
+        shell: bash
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+          examples/flutter/tools/build-libs.sh --android-only
+      - name: Rebuild Apple libraries
+        if: matrix.platform == 'apple'
+        run: examples/flutter/tools/build-libs.sh --apple-only
+      - name: Rebuild Windows DLL and verify all nine exports
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./examples/flutter/tools/build-windows.ps1
+      - name: Record only native binaries and their source provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NATIVE_PLATFORM: ${{ matrix.platform }}
+        run: python3 examples/flutter/tools/record-native-rebuild.py "$NATIVE_PLATFORM"

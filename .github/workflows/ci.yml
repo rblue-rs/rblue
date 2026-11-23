@@ -1,15 +1,7 @@
 name: CI
 
-# macOS self-hosted subset for the repository-only rblue-m4 runner.
-# This is not a full platform matrix: Linux and Windows *runtime* tests are
-# not executed here and must not be treated as green. Cross-compile checks
-# are labeled as such. GitHub-hosted jobs live in ci-hosted.yml and are
-# workflow_dispatch only while hosted billing is blocked.
-#
-# Trusted-code only: same-repository refs. Forking is disabled on this
-# private repo; the job `if` still rejects a pull_request whose head is
-# from another repository. No pull_request_target.
-
+# Standard GitHub-hosted runners only; public repository compute is free.
+# Cross-target compilation is not device/browser runtime coverage.
 on:
   push:
     branches: [main]
@@ -22,73 +14,83 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
-  rustfmt:
-    name: rustfmt
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+  fmt:
+    name: rustfmt (hosted ubuntu)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
 
   clippy:
-    name: clippy (macos-host)
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+    name: clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Clippy the workspace on this macOS host
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
-    name: test (macos-host)
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Test the workspace on this macOS host
-        run: cargo test --workspace
+      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - run: cargo test --workspace
       # Default quality gate: the workspace run now includes
-      # tests/contract_mock.rs (MockAdapter::with_contract_fixture). The
-      # explicit follow-up keeps that suite visible in CI logs and honors
-      # the historical `--features contract` invocation.
+      # tests/contract_mock.rs. The explicit follow-up keeps that suite
+      # visible in CI logs and honors the historical --features contract
+      # invocation.
       - name: Mock contract suite
         run: cargo test -p rblue-api --features contract --test contract_mock
 
   docs:
-    name: rustdoc (macos-host)
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+    name: rustdoc (hosted ubuntu)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: rustdoc the workspace on this macOS host
-        run: cargo doc --workspace --no-deps
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
 
   wasm32:
-    name: check (wasm32-unknown-unknown, cross)
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+    name: check (wasm32-unknown-unknown, hosted)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: cargo check wasm32 (not a browser runtime test)
-        run: >-
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: >-
           cargo check --workspace
           --exclude rblue-winrt
           --exclude rblue-corebluetooth
@@ -99,34 +101,47 @@ jobs:
           --target wasm32-unknown-unknown
 
   cross-apple:
-    name: check (aarch64-apple-ios, cross)
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+    name: check (aarch64-apple-ios, hosted)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: cargo check iOS target (not a device runtime test)
-        run: cargo check -p rblue-corebluetooth --target aarch64-apple-ios
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - run: cargo check -p rblue-corebluetooth --target aarch64-apple-ios
+
+  cross-windows:
+    name: check (x86_64-pc-windows-msvc, hosted)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check -p rblue-winrt
 
   cross-android:
-    name: check (aarch64-linux-android, cross)
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+    name: check (aarch64-linux-android, hosted)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: cargo check Android target (not a device or JVM runtime test)
-        run: cargo check -p rblue-android --target aarch64-linux-android
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - run: cargo check -p rblue-android --target aarch64-linux-android
 
   cross-ohos:
-    name: check (aarch64-unknown-linux-ohos, cross)
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+    name: check (aarch64-unknown-linux-ohos, hosted)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: cargo check OHOS target (not a device runtime test)
-        run: cargo check -p rblue-ohos --target aarch64-unknown-linux-ohos
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-ohos
+      - run: cargo check -p rblue-ohos --target aarch64-unknown-linux-ohos
