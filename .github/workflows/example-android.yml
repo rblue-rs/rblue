@@ -10,11 +10,15 @@
 # examples/android/README.md.
 name: example-android
 
-# GitHub-hosted jobs in this file are workflow_dispatch only while
-# hosted billing is blocked. An absent automatic run is not a pass.
-# These jobs assume a Linux hosted image with the Android SDK/NDK.
+# Standard hosted Linux build/test checks; no physical-radio acceptance.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -23,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -30,11 +36,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install Rust android targets
-        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-
-      - name: Cache cargo build
-        uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - name: Build bindings (real 4 ABI + mock 2 ABI + Kotlin bindings)
         run: examples/android/scripts/build-bindings.sh

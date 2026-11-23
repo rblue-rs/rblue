@@ -6,10 +6,7 @@
 # device acceptance is documented in examples/ios/README.md.
 name: example-ios
 
-# Runs on the repository-only rblue-m4 self-hosted runner. Trusted-code
-# only (same-repository heads). No pull_request_target. No GitHub cache
-# or artifact uploads (avoid storage fees). This does not cover Android,
-# Windows, or Flutter package jobs.
+# Standard GitHub-hosted macOS runner; unsigned builds and mock simulator tests.
 on:
   push:
     branches: [main]
@@ -38,15 +35,15 @@ env:
 
 jobs:
   build-and-test:
-    if: ${{ github.repository == 'rblue-rs/rblue' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, macOS, ARM64, rblue-m4, rblue-trusted]
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Ensure Rust iOS targets
-        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
 
       - name: Ensure XcodeGen
         run: command -v xcodegen >/dev/null || brew install xcodegen
