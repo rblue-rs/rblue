@@ -8,10 +8,10 @@ the package.
 ## Source provenance
 
 - Upstream repository: <https://github.com/rblue-rs/rblue>
-- Rebuild source commit: `c3802ca60eca0fef8384caade280e0bff6723e4d`
-- Package-local source Git tree: `89594bff03fe1b97eb67f0584e80bc6547f72c26`
+- Rebuild source commit: `4c203d93eea36821bc4a28838e6d760de1069d66`
+- Package-local source Git tree: `08f1d5f34d625943576c6bc43ffb99780cf40756`
 - All seven binaries were rebuilt from that self-contained snapshot in
-  [hosted rebuild run 45174606229](https://github.com/rblue-rs/rblue/actions/runs/45174606229).
+  [hosted rebuild run 45183308917](https://github.com/rblue-rs/rblue/actions/runs/45183308917).
   No external working tree or old packaged binary was used as a build input.
 - Pinned btleplug fork revision:
   `1af8299c291f24fca68dfb6b7ef1b5c0475892e1`
@@ -169,13 +169,13 @@ On macOS/Linux, install `cargo-xwin` and replace `cargo build` with
 SHA-256:
 
 ```text
-c8b60d8e3f2e334cfc41a92f4ac49ed7d14934df5a61d2d17cb831b1911730d1  android/src/main/jniLibs/arm64-v8a/librblue_c.so
-0349b1d4b3be0888444af09d202cb97629f4f743d7db5395b5200d2948a4ef1a  android/src/main/jniLibs/armeabi-v7a/librblue_c.so
-02391aee7ad7c5f85b6451bc83fa78ae55ef8ceb2fa726b6812f94e33a443add  android/src/main/jniLibs/x86_64/librblue_c.so
-22fa22ab8ee57fce8e6caa375c2696ebf4a20182c4447d0dd25e8a4bf246b338  ios/rblue_flutter/RblueC.xcframework/ios-arm64/librblue_c.a
-a2194f68d5b07b42650b4f2218fed7e7b6e4d5ca29069c7d16e094da64d13b7c  ios/rblue_flutter/RblueC.xcframework/ios-arm64-simulator/librblue_c.a
-e4eb742285943f4a7395faaa7c1596c67b72cf29781db626bb248da17f5cbdf6  macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a
-92ca8ed0b3d302dfc31ae6b8e9b07d985ab8d28209622afdaa309cea7f4cd704  windows/x64/rblue_c.dll
+9bd1954a422433d894bf02ebb14b6ccfea40a94c5744f3ea5d15bfd395d6eda3  android/src/main/jniLibs/arm64-v8a/librblue_c.so
+415fd31df7a1cc215f93cf33ddb847196cc3a14b915d0047ac65afaa6e419137  android/src/main/jniLibs/armeabi-v7a/librblue_c.so
+5fe94a2126cbc814901d8e7822529f38badfe131f8cb7d9915acffb2897e6a5e  android/src/main/jniLibs/x86_64/librblue_c.so
+2ad815942ad7768ea156ec78289be0e99ef9565e17a9b15f78df74f08ca235d4  ios/rblue_flutter/RblueC.xcframework/ios-arm64/librblue_c.a
+5a79d13f1d8e2003fcfba9354b3a1cee07cbff0aa4b837760f2c1af8cdfed5a1  ios/rblue_flutter/RblueC.xcframework/ios-arm64-simulator/librblue_c.a
+238f8c4d203dc05ddb34fa0ed40115d5e6fa4e6d271709ce78f7b0484250350b  macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a
+a8bfb11f53e1b4609bb717e9e959c0d963807c2829e4a79cfeab5061f33c3cd8  windows/x64/rblue_c.dll
 ```
 
 Every artifact must expose these nine public ABI symbols (Apple prepends `_`):
