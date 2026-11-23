@@ -158,7 +158,7 @@ pub trait Adapter: Send + Sync {
     ///
     /// Backends that cannot honor the lookup return [`Error::Unsupported`]
     /// with `feature: "system_connected_peripherals"`. Check
-    /// [`Capability::SystemConnectedPeripherals`] first when the caller
+    /// [`crate::Capability::SystemConnectedPeripherals`] first when the caller
     /// wants to degrade gracefully.
     async fn system_connected_peripherals(
         &self,
