@@ -38,8 +38,8 @@ use futures_timer::Delay;
 use crate::adapter::AdapterEventStream;
 use crate::{
     Adapter, AdapterEvent, AdapterState, Capability, CharacteristicId, CharacteristicProperties,
-    ConnectOptions, DeviceId, Error, RequestDeviceOptions, ScanFilter, ServiceId, WriteMode,
-    WriteOptions,
+    ConnectOptions, ConnectionPriority, DeviceId, Error, RequestDeviceOptions, ScanFilter,
+    ServiceId, WriteMode, WriteOptions,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -165,6 +165,17 @@ where
     );
 
     let peripheral = require("peripheral", adapter.peripheral(&device_id).await);
+
+    match peripheral
+        .set_connection_priority(ConnectionPriority::Balanced)
+        .await
+    {
+        Err(Error::NotConnected) => {}
+        other => panic!(
+            "contract violation at `set_connection_priority` before connect: expected Err(NotConnected), got {:?}",
+            other
+        ),
+    }
 
     // -- system-connected peripherals ---------------------------------------
     // Empty service list is invalid even on backends that do not implement
@@ -301,6 +312,33 @@ where
         connected,
         "contract violation: is_connected must be true right after connect"
     );
+
+    // -- connection priority ----------------------------------------------------
+    if adapter.capabilities().has(Capability::ConnectionPriority) {
+        for priority in [
+            ConnectionPriority::Low,
+            ConnectionPriority::Balanced,
+            ConnectionPriority::High,
+        ] {
+            require(
+                "set_connection_priority",
+                peripheral.set_connection_priority(priority).await,
+            );
+        }
+    } else {
+        match peripheral
+            .set_connection_priority(ConnectionPriority::Balanced)
+            .await
+        {
+            Err(Error::Unsupported { feature, .. }) => {
+                assert_eq!(feature, "set_connection_priority")
+            }
+            other => panic!(
+                "contract violation at `set_connection_priority` without the capability: expected Err(Unsupported), got {:?}",
+                other
+            ),
+        }
+    }
 
     // -- capability-gated peripheral APIs -------------------------------------
     if caps.has(Capability::Pairing) {

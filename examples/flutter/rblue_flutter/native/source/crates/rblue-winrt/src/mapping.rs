@@ -22,6 +22,7 @@ use rblue_api::gatt::{
     Characteristic, CharacteristicId, CharacteristicProperties, Service, ServiceId, ServiceSet,
 };
 use rblue_api::scan::{AdvertisementData, ScanFilter};
+use rblue_api::ConnectionPriority;
 use uuid::Uuid;
 
 /// Platform name used in [`Error::Unsupported`] pairs.
@@ -59,6 +60,18 @@ pub(crate) fn att_invalid_handle() -> Error {
         code: ATT_INVALID_HANDLE,
         handle: None,
     })
+}
+
+/// Maps the unified connection-priority enum onto the fork's WinRT
+/// `RequestPreferredConnectionParameters` presets.
+pub(crate) fn connection_parameter_preset(
+    priority: ConnectionPriority,
+) -> btleplug::api::ConnectionParameterPreset {
+    match priority {
+        ConnectionPriority::Low => btleplug::api::ConnectionParameterPreset::PowerOptimized,
+        ConnectionPriority::Balanced => btleplug::api::ConnectionParameterPreset::Balanced,
+        ConnectionPriority::High => btleplug::api::ConnectionParameterPreset::ThroughputOptimized,
+    }
 }
 
 /// Maps a btleplug error into the unified model. Errors that carry a device

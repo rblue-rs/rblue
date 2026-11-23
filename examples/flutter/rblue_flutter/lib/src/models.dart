@@ -774,6 +774,27 @@ class ServiceSet {
   }
 }
 
+/// Connection priority (`rblue_api::ConnectionPriority`).
+enum ConnectionPriority {
+  /// Lower power, higher latency (`CONNECTION_PRIORITY_LOW_POWER` on Android).
+  low('low'),
+
+  /// Default balance of throughput and power.
+  balanced('balanced'),
+
+  /// Higher throughput, lower latency; typically used temporarily for
+  /// bulk transfers.
+  high('high');
+
+  const ConnectionPriority(this.wire);
+
+  /// The serde form (snake_case variant name).
+  final String wire;
+
+  /// The serde form.
+  String toJson() => wire;
+}
+
 /// Write mode (`rblue_api::WriteMode`).
 enum WriteMode {
   /// Acknowledged, reliable (needs the WRITE property). The default.

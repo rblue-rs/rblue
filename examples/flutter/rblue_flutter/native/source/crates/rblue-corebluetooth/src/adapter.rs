@@ -825,6 +825,7 @@ mod tests {
         assert!(!caps.has(Capability::Pairing));
         assert!(!caps.has(Capability::RequestDevicePicker));
         assert!(!caps.has(Capability::BackgroundScan));
+        assert!(!caps.has(Capability::ConnectionPriority));
         assert!(!caps.has(Capability::AdapterPowerControl));
     }
 

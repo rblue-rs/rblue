@@ -82,6 +82,7 @@ current Android versions.
 | ScanResponse | no | Android merges advertisement and scan response into one `ScanRecord`; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | yes | `BluetoothGatt.requestConnectionPriority`: `Low` → `CONNECTION_PRIORITY_LOW_POWER`, `Balanced` → `BALANCED`, `High` → `HIGH`. This is a request; the controller may ignore it. Requires an established local connection (`Error::NotConnected` otherwise) |
 | AdapterPowerControl | no | `BluetoothAdapter.enable`/`disable` are deprecated and typically rejected for non-system apps; `set_powered` returns `Error::Unsupported` |
 | SystemConnectedPeripherals | yes | Shell-side `BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)`, filtered by cached `BluetoothDevice.getUuids()`. See "System-connected peripherals" below |
 

@@ -276,6 +276,19 @@ class RblueClient {
     decode: (payload) => jsonDecode(utf8.decode(payload))! as bool,
   );
 
+  /// Requests a connection-priority update for [device].
+  ///
+  /// Supported on Android and Windows; other platforms return `Unsupported`.
+  /// The device must already be connected locally.
+  Future<void> setConnectionPriority(
+    DeviceId device,
+    ConnectionPriority priority,
+  ) => _request(
+    'set_connection_priority',
+    params: {'device': device.json, 'priority': priority.toJson()},
+    decode: _noPayload,
+  );
+
   /// Stops native producers, fails pending requests, and closes the public
   /// streams. Internal FFI callbacks may continue briefly only to release
   /// already-queued native ownership transfers before the handle is freed.

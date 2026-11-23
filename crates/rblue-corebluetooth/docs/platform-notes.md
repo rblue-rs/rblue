@@ -22,6 +22,7 @@ editing fork internals; adapt in the shell.
 | PassiveScan | no | CoreBluetooth has no passive scanning |
 | GattServer / Advertise | no | Phase 2 |
 | ScanResponse | no | iOS delivers consolidated advertisement data, not separate scan responses |
+| ConnectionPriority | no | CoreBluetooth has no public connection-priority / interval request API; `set_connection_priority` returns `Error::Unsupported` |
 | AdapterPowerControl | no | iOS cannot programmatically switch Bluetooth; macOS apps likewise have no supported CoreBluetooth API. `set_powered` returns `Error::Unsupported` |
 | SystemConnectedPeripherals | yes | `retrieveConnectedPeripheralsWithServices` via the fork's `retrieve_peripherals`; returned handles still need a local `connect()` before GATT |
 

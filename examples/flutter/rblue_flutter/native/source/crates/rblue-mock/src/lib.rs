@@ -30,6 +30,9 @@
 //!   contract fixture requires.
 //! - [Manual notifications](MockPeripheral::push_notify): push values to
 //!   subscribers as if the peripheral had sent them.
+//! - [Connection priority](rblue_api::Peripheral::set_connection_priority):
+//!   records the requested [`ConnectionPriority`](rblue_api::ConnectionPriority)
+//!   once the mock session is connected.
 //! - [System-connected devices](MockPeripheral::set_system_connected): mark a
 //!   device as already connected at the OS level so
 //!   `Adapter::system_connected_peripherals` can return it before a local

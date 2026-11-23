@@ -68,6 +68,7 @@
  *   subscribe          {"device":..,"characteristic":..} -> (empty)
  *   unsubscribe        {"device":..,"characteristic":..} -> (empty)
  *   is_connected       {"device": <DeviceId>}          -> true|false
+ *   set_connection_priority {"device": <DeviceId>, "priority": "low"|"balanced"|"high"} -> (empty) (Android, Windows; Unsupported elsewhere)
  *
  * # Threading and ownership
  *

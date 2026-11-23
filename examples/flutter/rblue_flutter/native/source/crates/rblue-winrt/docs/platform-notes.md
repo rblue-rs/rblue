@@ -44,6 +44,7 @@ not advertise `Capability::AdapterPowerControl`.
 | ScanResponse | no | The fork consolidates advertisement + scan response into cumulative peripheral properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | yes | WinRT `RequestPreferredConnectionParameters` via the fork: `Low` → `PowerOptimized`, `Balanced` → `Balanced`, `High` → `ThroughputOptimized`. Requires an established local connection |
 | AdapterPowerControl | no | WinRT `Radio.SetStateAsync` is not exposed by the fork and is not offered here; `set_powered` returns `Error::Unsupported` |
 | SystemConnectedPeripherals | no | The forked WinRT backend already exposes `retrieve_peripherals`, but this backend keeps `Error::Unsupported` until a dedicated follow-up wires it through the shell |
 

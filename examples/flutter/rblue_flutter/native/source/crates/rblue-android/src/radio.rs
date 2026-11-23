@@ -16,9 +16,10 @@ use crate::mapping::map_android_bluetooth_state;
 const UNSET: i32 = i32::MIN;
 
 static LAST: AtomicI32 = AtomicI32::new(UNSET);
-static PUBLISHERS: OnceLock<Mutex<Vec<Box<dyn Fn(AdapterEvent) + Send + Sync>>>> = OnceLock::new();
+type Publisher = Box<dyn Fn(AdapterEvent) + Send + Sync>;
+static PUBLISHERS: OnceLock<Mutex<Vec<Publisher>>> = OnceLock::new();
 
-fn publishers() -> &'static Mutex<Vec<Box<dyn Fn(AdapterEvent) + Send + Sync>>> {
+fn publishers() -> &'static Mutex<Vec<Publisher>> {
     PUBLISHERS.get_or_init(|| Mutex::new(Vec::new()))
 }
 

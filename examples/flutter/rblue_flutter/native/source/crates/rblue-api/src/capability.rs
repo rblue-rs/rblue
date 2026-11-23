@@ -56,6 +56,9 @@ pub enum Capability {
     /// System-connected peripherals matching a nonempty service-UUID filter.
     /// Returned handles still require a local connect before GATT operations.
     SystemConnectedPeripherals = 15,
+    /// `Peripheral::set_connection_priority`: request a connection-interval /
+    /// latency trade-off for an already-connected peripheral.
+    ConnectionPriority = 16,
 }
 
 bitflags::bitflags! {
@@ -104,6 +107,8 @@ bitflags::bitflags! {
         /// See [`Capability::SystemConnectedPeripherals`].
         const SYSTEM_CONNECTED_PERIPHERALS =
             1 << Capability::SystemConnectedPeripherals as u32;
+        /// See [`Capability::ConnectionPriority`].
+        const CONNECTION_PRIORITY = 1 << Capability::ConnectionPriority as u32;
     }
 }
 
@@ -139,6 +144,19 @@ mod tests {
         let caps = CapabilitySet::default();
         assert_eq!(caps, CapabilitySet::empty());
         assert!(!caps.has(Capability::GattClient));
+    }
+
+    #[test]
+    fn connection_priority_uses_bit_16() {
+        assert_eq!(Capability::BackgroundScan as u32, 12);
+        assert_eq!(Capability::ConnectionPriority as u32, 16);
+        let caps = CapabilitySet::bit(Capability::ConnectionPriority);
+        assert_eq!(caps.bits(), 1 << 16);
+        assert!(caps.has(Capability::ConnectionPriority));
+        assert!(CapabilitySet::all().has(Capability::ConnectionPriority));
+        // ConnectionPriority must not alias AutoConnect, AdapterPowerControl,
+        // or SystemConnectedPeripherals (bits 13-15).
+        assert_eq!(caps.bits() & (1 << 13 | 1 << 14 | 1 << 15), 0);
     }
 
     #[test]

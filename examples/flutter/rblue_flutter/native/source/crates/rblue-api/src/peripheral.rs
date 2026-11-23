@@ -16,6 +16,27 @@ use crate::gatt::{CharacteristicId, Notification, ServiceSet, WriteMode};
 /// value-add layer layers configurable buffering on top.
 pub type NotificationStream = BoxStream<'static, Notification>;
 
+/// Preferred connection interval / latency trade-off for an already
+/// connected peripheral.
+///
+/// The public variants stay [`Low`](ConnectionPriority::Low),
+/// [`Balanced`](ConnectionPriority::Balanced), and
+/// [`High`](ConnectionPriority::High). Backends map them onto platform
+/// presets (on Android: `CONNECTION_PRIORITY_LOW_POWER` / `BALANCED` /
+/// `HIGH`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum ConnectionPriority {
+    /// Lower power, higher latency.
+    Low,
+    /// Default balance of throughput and power.
+    Balanced,
+    /// Higher throughput, lower latency; typically used temporarily for
+    /// bulk transfers.
+    High,
+}
+
 /// Options for [`Peripheral::connect_with`].
 ///
 /// `auto_connect` is the **platform/stack** background-connection flag
@@ -355,6 +376,27 @@ pub trait Peripheral: Send + Sync {
     /// [`Error::Unsupported`] where the platform does not expose the value
     /// (iOS: system-managed, web); use [`Peripheral::max_write_len`] instead.
     async fn mtu(&self) -> Result<u16, Error>;
+
+    /// Requests a connection-priority update for this peripheral.
+    ///
+    /// This is a request: the remote device or the controller may ignore or
+    /// renegotiate the parameters. Callers should check
+    /// [`crate::Capability::ConnectionPriority`] first.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotConnected`] when the local session is down,
+    /// [`Error::Unsupported`] with `feature: "set_connection_priority"` on
+    /// platforms that have no stable equivalent API.
+    async fn set_connection_priority(&self, _priority: ConnectionPriority) -> Result<(), Error> {
+        if !self.is_connected().await? {
+            return Err(Error::NotConnected);
+        }
+        Err(Error::Unsupported {
+            platform: std::env::consts::OS,
+            feature: "set_connection_priority",
+        })
+    }
 }
 
 #[cfg(test)]

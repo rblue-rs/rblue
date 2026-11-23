@@ -26,6 +26,7 @@ use rblue_api::gatt::{
     ServiceSet,
 };
 use rblue_api::scan::{AdvertisementData, ScanFilter};
+use rblue_api::ConnectionPriority;
 use uuid::Uuid;
 
 /// Platform name used in [`Error::Unsupported`] pairs.
@@ -48,6 +49,20 @@ pub(crate) fn att_invalid_handle() -> Error {
         code: ATT_INVALID_HANDLE,
         handle: None,
     })
+}
+
+/// Maps the unified connection-priority enum onto the fork's Android
+/// `requestConnectionPriority` presets: `Low` is `CONNECTION_PRIORITY_LOW_POWER`,
+/// `Balanced` is `CONNECTION_PRIORITY_BALANCED`, and `High` is
+/// `CONNECTION_PRIORITY_HIGH`.
+pub(crate) fn connection_parameter_preset(
+    priority: ConnectionPriority,
+) -> btleplug::api::ConnectionParameterPreset {
+    match priority {
+        ConnectionPriority::Low => btleplug::api::ConnectionParameterPreset::PowerOptimized,
+        ConnectionPriority::Balanced => btleplug::api::ConnectionParameterPreset::Balanced,
+        ConnectionPriority::High => btleplug::api::ConnectionParameterPreset::ThroughputOptimized,
+    }
 }
 
 /// Maps a btleplug error into the unified model. Errors that carry a device
@@ -911,5 +926,23 @@ mod tests {
         assert!(notification_from(&set, |_| false, &value).is_none());
         // Without a discovered tree, values are not addressable at all.
         assert!(notification_from(&ServiceSet::default(), |_| true, &value).is_none());
+    }
+
+    #[test]
+    fn connection_priority_maps_to_android_presets() {
+        use btleplug::api::ConnectionParameterPreset;
+
+        assert_eq!(
+            connection_parameter_preset(ConnectionPriority::Low),
+            ConnectionParameterPreset::PowerOptimized
+        );
+        assert_eq!(
+            connection_parameter_preset(ConnectionPriority::Balanced),
+            ConnectionParameterPreset::Balanced
+        );
+        assert_eq!(
+            connection_parameter_preset(ConnectionPriority::High),
+            ConnectionParameterPreset::ThroughputOptimized
+        );
     }
 }

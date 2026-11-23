@@ -425,6 +425,7 @@ mod tests {
     fn capabilities_report_every_bit() {
         let adapter = MockAdapter::new();
         assert_eq!(adapter.capabilities(), CapabilitySet::all());
+        assert!(adapter.capabilities().has(Capability::ConnectionPriority));
         assert!(adapter
             .capabilities()
             .has(Capability::SystemConnectedPeripherals));

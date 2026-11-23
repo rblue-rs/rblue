@@ -56,6 +56,7 @@ writes the BlueZ `Powered` property and this backend advertises
 | ScanResponse | no | BlueZ merges scan-response payloads into the cumulative device properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 (this is exactly what the `bluer` migration unlocks) |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | no | The fork does not expose a stable BlueZ connection-parameter request; `set_connection_priority` returns `Error::Unsupported` |
 | AdapterPowerControl | yes | BlueZ `org.bluez.Adapter1.Powered`, written through bluez-async `set_powered` |
 | SystemConnectedPeripherals | yes | The fork's BlueZ `retrieve_peripherals` lists connected devices whose `UUIDs` property matches any requested service; returned handles still need a local `connect()` before GATT |
 
