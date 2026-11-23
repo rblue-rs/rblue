@@ -15,7 +15,8 @@ default = []
 # build stays a pure, dependency-light Rust core. bitflags/serde gives the
 # bitflag types a "|"-separated flag-name string representation.
 serde = ["dep:serde", "bitflags/serde"]
-# Cross-backend contract test suite (src/contract.rs).
+# Compatibility alias: the contract suite is always compiled. Retained so
+# `cargo test -p rblue-api --features contract` keeps working.
 contract = []
 
 [dependencies]
