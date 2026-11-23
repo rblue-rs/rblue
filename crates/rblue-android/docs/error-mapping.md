@@ -23,7 +23,7 @@ points, verified against the fork source:
 | fork path | raw status fate |
 |---|---|
 | `connect` - `onConnectionStateChange` reports a failure | **Swallowed by the fork's Java layer.** It retries the fast-failing status 133 / HCI 0x3E attempts itself (up to 3 total attempts, only when the attempt failed quickly) and then throws `NotConnectedException` without the number. `connect()` therefore fails with `Error::NotConnected`, not `Platform{133}` (fork limitation, below). |
-| `connect` - the fork's automatic `requestMtu(517)` after the link comes up | Preserved: `"MTU negotiation failed, status: N"` -> `Error::Platform { code: N }`. |
+| `connect` / `request_mtu` - the configured connect-time or explicit MTU request after the link comes up | Preserved: `"MTU negotiation failed, status: N"` -> `Error::Platform { code: N }`. |
 | `disconnect` callback failure | Preserved: `"Unable to disconnect, status: N"` -> `Error::Platform { code: N }`. |
 | `discover_services` callback failure | Preserved: `"Unable to discover services, status: N"` -> `Error::Platform { code: N }`. |
 | `read` / `write` callback failure | Preserved: `"Unable to read characteristic, status: N"` / `"Unable to write characteristic, status: N"` -> `Error::Platform { code: N }`. |

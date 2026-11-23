@@ -44,11 +44,15 @@ probe, stay unchanged either way.
 ## Radio state
 
 The fork's Android adapter tracks no radio state: `adapter_state()` is a
-constant `CentralState::Unknown`, and no state events are emitted. The
-shell's `initialize()` therefore reports `AdapterState::Unknown` and
-**succeeds even on a powered-off radio** - the state is genuinely
-unresolvable through the fork. The first real operation reports the radio
-condition instead:
+constant `CentralState::Unknown`, and the fork emits no state events. The
+shell therefore queries `BluetoothAdapter.getState()` (and listens for
+`ACTION_STATE_CHANGED` once `RblueAndroid.initialize(context)` / the
+Flutter plugin has started `AdapterStateMonitor`) so `Adapter::state`
+and live `StateChanged` events report the real radio.
+
+`initialize()` still **succeeds when the radio is off**, so an app can
+open the adapter and then prompt the user to turn Bluetooth on. The first
+real operation can also report the radio condition:
 
 - `start_scan` with the radio off: `Error::Permission(BluetoothOff)`
   (`getBluetoothLeScanner()` returns null), or a permission denial
@@ -57,7 +61,10 @@ condition instead:
   `Error::NotConnected` (the fork swallows the attempt's status; see
   error-mapping.md).
 
-Live `StateChanged` events do not occur on this backend.
+`set_powered` returns `Error::Unsupported { feature: "set_powered" }` and
+`Capability::AdapterPowerControl` is not advertised: `BluetoothAdapter.enable`
+/ `disable` are deprecated and typically forbidden for ordinary apps on
+current Android versions.
 
 ## Capability matrix (plan section 2.3, Android column)
 
@@ -65,8 +72,8 @@ Live `StateChanged` events do not occur on this backend.
 |---|---|---|
 | ActiveScan | yes | The fork scans with `CALLBACK_TYPE_ALL_MATCHES` and default (active) scan settings |
 | GattClient | yes | Central role over `BluetoothGatt` |
-| MtuQuery | yes | The fork caches the negotiated MTU (its automatic `requestMtu(517)` at connect updates the value); `mtu()`/`max_write_len()` read it |
-| MtuNegotiation | no | The fork's `Peripheral` trait surface exposes no MTU request API - the fork requests 517 automatically at connect, and the Java-side `requestMtu` is not surfaced. **TODO**: expose it via a fork PR or the Driver-track migration; the unified trait would also need a request method |
+| MtuQuery | yes | The fork caches the negotiated MTU (updated by the connect-time request and by `request_mtu`); `mtu()`/`max_write_len()` read it |
+| MtuNegotiation | yes | `Peripheral::request_mtu` and `ConnectOptions.mtu` call the fork's `request_mtu`, which surfaces Java `requestMtu`. The connect-time default is a configurable 512 (`rblue_android::set_connect_mtu`); `None` disables the automatic request |
 | RssiDuringConnection | yes | `readRemoteRssi` is implemented over the connected link (`rssi()`) |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
 | Pairing | yes | Shell-side JNI: `BluetoothDevice.createBond` / hidden `removeBond` (the fork's `Peripheral` surface still does not expose them; vendored Java is left untouched). `pair()` / `unpair()` do not require an existing GATT connection. Already-bonded `pair` and already-unbonded `unpair` succeed without starting a new procedure. Failures map to `Error::Pairing` / `Error::Permission`. |
@@ -75,6 +82,26 @@ Live `StateChanged` events do not occur on this backend.
 | ScanResponse | no | Android merges advertisement and scan response into one `ScanRecord`; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | yes | `BluetoothGatt.requestConnectionPriority`: `Low` → `CONNECTION_PRIORITY_LOW_POWER`, `Balanced` → `BALANCED`, `High` → `HIGH`. This is a request; the controller may ignore it. Requires an established local connection (`Error::NotConnected` otherwise) |
+| AdapterPowerControl | no | `BluetoothAdapter.enable`/`disable` are deprecated and typically rejected for non-system apps; `set_powered` returns `Error::Unsupported` |
+| SystemConnectedPeripherals | yes | Shell-side `BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)`, filtered by cached `BluetoothDevice.getUuids()`. See "System-connected peripherals" below |
+
+## System-connected peripherals
+
+The fork does not implement `retrieve_peripherals`. The shell queries
+`BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)` over JNI
+(without editing the vendored fork Java), then asks the fork to
+`add_peripheral` for each match so the caller can `connect()` locally.
+The rblue session is not marked connected by the lookup itself.
+
+Service matching is strict: a connected device is returned only when
+`BluetoothDevice.getUuids()` is nonempty and intersects the requested
+list. That cache is populated from SDP/bond data and is often empty for
+devices that have never disclosed their GATT services to the system, so
+those devices are omitted rather than returned as false positives. API 31+
+requires the `BLUETOOTH_CONNECT` runtime permission; a denial surfaces as
+`Error::Permission(BluetoothPermissionDenied)`. An empty service list
+returns `Error::InvalidState`.
 
 ## Permissions matrix (write these into the app manifest)
 
@@ -157,11 +184,15 @@ permission, `BluetoothOff` for a powered-off radio).
   retrying that would turn a connect to an absent device into a ~90 s
   wait). Exhausted attempts surface as `Error::NotConnected`; the raw
   attempt status does not survive (see error-mapping.md).
-- After the link comes up, the fork **automatically requests MTU 517** and
-  refreshes its properties snapshot with the system-cached GAP device name;
-  the shell mirrors the name into its cached advertisement. The `connect`
-  result therefore also covers MTU-negotiation failures, which *do* carry
-  their status (`Error::Platform`).
+- After the link comes up, the shell requests a configurable connect-time
+  ATT MTU (recommended default **512**, replacing the fork's historical
+  hardcoded 517) and the fork refreshes its properties snapshot with the
+  system-cached GAP device name; the shell mirrors the name into its cached
+  advertisement. `ConnectOptions.mtu = Some(n)` requests `n` instead;
+  `rblue_android::set_connect_mtu(None)` disables the automatic request
+  when `mtu` is omitted. The `connect` result therefore also covers
+  MTU-negotiation failures, which *do* carry their status
+  (`Error::Platform`).
 - Disconnects (local or remote) arrive as a disconnect notification without
   a status code; the shell publishes `DeviceDisconnected` with
   `DisconnectReason::Unknown` on state transitions only (repeated signals
@@ -218,15 +249,14 @@ permission, `BluetoothOff` for a powered-off radio).
   call. This is not optional on Android: the stack silently truncates
   oversize payloads (both write types enforce MTU - 3 per call).
 - `max_write_len` is the negotiated ATT MTU minus the 3-byte ATT header,
-  for both write modes. The fork requests MTU 517 at every connect; before
-  that completes the value is the ATT default 23, so the conservative limit
-  is 20. Re-query after every (re)connect instead of caching: the MTU is
+  for both write modes. The shell requests a configurable default of 512 at
+  every connect unless that automatic request is disabled; before it
+  completes the value is the ATT default 23, so the conservative limit is
+  20. Re-query after every (re)connect instead of caching: the MTU is
   renegotiated per connection.
 - `mtu()` and `max_write_len()` read the fork's cached MTU, which the
-  automatic `requestMtu(517)` updates at connect; the platform may
-  renegotiate later, and the cached value follows. `MtuNegotiation` (an
-  explicit request API) is absent through the fork - see the capability
-  table TODO.
+  connect-time request and `request_mtu` update; the platform may
+  renegotiate later, and the cached value follows.
 
 ## Pairing
 

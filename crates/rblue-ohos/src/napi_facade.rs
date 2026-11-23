@@ -330,22 +330,10 @@ impl Rblue {
     /// negotiated ATT MTU.
     #[napi]
     pub async fn request_mtu(&self, device: String, mtu: u16) -> NapiResult<u16> {
-        let device_id: DeviceId = parse_json("device id", &device)?;
-        let value = self
-            .registry
-            .request(rblue_driver::BleDriverCommand::RequestMtu {
-                device: device_id,
-                mtu,
-            })
+        self.with_peripheral(&device)?
+            .request_mtu(mtu)
             .await
-            .map_err(napi_error)?;
-        match value {
-            rblue_driver::DriverValue::Mtu { mtu } => Ok(mtu),
-            other => Err(invalid_argument(
-                "mtu response",
-                &format!("driver returned {other:?}"),
-            )),
-        }
+            .map_err(napi_error)
     }
 
     fn with_peripheral(&self, device: &str) -> NapiResult<Arc<OhosPeripheral>> {

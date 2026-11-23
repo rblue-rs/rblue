@@ -22,6 +22,12 @@ object RblueNative {
      * with an error record on the Rust side otherwise.
      */
     external fun nativeInit(): Boolean
+
+    /**
+     * Forwards a `BluetoothAdapter` state code (or the shell sentinels
+     * `-2` / `-3`) into the Rust radio watcher.
+     */
+    external fun nativeOnAdapterStateChanged(state: Int)
 }
 
 /**
@@ -78,6 +84,7 @@ object RblueAndroid {
                     "error log for details",
             )
         }
+        AdapterStateMonitor.start(context.applicationContext)
         initialized = true
     }
 }

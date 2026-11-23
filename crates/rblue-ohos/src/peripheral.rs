@@ -6,8 +6,8 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard, Weak};
 
 use async_trait::async_trait;
 use rblue_api::{
-    AdvertisementData, AttError, CharacteristicId, CharacteristicProperties, DeviceId, Error,
-    Notification, NotificationStream, Peripheral, ServiceSet, WriteMode,
+    AdvertisementData, AttError, CharacteristicId, CharacteristicProperties, ConnectOptions,
+    DeviceId, Error, Notification, NotificationStream, Peripheral, ServiceSet, WriteMode,
 };
 use rblue_driver::{BleDriverCommand, DriverValue};
 
@@ -236,6 +236,23 @@ impl Peripheral for OhosPeripheral {
         Ok(())
     }
 
+    async fn connect_with(&self, opts: &ConnectOptions) -> Result<(), Error> {
+        if opts.auto_connect {
+            return Err(Error::Unsupported {
+                platform: "ohos",
+                feature: "auto_connect",
+            });
+        }
+        if let Some(mtu) = opts.mtu {
+            rblue_api::reject_invalid_att_mtu(mtu)?;
+        }
+        self.connect().await?;
+        if let Some(mtu) = opts.mtu {
+            self.request_mtu(mtu).await?;
+        }
+        Ok(())
+    }
+
     async fn disconnect(&self) -> Result<(), Error> {
         // Idempotent: an already-down link has nothing to tear down, so the
         // command is not dispatched (the driver rejects it with a platform
@@ -413,5 +430,22 @@ impl Peripheral for OhosPeripheral {
             return Err(Error::NotConnected);
         }
         Ok(shared.mtu)
+    }
+
+    async fn request_mtu(&self, mtu: u16) -> Result<u16, Error> {
+        self.require_connected()?;
+        rblue_api::reject_invalid_att_mtu(mtu)?;
+        let value = self
+            .request(BleDriverCommand::RequestMtu {
+                device: self.id.clone(),
+                mtu,
+            })
+            .await?;
+        match value {
+            DriverValue::Mtu { mtu } => Ok(mtu),
+            other => Err(Error::Backend(format!(
+                "expected mtu response, got {other:?}"
+            ))),
+        }
     }
 }

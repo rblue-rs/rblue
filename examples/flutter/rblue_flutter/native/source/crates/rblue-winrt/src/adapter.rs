@@ -45,7 +45,8 @@ use crate::peripheral::{NotificationHub, WinRtPeripheral};
 const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
-    .union(CapabilitySet::bit(Capability::BackgroundScan));
+    .union(CapabilitySet::bit(Capability::BackgroundScan))
+    .union(CapabilitySet::bit(Capability::ConnectionPriority));
 
 /// Registry entry for one device ever sighted by this adapter. Lives until
 /// the adapter is dropped: `Error::NotFound` is reserved for devices that
@@ -460,6 +461,19 @@ impl Adapter for WinRtAdapter {
         ));
         *initialized = Some(adapter);
         self.resolve_state(map_central_state(state))
+    }
+
+    async fn state(&self) -> Result<AdapterState, Error> {
+        let adapter = self.initialized_adapter().await?;
+        let state = adapter.adapter_state().await.map_err(map_btleplug_error)?;
+        Ok(map_central_state(state))
+    }
+
+    async fn set_powered(&self, _powered: bool) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "set_powered",
+        })
     }
 
     async fn start_scan(&self, filter: &ScanFilter) -> Result<(), Error> {

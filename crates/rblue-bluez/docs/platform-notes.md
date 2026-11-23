@@ -33,6 +33,13 @@ without any adapter fails earlier, at adapter enumeration, with
 property changes; the collapsed `AdapterState::Unknown` never surfaces from
 this backend.
 
+`Adapter::state` reads the same `Powered` flag (via the fork after
+`initialize`, or a short bluez-async session before it). `set_powered`
+writes the BlueZ `Powered` property and this backend advertises
+`Capability::AdapterPowerControl`. If the D-Bus daemon refuses the change
+(`NotAuthorized` / `AccessDenied` / `NotPermitted`), the call returns
+`Error::Permission(Unauthorized)`.
+
 ## Capability matrix (plan section 2.3, Linux column)
 
 | Capability | Value | Reason |
@@ -40,7 +47,7 @@ this backend.
 | ActiveScan | yes | BlueZ performs active LE scanning by default (scan requests for scan responses); the fork sets `Transport::Auto` |
 | GattClient | yes | Central role |
 | MtuQuery | yes | The D-Bus `MTU` property on `org.bluez.GattCharacteristic1` (BlueZ around 5.62+); see "Writes and MTU" for the fallback |
-| MtuNegotiation | no | The stack negotiates the ATT MTU automatically; there is no client request API |
+| MtuNegotiation | no | The stack negotiates the ATT MTU automatically; `request_mtu` and `ConnectOptions.mtu = Some(_)` return `Error::Unsupported { feature: "request_mtu" }`. `mtu = None` must not fail for that reason |
 | RssiDuringConnection | no | BlueZ does not update the device `RSSI` property while connected - the value freezes at the last scan-time sighting. `rssi()` reports `Error::Unsupported` instead of presenting stale data |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
 | Pairing | yes | Shell-side D-Bus: `org.bluez.Device1.Pair` / `org.bluez.Adapter1.RemoveDevice` (the fork's `Peripheral` surface still does not expose them). `pair()` / `unpair()` do not require an existing GATT connection. Already-paired `pair` and already-unpaired `unpair` succeed without starting a new procedure. `CancelPairing` is not used for unpair. Failures map to `Error::Pairing` / `Error::Permission`. |
@@ -49,6 +56,17 @@ this backend.
 | ScanResponse | no | BlueZ merges scan-response payloads into the cumulative device properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 (this is exactly what the `bluer` migration unlocks) |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | no | The fork does not expose a stable BlueZ connection-parameter request; `set_connection_priority` returns `Error::Unsupported` |
+| AdapterPowerControl | yes | BlueZ `org.bluez.Adapter1.Powered`, written through bluez-async `set_powered` |
+| SystemConnectedPeripherals | yes | The fork's BlueZ `retrieve_peripherals` lists connected devices whose `UUIDs` property matches any requested service; returned handles still need a local `connect()` before GATT |
+
+## System-connected peripherals
+
+`Adapter::system_connected_peripherals` is implemented on top of the fork's
+`retrieve_peripherals` (connected BlueZ devices filtered by the `UUIDs`
+property). Matches are inserted into the shell registry without marking the
+rblue session connected; the caller must still `connect()` locally before
+GATT operations. An empty service list returns `Error::InvalidState`.
 
 ## Device identity and the RPA rule
 

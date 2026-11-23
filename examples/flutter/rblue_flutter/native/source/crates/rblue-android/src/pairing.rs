@@ -10,8 +10,10 @@
 use rblue_api::error::Error;
 
 /// `BluetoothDevice.BOND_NONE`.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) const BOND_NONE: i32 = 10;
 /// `BluetoothDevice.BOND_BONDING`.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) const BOND_BONDING: i32 = 11;
 /// `BluetoothDevice.BOND_BONDED`.
 pub(crate) const BOND_BONDED: i32 = 12;
@@ -27,6 +29,7 @@ pub(crate) fn format_android_address(address: [u8; 6]) -> String {
 
 /// Outcome of waiting for a bond-state transition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(any(test, target_os = "android")), allow(dead_code))]
 pub(crate) enum BondWait {
     /// Reached `BOND_BONDED`.
     Bonded,
@@ -133,12 +136,8 @@ fn remote_device(address: [u8; 6]) -> Result<BondedDevice, Error> {
         ));
     }
 
-    let vm = jni::JavaVM::singleton()
-        .map_err(|err| Error::Backend(format!("android pairing: no Java VM: {err}")))?;
-    // The JNI work has to stay inside attach_current_thread; we perform the
-    // whole procedure in the blocking functions above after fetching a
-    // process-local helper that re-attaches per call. Each helper method
-    // attaches for one JNI burst (state / createBond / removeBond).
+    // The JNI work has to stay inside attach_current_thread. BondedDevice
+    // re-attaches for each JNI burst (state / createBond / removeBond).
     Ok(BondedDevice { address })
 }
 
@@ -157,11 +156,15 @@ impl BondedDevice {
         let vm = jni::JavaVM::singleton()
             .map_err(|err| Error::Backend(format!("android pairing: no Java VM: {err}")))?;
         vm.attach_current_thread(|env| {
-            let device = lookup_remote_device(env, self.address)?;
-            f(env, &device)
+            Ok::<_, jni::errors::Error>(
+                (|| {
+                    let device = lookup_remote_device(env, self.address)?;
+                    f(env, &device)
+                })()
+                .map_err(|err| err.into_error(what)),
+            )
         })
         .map_err(|err| Error::Backend(format!("android pairing: JNI attach: {err}")))?
-        .map_err(|err| err.into_error(what))
     }
 
     fn bond_state(&self) -> Result<i32, Error> {
@@ -358,8 +361,8 @@ fn lookup_remote_device<'a>(
 fn map_java_exception(env: &mut jni::Env<'_>, what: &str) -> PairingJni {
     use jni::jni_str;
     let occurred = env.exception_occurred();
-    let _ = env.exception_clear();
-    let Ok(exception) = occurred else {
+    env.exception_clear();
+    let Some(exception) = occurred else {
         return PairingJni::Failed(format!("{what}: Java exception"));
     };
     if exception.is_null() {

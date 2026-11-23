@@ -358,7 +358,6 @@ impl DriverRegistry {
     /// Subscribes to the adapter event stream. The stream first replays every
     /// device known so far as a fresh `DeviceDiscovered` (snapshot), then
     /// continues with live events.
-    #[must_use]
     pub fn subscribe_events(&self) -> BoxStream<'static, AdapterEvent> {
         self.inner.subscribe_events()
     }

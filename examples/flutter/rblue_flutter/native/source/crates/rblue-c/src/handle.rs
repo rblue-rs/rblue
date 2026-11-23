@@ -35,6 +35,8 @@ enum PumpMessage {
         device: DeviceId,
         notification: Notification,
     },
+    /// One event from the connection supervisor (`SupervisorHandle`).
+    Supervisor(SupervisorEvent),
 }
 
 /// The notification-forwarding machinery: the bounded channel every forwarder
@@ -53,11 +55,23 @@ struct Pump {
 type Subscriptions = HashMap<String, HashSet<String>>;
 
 /// Shared state of one facade handle, handed to runtime tasks by `Arc`.
+/// Live connection supervisor, created lazily on the first `auto_connect`.
+struct SupervisorSlot {
+    handle: SupervisorHandle,
+    policy: ReconnectPolicy,
+    run_task: tokio::task::JoinHandle<()>,
+    event_task: tokio::task::JoinHandle<()>,
+}
+
 pub(crate) struct CoreInner {
     adapter: Arc<dyn Adapter>,
     callbacks: Arc<Callbacks>,
     pump: Mutex<Pump>,
+    /// Clone of the pump channel sender, so the supervisor can publish
+    /// events without taking the pump lock while other locks are held.
+    pump_tx: tokio::sync::mpsc::Sender<PumpMessage>,
     subscriptions: Mutex<Subscriptions>,
+    supervisor: Mutex<Option<SupervisorSlot>>,
 }
 
 impl CoreInner {
@@ -254,6 +268,7 @@ impl CoreInner {
     /// Aborts the central pump and every forwarder. Called on teardown while
     /// the runtime is still alive, so no pump callback can race the shutdown.
     pub(crate) fn abort_pump(&self) {
+        self.abort_supervisor();
         let mut pump = self.lock_pump();
         if let Some(central) = pump.central.take() {
             central.abort();
@@ -261,6 +276,98 @@ impl CoreInner {
         for (_, task) in pump.forwarders.drain() {
             task.abort();
         }
+    }
+
+    /// Stops the supervisor loop and its event forwarder, if they were started.
+    fn abort_supervisor(&self) {
+        let slot = self
+            .supervisor
+            .lock()
+            .expect("supervisor state must not be poisoned")
+            .take();
+        if let Some(slot) = slot {
+            slot.run_task.abort();
+            slot.event_task.abort();
+        }
+    }
+
+    /// Starts the supervisor with `policy` (or the default policy) if needed,
+    /// then registers `device` for application-level auto-reconnect.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidState`] when a supervisor is already running with a
+    /// different policy, or when the supervisor loop is gone.
+    pub(crate) async fn supervisor_auto_connect(
+        &self,
+        device: DeviceId,
+        policy: Option<ReconnectPolicy>,
+    ) -> Result<(), Error> {
+        let handle = self.ensure_supervisor(policy)?;
+        handle.auto_connect(device).await
+    }
+
+    /// Stops supervising `device`. Succeeds if the supervisor was never started.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidState`] when the supervisor loop is gone.
+    pub(crate) async fn supervisor_unwatch(&self, device: DeviceId) -> Result<(), Error> {
+        let handle = {
+            let slot = self
+                .supervisor
+                .lock()
+                .expect("supervisor state must not be poisoned");
+            slot.as_ref().map(|slot| slot.handle.clone())
+        };
+        match handle {
+            Some(handle) => handle.unwatch(device).await,
+            None => Ok(()),
+        }
+    }
+
+    fn ensure_supervisor(
+        &self,
+        policy: Option<ReconnectPolicy>,
+    ) -> Result<SupervisorHandle, Error> {
+        let mut slot = self
+            .supervisor
+            .lock()
+            .expect("supervisor state must not be poisoned");
+        if let Some(existing) = slot.as_ref() {
+            if let Some(policy) = policy.as_ref() {
+                if &existing.policy != policy {
+                    return Err(Error::InvalidState(
+                        "supervisor already running with a different policy".to_owned(),
+                    ));
+                }
+            }
+            return Ok(existing.handle.clone());
+        }
+        let policy = policy.unwrap_or_default();
+        let (supervisor, handle, mut events) =
+            ConnectionSupervisor::new(Arc::clone(&self.adapter), policy.clone());
+        let run_task = tokio::spawn(async move {
+            if let Err(error) = supervisor.run().await {
+                tracing::warn!(?error, "supervisor loop ended with error");
+            }
+        });
+        let tx = self.pump_tx.clone();
+        let event_task = tokio::spawn(async move {
+            while let Some(event) = events.next().await {
+                if tx.send(PumpMessage::Supervisor(event)).await.is_err() {
+                    break;
+                }
+            }
+        });
+        self.ensure_central_task();
+        *slot = Some(SupervisorSlot {
+            handle: handle.clone(),
+            policy,
+            run_task,
+            event_task,
+        });
+        Ok(handle)
     }
 }
 
@@ -315,6 +422,7 @@ fn deliver(callbacks: &Callbacks, message: PumpMessage) {
             notification,
         }
         .to_json(),
+        PumpMessage::Supervisor(event) => EventEnvelope::SupervisorEvent { event }.to_json(),
     };
     callbacks.deliver_event(cstring(json));
 }
@@ -371,12 +479,14 @@ impl Core {
             adapter,
             callbacks: Arc::new(Callbacks::default()),
             pump: Mutex::new(Pump {
-                tx,
+                tx: tx.clone(),
                 rx: Some(rx),
                 central: None,
                 forwarders: HashMap::new(),
             }),
+            pump_tx: tx,
             subscriptions: Mutex::new(HashMap::new()),
+            supervisor: Mutex::new(None),
         });
         let rt = tokio::runtime::Builder::new_multi_thread()
             .thread_name("rblue-c")

@@ -24,6 +24,10 @@ the user's Bluetooth toggle (Windows reports the settings toggle as
 enumeration, with `Error::Unsupported`. Live `StateChanged` events keep the
 honest `AdapterState::Unknown` for the collapsed states.
 
+`Adapter::state` reads the same mapping after `initialize`. `set_powered`
+returns `Error::Unsupported { feature: "set_powered" }`; this backend does
+not advertise `Capability::AdapterPowerControl`.
+
 ## Capability matrix (plan section 2.3, Windows column)
 
 | Capability | Value | Reason |
@@ -31,7 +35,7 @@ honest `AdapterState::Unknown` for the collapsed states.
 | ActiveScan | yes | The fork sets `BluetoothLEScanningMode::Active` on every scan |
 | GattClient | yes | Central role |
 | MtuQuery | yes | `GattSession.MaxPduSize`, tracked live by the fork's `MaxPduSizeChanged` handler; `mtu()` returns it while connected |
-| MtuNegotiation | no | Windows negotiates the ATT MTU automatically; there is no client request API |
+| MtuNegotiation | no | Windows negotiates the ATT MTU automatically; `request_mtu` and `ConnectOptions.mtu = Some(_)` return `Error::Unsupported { feature: "request_mtu" }`. `mtu = None` must not fail for that reason |
 | RssiDuringConnection | no | No WinRT API; RSSI exists only on advertisements (scan time). The fork's `read_rssi` would return the last scan-time cache value, so `rssi()` reports `Error::Unsupported` instead of presenting stale data |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
 | Pairing | no | WinRT exposes `DeviceInformation.Pairing.PairAsync` / `UnpairAsync`, but the fork does not surface them. Reported as absent rather than faked; `pair()` / `unpair()` return `Error::Unsupported` with feature `pair` / `unpair`. Accessing an encrypted characteristic still triggers the implicit system pairing dialog |
@@ -40,6 +44,9 @@ honest `AdapterState::Unknown` for the collapsed states.
 | ScanResponse | no | The fork consolidates advertisement + scan response into cumulative peripheral properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | yes | WinRT `RequestPreferredConnectionParameters` via the fork: `Low` → `PowerOptimized`, `Balanced` → `Balanced`, `High` → `ThroughputOptimized`. Requires an established local connection |
+| AdapterPowerControl | no | WinRT `Radio.SetStateAsync` is not exposed by the fork and is not offered here; `set_powered` returns `Error::Unsupported` |
+| SystemConnectedPeripherals | no | The forked WinRT backend already exposes `retrieve_peripherals`, but this backend keeps `Error::Unsupported` until a dedicated follow-up wires it through the shell |
 
 ## Device identity and the RPA rule
 

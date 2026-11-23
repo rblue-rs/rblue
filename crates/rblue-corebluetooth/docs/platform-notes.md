@@ -14,7 +14,7 @@ editing fork internals; adapt in the shell.
 | ActiveScan | yes | CoreBluetooth scanning is active inquiry |
 | GattClient | yes | Central role |
 | RssiDuringConnection | yes | `CBPeripheral.readRSSI` on a connected peripheral |
-| MtuNegotiation | no | macOS/iOS negotiate the ATT MTU automatically; no request API |
+| MtuNegotiation | no | macOS/iOS negotiate the ATT MTU automatically; `request_mtu` and `ConnectOptions.mtu = Some(_)` return `Error::Unsupported { feature: "request_mtu" }`. `mtu = None` must not fail for that reason |
 | MtuQuery | no | CoreBluetooth does not expose the negotiated MTU; use `max_write_len` |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
 | Pairing | no | Implicit pairing on encrypted-characteristic access; `pair()` / `unpair()` return `Error::Unsupported` with feature `pair` / `unpair` |
@@ -22,6 +22,18 @@ editing fork internals; adapt in the shell.
 | PassiveScan | no | CoreBluetooth has no passive scanning |
 | GattServer / Advertise | no | Phase 2 |
 | ScanResponse | no | iOS delivers consolidated advertisement data, not separate scan responses |
+| ConnectionPriority | no | CoreBluetooth has no public connection-priority / interval request API; `set_connection_priority` returns `Error::Unsupported` |
+| AdapterPowerControl | no | iOS cannot programmatically switch Bluetooth; macOS apps likewise have no supported CoreBluetooth API. `set_powered` returns `Error::Unsupported` |
+| SystemConnectedPeripherals | yes | `retrieveConnectedPeripheralsWithServices` via the fork's `retrieve_peripherals`; returned handles still need a local `connect()` before GATT |
+
+## System-connected peripherals
+
+`Adapter::system_connected_peripherals` is implemented. The shell calls the
+fork's `retrieve_peripherals` with the given service UUIDs (mapped to
+`retrieveConnectedPeripheralsWithServices`) and inserts matches into the
+registry without marking the rblue session connected. An empty service list
+returns `Error::InvalidState`. The caller must still `connect()` locally
+before GATT operations.
 
 ## Runtime requirements
 

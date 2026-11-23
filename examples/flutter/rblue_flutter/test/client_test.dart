@@ -58,6 +58,37 @@ void main() {
     },
   );
 
+  test('setConnectionPriority sends the snake_case enum', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.uuid('00000000-0000-0000-0000-00000000180f');
+    final pending = client.setConnectionPriority(
+      device,
+      ConnectionPriority.high,
+    );
+    expect(bridge.sent.last.method, 'set_connection_priority');
+    expect(bridge.sent.last.params, contains('"priority":"high"'));
+    bridge.respondTo(bridge.sent.last.reqId);
+    await pending;
+    client.dispose();
+  });
+
+  test('systemConnectedPeripherals sends the service filter', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    const service = '0000180f-0000-1000-8000-00805f9b34fb';
+    final pending = client.systemConnectedPeripherals([service]);
+    expect(bridge.sent.last.method, 'system_connected_peripherals');
+    expect(bridge.sent.last.params, contains(service));
+    bridge.respondTo(
+      bridge.sent.last.reqId,
+      '[{"id":{"uuid":"device"},"name":"bonded"}]'.codeUnits,
+    );
+    final result = await pending;
+    expect(result.single.name, 'bonded');
+    client.dispose();
+  });
+
   test('device metrics use the native request protocol', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);
@@ -129,6 +160,26 @@ void main() {
     expect(bridge.sent[0].params, contains('random_static'));
     expect(bridge.sent[1].method, 'unpair');
     expect(bridge.sent[1].params, contains('random_static'));
+  });
+
+  test('write forwards allow_long_write and defaults it to false', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+    unawaited(quiet(client.write(device, _characteristic(), [1, 2, 3])));
+    expect(bridge.sent.single.method, 'write');
+    expect(bridge.sent.single.params, contains('"allow_long_write":false'));
+    unawaited(
+      quiet(
+        client.write(
+          device,
+          _characteristic(),
+          List.filled(600, 1),
+          allowLongWrite: true,
+        ),
+      ),
+    );
+    expect(bridge.sent.last.params, contains('"allow_long_write":true'));
     client.dispose();
   });
 
@@ -230,6 +281,60 @@ void main() {
     client.dispose();
   });
 
+  test('connect sends auto_connect and mtu options', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+    unawaited(quiet(client.connect(device, autoConnect: true, mtu: 512)));
+    expect(bridge.sent.single.method, 'connect');
+    expect(bridge.sent.single.params, contains('"auto_connect":true'));
+    expect(bridge.sent.single.params, contains('"mtu":512'));
+    client.dispose();
+  });
+
+  test('requestMtu uses the rust request_mtu method name', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+    unawaited(quiet(client.requestMtu(device, 512)));
+    expect(bridge.sent.single.method, 'request_mtu');
+    expect(bridge.sent.single.params, contains('"mtu":512'));
+    client.dispose();
+  });
+
+  test('supervisor auto_connect and unwatch use rust method names', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+    final device = DeviceId.mac([2, 0, 0, 0, 0, 1], AddressType.randomStatic);
+    unawaited(
+      quiet(
+        client.autoConnect(
+          device,
+          policy: const ReconnectPolicy(
+            initialBackoff: Duration(milliseconds: 10),
+            maxBackoff: Duration(milliseconds: 100),
+            jitterFraction: 0,
+          ),
+        ),
+      ),
+    );
+    expect(bridge.sent.single.method, 'auto_connect');
+    expect(bridge.sent.single.params, contains('"initial_backoff_ms":10'));
+    expect(bridge.sent.single.params, contains('"max_backoff_ms":100'));
+    unawaited(quiet(client.unwatch(device)));
+    expect(bridge.sent.last.method, 'unwatch');
+
+    final events = <SupervisorEvent>[];
+    final done = client.supervisorEvents.take(1).forEach(events.add);
+    bridge.emitEvent(
+      '{"type":"supervisor_event","event":{"connected":'
+      '{"mac":[[2,0,0,0,0,1],"random_static"]}}}',
+    );
+    await done;
+    expect(events.single, isA<SupervisorConnected>());
+    client.dispose();
+  });
+
   test('dispose closes the handle and fails later calls', () async {
     final bridge = FakeNativeBridge();
     final client = RblueClient.forBridge(bridge, bridge.create()!);
@@ -251,6 +356,25 @@ void main() {
     final handler = bridge.onResponse;
     client.dispose();
     expect(() => handler!(call.reqId, null, Uint8List(0)), returnsNormally);
+  });
+
+  test('state and setPowered use the native request protocol', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+
+    final stateFuture = client.state();
+    expect(bridge.sent.single.method, 'state');
+    expect(bridge.sent.single.params, '{}');
+    bridge.respondTo(bridge.sent.single.reqId, '"powered_on"'.codeUnits);
+    expect(await stateFuture, AdapterState.poweredOn);
+
+    final off = client.setPowered(powered: false);
+    expect(bridge.sent.last.method, 'set_powered');
+    expect(bridge.sent.last.params, contains('"powered":false'));
+    bridge.respondTo(bridge.sent.last.reqId);
+    await off;
+
+    client.dispose();
   });
 }
 

@@ -11,9 +11,7 @@ use rblue_api::error::{Error, PairingStatus, PermissionReason};
 /// Prefix stored paths from the fork (`hci0/dev_XX_...`) with `/org/bluez/`.
 #[cfg_attr(not(any(test, target_os = "linux")), allow(dead_code))]
 pub(crate) fn normalize_device_path(stored: &str) -> String {
-    if stored.starts_with("/org/bluez/") {
-        stored.to_string()
-    } else if stored.starts_with('/') {
+    if stored.starts_with("/org/bluez/") || stored.starts_with('/') {
         stored.to_string()
     } else {
         format!("/org/bluez/{stored}")
@@ -103,7 +101,7 @@ fn pair_blocking(stored_path: &str) -> Result<(), Error> {
     let conn = Connection::new_system()
         .map_err(|err| Error::Backend(format!("bluez pair: system bus: {err}")))?;
     let timeout = std::time::Duration::from_secs(30);
-    let dev = conn.with_path("org.bluez", device_path.clone(), timeout);
+    let dev = conn.with_proxy("org.bluez", device_path.clone(), timeout);
     match Properties::get::<bool>(&dev, "org.bluez.Device1", "Paired") {
         Ok(true) => return Ok(()),
         Ok(false) => {}
@@ -147,7 +145,7 @@ fn unpair_blocking(stored_path: &str) -> Result<(), Error> {
     let conn = Connection::new_system()
         .map_err(|err| Error::Backend(format!("bluez unpair: system bus: {err}")))?;
     let timeout = std::time::Duration::from_secs(30);
-    let dev = conn.with_path("org.bluez", device_path.clone(), timeout);
+    let dev = conn.with_proxy("org.bluez", device_path.clone(), timeout);
     match Properties::get::<bool>(&dev, "org.bluez.Device1", "Paired") {
         Ok(false) => return Ok(()),
         Ok(true) => {}
@@ -160,7 +158,7 @@ fn unpair_blocking(stored_path: &str) -> Result<(), Error> {
             return Err(map_pairing_dbus_error(&err));
         }
     }
-    let adapter = conn.with_path("org.bluez", adapter_path, timeout);
+    let adapter = conn.with_proxy("org.bluez", adapter_path, timeout);
     let path = Path::new(device_path.clone())
         .map_err(|_| Error::Backend(format!("bluez unpair: invalid device path {device_path}")))?;
     match adapter.method_call("org.bluez.Adapter1", "RemoveDevice", (path,)) {

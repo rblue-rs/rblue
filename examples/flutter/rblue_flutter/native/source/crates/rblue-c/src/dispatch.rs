@@ -66,6 +66,47 @@ struct DeviceParams {
     device: DeviceId,
 }
 
+/// Parameters for [`Adapter::set_powered`] (`{"powered": true|false}`).
+#[derive(serde::Deserialize)]
+struct PoweredParams {
+    /// `true` to turn the radio on, `false` to turn it off.
+    powered: bool,
+}
+
+/// Connect parameters: a device plus optional [`ConnectOptions`] fields.
+#[derive(serde::Deserialize)]
+struct ConnectParams {
+    /// The device to connect to.
+    device: DeviceId,
+    /// Platform/stack background connection flag; defaults to `false`.
+    #[serde(default)]
+    auto_connect: bool,
+    /// Optional connect-time ATT MTU request.
+    #[serde(default)]
+    mtu: Option<u16>,
+}
+
+/// `request_mtu` parameters: a device plus the requested ATT MTU.
+#[derive(serde::Deserialize)]
+struct RequestMtuParams {
+    /// The connected device.
+    device: DeviceId,
+    /// Requested ATT MTU.
+    mtu: u16,
+}
+
+/// Supervisor `auto_connect` parameters: a device plus optional policy.
+#[derive(serde::Deserialize)]
+struct SupervisorAutoConnectParams {
+    /// The device to supervise.
+    device: DeviceId,
+    /// Optional [`ReconnectPolicy`] (`*_ms` duration fields). Omitted
+    /// fields keep the supervisor defaults; a later call that supplies a
+    /// different policy fails with `InvalidState`.
+    #[serde(default)]
+    policy: Option<ReconnectPolicy>,
+}
+
 /// Characteristic-addressing parameters
 /// (`{"device": <DeviceId>, "characteristic": <CharacteristicId>}`).
 #[derive(serde::Deserialize)]
@@ -74,6 +115,16 @@ struct CharacteristicParams {
     device: DeviceId,
     /// The characteristic, from the `discover_services` result.
     characteristic: CharacteristicId,
+}
+
+/// Connection-priority parameters
+/// (`{"device": <DeviceId>, "priority": "low"|"balanced"|"high"}`).
+#[derive(serde::Deserialize)]
+struct ConnectionPriorityParams {
+    /// The connected device.
+    device: DeviceId,
+    /// Requested connection trade-off.
+    priority: ConnectionPriority,
 }
 
 /// Write parameters: like [`CharacteristicParams`] plus the write mode.
@@ -87,6 +138,10 @@ struct WriteParams {
     /// `with_response`.
     #[serde(default)]
     mode: WriteMode,
+    /// When `true`, oversize payloads are written as sequential MTU-sized
+    /// chunks. Defaults to `false` (`InvalidLength`).
+    #[serde(default)]
+    allow_long_write: bool,
 }
 
 /// Summary of one known device, the result shape of the `peripherals` method.
@@ -118,6 +173,12 @@ pub(crate) async fn execute(
         "capabilities" => Ok(json_payload(&core.adapter().capabilities().bits())),
         "initialize" => {
             core.adapter().initialize().await?;
+            Ok(Vec::new())
+        }
+        "state" => Ok(json_payload(&core.adapter().state().await?)),
+        "set_powered" => {
+            let PoweredParams { powered } = parse_params(&params)?;
+            core.adapter().set_powered(powered).await?;
             Ok(Vec::new())
         }
         "start_scan" => {
@@ -154,8 +215,25 @@ pub(crate) async fn execute(
             Ok(json_payload(&infos))
         }
         "connect" => {
+            let ConnectParams {
+                device,
+                auto_connect,
+                mtu,
+            } = parse_params(&params)?;
+            core.peripheral(&device)
+                .await?
+                .connect_with(&ConnectOptions { auto_connect, mtu })
+                .await?;
+            Ok(Vec::new())
+        }
+        "auto_connect" => {
+            let SupervisorAutoConnectParams { device, policy } = parse_params(&params)?;
+            core.supervisor_auto_connect(device, policy).await?;
+            Ok(Vec::new())
+        }
+        "unwatch" => {
             let DeviceParams { device } = parse_params(&params)?;
-            core.peripheral(&device).await?.connect().await?;
+            core.supervisor_unwatch(device).await?;
             Ok(Vec::new())
         }
         "disconnect" => {
@@ -201,10 +279,16 @@ pub(crate) async fn execute(
                 device,
                 characteristic,
                 mode,
+                allow_long_write,
             } = parse_params(&params)?;
             core.peripheral(&device)
                 .await?
-                .write(&characteristic, &payload, mode)
+                .write_with(
+                    &characteristic,
+                    &payload,
+                    mode,
+                    &WriteOptions { allow_long_write },
+                )
                 .await?;
             Ok(Vec::new())
         }
@@ -239,11 +323,18 @@ pub(crate) async fn execute(
                 Ok(json_payload(&peripheral.mtu().await?))
             }
         }
+        "request_mtu" => {
+            let RequestMtuParams { device, mtu } = parse_params(&params)?;
+            Ok(json_payload(
+                &core.peripheral(&device).await?.request_mtu(mtu).await?,
+            ))
+        }
         "max_write_len" => {
             let WriteParams {
                 device,
                 characteristic,
                 mode,
+                ..
             } = parse_params(&params)?;
             Ok(json_payload(
                 &core
@@ -257,6 +348,14 @@ pub(crate) async fn execute(
             let DeviceParams { device } = parse_params(&params)?;
             let connected = core.peripheral(&device).await?.is_connected().await?;
             Ok(json_payload(&connected))
+        }
+        "set_connection_priority" => {
+            let ConnectionPriorityParams { device, priority } = parse_params(&params)?;
+            core.peripheral(&device)
+                .await?
+                .set_connection_priority(priority)
+                .await?;
+            Ok(Vec::new())
         }
         unknown => Err(RequestFailure::InvalidArgument(format!(
             "unknown method {unknown:?}"
@@ -397,13 +496,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn state_and_set_powered_roundtrip_on_the_mock() {
+        let mut fixture = Fixture::new().await;
+        let (status, payload) = roundtrip(&mut fixture, 1, "state", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(
+            serde_json::from_slice::<rblue_api::AdapterState>(&payload).unwrap(),
+            rblue_api::AdapterState::Unknown
+        );
+
+        let (status, _) = roundtrip(&mut fixture, 2, "initialize", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        let (status, payload) = roundtrip(&mut fixture, 3, "state", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(
+            serde_json::from_slice::<rblue_api::AdapterState>(&payload).unwrap(),
+            rblue_api::AdapterState::PoweredOn
+        );
+
+        let (status, _) =
+            roundtrip(&mut fixture, 4, "set_powered", r#"{"powered":false}"#, &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        let (status, payload) = roundtrip(&mut fixture, 5, "state", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(
+            serde_json::from_slice::<rblue_api::AdapterState>(&payload).unwrap(),
+            rblue_api::AdapterState::PoweredOff
+        );
+
+        let missing = roundtrip(&mut fixture, 6, "set_powered", "{}", &[]).await.0;
+        let status = missing.as_deref().expect("invalid argument");
+        assert!(
+            status.contains("InvalidArgument"),
+            "missing powered flag must not reach the backend: {status}"
+        );
+    }
+
+    #[tokio::test]
     async fn metrics_are_returned_as_json_and_require_a_connection() {
         let mut fixture = Fixture::new().await;
         let (status, _) = roundtrip(&mut fixture, 1, "rssi", &device_params(), &[]).await;
         assert!(status.is_some());
         let (status, capabilities) = roundtrip(&mut fixture, 2, "capabilities", "{}", &[]).await;
         assert!(status.is_none());
-        assert!(serde_json::from_slice::<u16>(&capabilities).unwrap() > 0);
+        assert!(serde_json::from_slice::<u32>(&capabilities).unwrap() > 0);
         roundtrip(&mut fixture, 3, "connect", &device_params(), &[]).await;
         for (id, method, params) in [
             (4, "rssi", device_params()),
@@ -492,6 +628,20 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&status).expect("status JSON");
         assert_eq!(value["InvalidLength"]["len"], 600, "{status}");
         assert_eq!(value["InvalidLength"]["max"], 514, "{status}");
+    }
+
+    #[tokio::test]
+    async fn allow_long_write_chunks_oversize_payloads() {
+        let mut fixture = Fixture::new().await;
+        roundtrip(&mut fixture, 1, "connect", &device_params(), &[]).await;
+        let oversize = vec![0u8; 600];
+        let mut params: serde_json::Value = serde_json::from_str(&characteristic_params()).unwrap();
+        params["allow_long_write"] = serde_json::json!(true);
+        let (status, _) = roundtrip(&mut fixture, 2, "write", &params.to_string(), &oversize).await;
+        assert!(
+            status.is_none(),
+            "allow_long_write should succeed: {status:?}"
+        );
     }
 
     #[tokio::test]
@@ -593,6 +743,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn system_connected_lookup_returns_marked_devices() {
+        let mut fixture = Fixture::new().await;
+        fixture.device.set_system_connected(true);
+        let params = format!(r#"{{"services":["{}"]}}"#, crate::testing::SERVICE_UUID);
+        let (status, payload) = roundtrip(
+            &mut fixture,
+            1,
+            "system_connected_peripherals",
+            &params,
+            &[],
+        )
+        .await;
+        assert!(status.is_none(), "{status:?}");
+        let infos: serde_json::Value = serde_json::from_slice(&payload).expect("infos JSON");
+        assert_eq!(infos[0]["name"], "simulated-sensor", "{infos}");
+        assert_eq!(
+            infos[0]["id"],
+            serde_json::to_value(device_id()).expect("device JSON")
+        );
+
+        let (status, payload) =
+            roundtrip(&mut fixture, 2, "is_connected", &device_params(), &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(payload, b"false");
+    }
+
+    #[tokio::test]
     async fn peripherals_and_is_connected() {
         let mut fixture = Fixture::new().await;
         let (status, payload) = roundtrip(&mut fixture, 1, "peripherals", "{}", &[]).await;
@@ -609,6 +786,48 @@ mod tests {
             roundtrip(&mut fixture, 3, "is_connected", &device_params(), &[]).await;
         assert!(status.is_none());
         assert_eq!(payload, b"true");
+    }
+
+    #[tokio::test]
+    async fn set_connection_priority_requires_connection_and_valid_enum() {
+        let mut fixture = Fixture::new().await;
+        let params = format!(
+            r#"{{"device":{},"priority":"high"}}"#,
+            serde_json::to_string(&device_id()).expect("device JSON")
+        );
+        let (status, _) = roundtrip(&mut fixture, 1, "set_connection_priority", &params, &[]).await;
+        assert!(
+            status
+                .as_deref()
+                .is_some_and(|error| error.contains("NotConnected")),
+            "{status:?}"
+        );
+
+        roundtrip(&mut fixture, 2, "connect", &device_params(), &[]).await;
+        let (status, _) = roundtrip(&mut fixture, 3, "set_connection_priority", &params, &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(
+            fixture.device.connection_priority(),
+            Some(ConnectionPriority::High)
+        );
+
+        let (status, _) = roundtrip(
+            &mut fixture,
+            4,
+            "set_connection_priority",
+            &format!(
+                r#"{{"device":{},"priority":"turbo"}}"#,
+                serde_json::to_string(&device_id()).expect("device JSON")
+            ),
+            &[],
+        )
+        .await;
+        assert!(
+            status
+                .as_deref()
+                .is_some_and(|error| error.contains("InvalidArgument")),
+            "{status:?}"
+        );
     }
 
     #[tokio::test]
@@ -683,6 +902,96 @@ mod tests {
                 .store(true, std::sync::atomic::Ordering::Release);
             self.gate.notify.notify_waiters();
         }
+    }
+
+    #[tokio::test]
+    async fn connect_accepts_default_auto_connect_flag() {
+        let mut fixture = Fixture::new().await;
+        let mut value: serde_json::Value = serde_json::from_str(&device_params()).unwrap();
+        value["auto_connect"] = serde_json::json!(false);
+        let (status, _) = roundtrip(&mut fixture, 1, "connect", &value.to_string(), &[]).await;
+        assert!(status.is_none(), "{status:?}");
+    }
+
+    #[tokio::test]
+    async fn connect_auto_connect_true_is_unsupported_on_mock() {
+        let mut fixture = Fixture::new().await;
+        let mut value: serde_json::Value = serde_json::from_str(&device_params()).unwrap();
+        value["auto_connect"] = serde_json::json!(true);
+        let (status, _) = roundtrip(&mut fixture, 1, "connect", &value.to_string(), &[]).await;
+        let status = status.expect("mock has no platform auto_connect");
+        assert!(status.contains("Unsupported"), "{status}");
+        assert!(status.contains("auto_connect"), "{status}");
+    }
+
+    #[tokio::test]
+    async fn request_mtu_and_connect_time_mtu_are_honored_on_mock() {
+        let mut fixture = Fixture::new().await;
+        let (status, _) = roundtrip(&mut fixture, 1, "connect", &device_params(), &[]).await;
+        assert!(status.is_none(), "connect: {status:?}");
+        let mut request: serde_json::Value = serde_json::from_str(&device_params()).unwrap();
+        request["mtu"] = serde_json::json!(185);
+        let (status, payload) =
+            roundtrip(&mut fixture, 2, "request_mtu", &request.to_string(), &[]).await;
+        assert!(status.is_none(), "request_mtu: {status:?}");
+        assert_eq!(serde_json::from_slice::<u16>(&payload).unwrap(), 185);
+        let (status, payload) = roundtrip(&mut fixture, 3, "mtu", &device_params(), &[]).await;
+        assert!(status.is_none(), "mtu: {status:?}");
+        assert_eq!(serde_json::from_slice::<u16>(&payload).unwrap(), 185);
+
+        roundtrip(&mut fixture, 4, "disconnect", &device_params(), &[]).await;
+        let mut connect: serde_json::Value = serde_json::from_str(&device_params()).unwrap();
+        connect["mtu"] = serde_json::json!(512);
+        let (status, _) = roundtrip(&mut fixture, 5, "connect", &connect.to_string(), &[]).await;
+        assert!(status.is_none(), "connect mtu: {status:?}");
+        let (status, payload) = roundtrip(&mut fixture, 6, "mtu", &device_params(), &[]).await;
+        assert!(status.is_none(), "mtu after connect: {status:?}");
+        assert_eq!(serde_json::from_slice::<u16>(&payload).unwrap(), 512);
+    }
+
+    #[tokio::test]
+    async fn supervisor_auto_connect_and_unwatch() {
+        let mut fixture = Fixture::new().await;
+        let (status, _) = roundtrip(&mut fixture, 1, "auto_connect", &device_params(), &[]).await;
+        assert!(status.is_none(), "supervisor auto_connect: {status:?}");
+        // The supervisor should bring the fixture device up.
+        let mut connected = false;
+        for _ in 0..50 {
+            let (status, payload) =
+                roundtrip(&mut fixture, 2, "is_connected", &device_params(), &[]).await;
+            assert!(status.is_none(), "{status:?}");
+            connected = serde_json::from_slice::<bool>(&payload).unwrap();
+            if connected {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(
+            connected,
+            "supervisor should connect the watched mock device"
+        );
+        let (status, _) = roundtrip(&mut fixture, 3, "unwatch", &device_params(), &[]).await;
+        assert!(status.is_none(), "unwatch: {status:?}");
+    }
+
+    #[tokio::test]
+    async fn supervisor_auto_connect_accepts_policy_ms_shape() {
+        let mut fixture = Fixture::new().await;
+        let mut value: serde_json::Value = serde_json::from_str(&device_params()).unwrap();
+        value["policy"] = serde_json::json!({
+            "initial_backoff_ms": 10,
+            "max_backoff_ms": 100,
+            "multiplier": 2.0,
+            "jitter_fraction": 0.0,
+            "gatt_133_backoff_ms": 20,
+            "breaker_threshold": 5,
+            "max_attempts": null,
+            "reconnect_on_local_disconnect": false
+        });
+        let (status, _) = roundtrip(&mut fixture, 1, "auto_connect", &value.to_string(), &[]).await;
+        assert!(status.is_none(), "policy auto_connect: {status:?}");
+        let (status, _) = roundtrip(&mut fixture, 2, "unwatch", &device_params(), &[]).await;
+        assert!(status.is_none(), "{status:?}");
     }
 
     #[async_trait::async_trait]

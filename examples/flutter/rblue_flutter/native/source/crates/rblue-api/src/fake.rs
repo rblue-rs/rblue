@@ -1,6 +1,10 @@
 //! Minimal in-process fake backend, used only to self-test the contract
-//! suite until the real mock backend lands in `rblue-mock`. Safe to delete
-//! once `rblue-mock` implements the same fixture.
+//! suite without taking a `rblue-mock` dependency in unit tests.
+//!
+//! The CI and workspace default fixture is `MockAdapter::with_contract_fixture()`
+//! in `tests/contract_mock.rs`. This module can be removed once that mock path
+//! is the only suite self-test; it is kept until then so the suite can still
+//! be checked in isolation.
 
 use std::sync::{Arc, Mutex};
 

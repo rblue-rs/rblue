@@ -30,6 +30,7 @@ import io.flutter.plugin.common.PluginRegistry
 class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
     private var channel: MethodChannel? = null
     private var activity: Activity? = null
+    private var appContext: android.content.Context? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
 
     private val permissionListener =
@@ -46,6 +47,7 @@ class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
         }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        appContext = binding.applicationContext
         channel = MethodChannel(binding.binaryMessenger, CHANNEL).also {
             it.setMethodCallHandler(this)
         }
@@ -90,6 +92,8 @@ class RblueFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
         val ok = RblueNative.nativeInit()
         if (!ok) {
             Log.e(TAG, "RblueNative.nativeInit() failed; adapter calls will not work")
+        } else {
+            appContext?.let { com.rblue.AdapterStateMonitor.start(it) }
         }
         return ok
     }
