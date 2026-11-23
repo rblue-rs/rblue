@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ffi' as ffi;
 import 'dart:io';
 import 'dart:typed_data';
@@ -32,10 +33,14 @@ void main() {
         libraryPath!,
         requestCount: 1000,
         waitForAcceptanceWindow: true,
+        waitForAllClientResponses: true,
       );
       expect(result.deliveredToClient, result.targets.responses);
       expect(result.completedIds, hasLength(result.targets.responses));
-      expect(result.completedIds.toSet(), hasLength(result.completedIds.length));
+      expect(
+        result.completedIds.toSet(),
+        hasLength(result.completedIds.length),
+      );
       expect(
         result.completedIds.toSet(),
         everyElement(predicate<int>((id) => id >= 1 && id <= 1000)),
@@ -52,8 +57,14 @@ void main() {
         requestCount: 1000,
         waitForAcceptanceWindow: false,
       );
-      expect(result.deliveredToClient, lessThanOrEqualTo(result.targets.responses));
-      expect(result.completedIds.toSet(), hasLength(result.completedIds.length));
+      expect(
+        result.deliveredToClient,
+        lessThanOrEqualTo(result.targets.responses),
+      );
+      expect(
+        result.completedIds.toSet(),
+        hasLength(result.completedIds.length),
+      );
     },
     skip: skipReason,
   );
@@ -77,11 +88,14 @@ class _DrainResult {
 ///
 /// When [waitForAcceptanceWindow] is true, the test yields once so the mock
 /// runtime can accept work before shutdown; when false, dispose races the
-/// in-flight requests, which is the mid-flight soak.
+/// in-flight requests, which is the mid-flight soak. The completed-request soak
+/// instead sets [waitForAllClientResponses]: disposal intentionally suppresses
+/// application callbacks while still draining their native ownership transfers.
 Future<_DrainResult> _runAcceptedRequestDrain(
   String libraryPath, {
   required int requestCount,
   required bool waitForAcceptanceWindow,
+  bool waitForAllClientResponses = false,
 }) async {
   final bridge = RealNativeBridge.fromDynamicLibrary(
     ffi.DynamicLibrary.open(libraryPath),
@@ -91,27 +105,25 @@ Future<_DrainResult> _runAcceptedRequestDrain(
 
   var deliveredToClient = 0;
   final completedIds = <int>[];
+  final allClientResponses = Completer<void>();
   bridge.registerCallbacks(
     handle!,
     onResponse: (reqId, _, _) {
       deliveredToClient++;
       completedIds.add(reqId);
+      if (deliveredToClient == requestCount) allClientResponses.complete();
     },
     onEvent: (_) {},
   );
   for (var requestId = 1; requestId <= requestCount; requestId++) {
     expect(
-      bridge.send(
-        handle,
-        requestId,
-        'backend_version',
-        const {},
-        Uint8List(0),
-      ),
+      bridge.send(handle, requestId, 'backend_version', const {}, Uint8List(0)),
       0,
     );
   }
-  if (waitForAcceptanceWindow) {
+  if (waitForAllClientResponses) {
+    await allClientResponses.future.timeout(_drainTimeout);
+  } else if (waitForAcceptanceWindow) {
     // Let the facade runtime start the accepted requests so the high-count
     // drain is not accidentally just an immediate cancel.
     await Future<void>.delayed(Duration.zero);

@@ -231,11 +231,9 @@ fn notification_payload(json: &str) -> Option<Vec<u8>> {
         return None;
     }
     let data = value.get("notification")?.get("data")?.as_array()?;
-    Some(
-        data.iter()
-            .map(|byte| u8::try_from(byte.as_u64()?).ok())
-            .collect::<Option<Vec<_>>>()?,
-    )
+    data.iter()
+        .map(|byte| u8::try_from(byte.as_u64()?).ok())
+        .collect::<Option<Vec<_>>>()
 }
 
 async fn recorder_expect_silence(recorder: &mut Recorder) {

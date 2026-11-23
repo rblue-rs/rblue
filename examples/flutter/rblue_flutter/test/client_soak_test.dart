@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -63,34 +62,47 @@ void main() {
     client.dispose();
   });
 
-  test('dispose mid-flight fails pending requests and drops late completions', () async {
-    final bridge = FakeNativeBridge();
-    final client = RblueClient.forBridge(bridge, bridge.create()!);
-    final pending = <Future<String>>[
-      for (var i = 0; i < _burst; i++) client.backendVersion(),
-    ];
-    final reqIds = [for (final call in bridge.sent) call.reqId];
-    final handler = bridge.onResponse;
-    expect(handler, isNotNull);
+  test(
+    'dispose mid-flight fails pending requests and drops late completions',
+    () async {
+      final bridge = FakeNativeBridge();
+      final client = RblueClient.forBridge(bridge, bridge.create()!);
+      final pending = <Future<String>>[
+        for (var i = 0; i < _burst; i++) client.backendVersion(),
+      ];
+      final reqIds = [for (final call in bridge.sent) call.reqId];
+      final handler = bridge.onResponse;
+      expect(handler, isNotNull);
 
-    client.dispose();
-    final outcomes = await Future.wait(
-      pending.map((future) => future.then<Object?>((value) => value, onError: (e) => e)),
-    );
-    expect(
-      outcomes,
-      everyElement(
-        isA<RblueException>().having((e) => e.message, 'message', contains('disposed')),
-      ),
-    );
+      client.dispose();
+      final outcomes = await Future.wait(
+        pending.map(
+          (future) => future.then<Object?>((value) => value, onError: (e) => e),
+        ),
+      );
+      expect(
+        outcomes,
+        everyElement(
+          isA<RblueException>().having(
+            (e) => e.message,
+            'message',
+            contains('disposed'),
+          ),
+        ),
+      );
 
-    // A late native completion for a request that was in flight must not
-    // throw (the completer is already finished) and must not re-complete.
-    expect(
-      () => handler!(reqIds.first, null, Uint8List.fromList(utf8.encode('"late"'))),
-      returnsNormally,
-    );
-  });
+      // A late native completion for a request that was in flight must not
+      // throw (the completer is already finished) and must not re-complete.
+      expect(
+        () => handler!(
+          reqIds.first,
+          null,
+          Uint8List.fromList(utf8.encode('"late"')),
+        ),
+        returnsNormally,
+      );
+    },
+  );
 }
 
 String _notificationEnvelope(List<int> data) =>

@@ -321,7 +321,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' && inputs.rebuild_native &&
       github.repository == 'rblue-rs/rblue' &&
-      github.ref == 'refs/heads/ci/free-standard-hosted'
+      contains(fromJSON('["refs/heads/ci/free-standard-hosted","refs/heads/test/c-abi-dart-ffi-soak"]'), github.ref)
     permissions:
       contents: write
     runs-on: ${{ matrix.os }}
