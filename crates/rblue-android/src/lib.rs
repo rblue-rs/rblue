@@ -66,6 +66,8 @@ mod adapter;
 mod jni_shim;
 #[cfg(target_os = "android")]
 mod peripheral;
+#[cfg(target_os = "android")]
+mod radio;
 
 #[cfg(target_os = "android")]
 use std::sync::atomic::{AtomicBool, Ordering};

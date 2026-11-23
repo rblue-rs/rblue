@@ -14,7 +14,8 @@ import platform as host_platform
 import subprocess
 
 PACKAGE = "examples/flutter/rblue_flutter/"
-BRANCHES = {"ci/free-standard-hosted", "test/c-abi-dart-ffi-soak"}
+BRANCHES = {"ci/free-standard-hosted", "test/c-abi-dart-ffi-soak",
+            "feat/adapter-power-control"}
 REPOSITORY = "rblue-rs/rblue"
 INPUTS = [
     PACKAGE + "native/source",

@@ -37,8 +37,9 @@ use futures_timer::Delay;
 
 use crate::adapter::AdapterEventStream;
 use crate::{
-    Adapter, AdapterEvent, Capability, CharacteristicId, CharacteristicProperties, ConnectOptions,
-    DeviceId, Error, RequestDeviceOptions, ScanFilter, ServiceId, WriteMode, WriteOptions,
+    Adapter, AdapterEvent, AdapterState, Capability, CharacteristicId, CharacteristicProperties,
+    ConnectOptions, DeviceId, Error, RequestDeviceOptions, ScanFilter, ServiceId, WriteMode,
+    WriteOptions,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -112,6 +113,22 @@ where
         caps.has(Capability::GattClient),
         "contract violation: fixture backend must report Capability::GattClient"
     );
+
+    // `state()` is always implemented (at least as Unknown). `set_powered`
+    // is only exercised here when the capability is absent, so the suite
+    // never toggles a real system radio. Backends that advertise
+    // AdapterPowerControl cover the switch in their own tests.
+    let state = require("state", adapter.state().await);
+    let _: AdapterState = state;
+    if !adapter.capabilities().has(Capability::AdapterPowerControl) {
+        match adapter.set_powered(true).await {
+            Err(Error::Unsupported { feature: "set_powered", .. }) => {}
+            other => panic!(
+                "contract violation at `set_powered` without AdapterPowerControl:                  expected Err(Unsupported {{ feature: \"set_powered\" }}), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+    }
 
     // The event stream is subscribed before scanning so no discovery event
     // can be missed.

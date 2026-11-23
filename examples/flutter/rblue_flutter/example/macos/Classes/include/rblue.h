@@ -40,6 +40,8 @@
  *
  *   backend_version    {}                              -> JSON string
  *   initialize         {}                              -> (empty)
+ *   state              {}                              -> AdapterState JSON (snake_case string)
+ *   set_powered        {"powered": true|false}         -> (empty)
  *   start_scan         ScanFilter JSON                 -> (empty)
  *   stop_scan          {}                              -> (empty)
  *   system_connected_peripherals {"services":[<UUID>,...]} -> [{ "id":..,"name":.. }] (CoreBluetooth)

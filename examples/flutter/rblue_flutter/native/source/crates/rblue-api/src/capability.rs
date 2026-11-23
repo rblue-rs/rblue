@@ -49,7 +49,10 @@ pub enum Capability {
     /// `connectGatt(autoConnect=true)`). This is not
     /// [`crate::SupervisorHandle::auto_connect`], which is the
     /// application-level reconnect supervisor.
-    AutoConnect,
+    AutoConnect = 13,
+    /// Programmatic radio on/off ([`crate::Adapter::set_powered`]). Querying
+    /// [`crate::Adapter::state`] does not require this bit.
+    AdapterPowerControl = 14,
 }
 
 bitflags::bitflags! {
@@ -93,6 +96,8 @@ bitflags::bitflags! {
         const BACKGROUND_SCAN = 1 << Capability::BackgroundScan as u32;
         /// See [`Capability::AutoConnect`].
         const AUTO_CONNECT = 1 << Capability::AutoConnect as u32;
+        /// See [`Capability::AdapterPowerControl`].
+        const ADAPTER_POWER_CONTROL = 1 << Capability::AdapterPowerControl as u32;
     }
 }
 
@@ -139,5 +144,10 @@ mod tests {
         let _: u32 = CapabilitySet::all().bits();
         assert!(CapabilitySet::all().has(Capability::AutoConnect));
         assert!(!CapabilitySet::bit(Capability::GattClient).has(Capability::AutoConnect));
+        assert_eq!(Capability::AutoConnect as u32, 13);
+        assert_eq!(Capability::AdapterPowerControl as u32, 14);
+        assert_eq!(CapabilitySet::ADAPTER_POWER_CONTROL.bits(), 1 << 14);
+        assert!(CapabilitySet::all().has(Capability::AdapterPowerControl));
+        assert!(!CapabilitySet::bit(Capability::GattClient).has(Capability::AdapterPowerControl));
     }
 }

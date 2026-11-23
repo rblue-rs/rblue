@@ -303,6 +303,25 @@ void main() {
     client.dispose();
     expect(() => handler!(call.reqId, null, Uint8List(0)), returnsNormally);
   });
+
+  test('state and setPowered use the native request protocol', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+
+    final stateFuture = client.state();
+    expect(bridge.sent.single.method, 'state');
+    expect(bridge.sent.single.params, '{}');
+    bridge.respondTo(bridge.sent.single.reqId, '"powered_on"'.codeUnits);
+    expect(await stateFuture, AdapterState.poweredOn);
+
+    final off = client.setPowered(powered: false);
+    expect(bridge.sent.last.method, 'set_powered');
+    expect(bridge.sent.last.params, contains('"powered":false'));
+    bridge.respondTo(bridge.sent.last.reqId);
+    await off;
+
+    client.dispose();
+  });
 }
 
 CharacteristicId _characteristic() => CharacteristicId(

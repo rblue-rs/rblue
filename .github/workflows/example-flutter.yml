@@ -217,13 +217,14 @@ jobs:
             for symbol in rblue_new rblue_shutdown rblue_free rblue_request \
               rblue_set_event_callback rblue_set_owned_response_callback \
               rblue_set_response_callback rblue_free_string rblue_free_payload \
-              Java_com_rblue_RblueNative_nativeInit; do
+              Java_com_rblue_RblueNative_nativeInit \
+              Java_com_rblue_RblueNative_nativeOnAdapterStateChanged; do
               if ! grep -q " $symbol$" <<<"$exports"; then
                 echo "::error::$abi/librblue_c.so does not export $symbol"
                 exit 1
               fi
             done
-            echo "$abi/librblue_c.so exports the C ABI and JNI nativeInit"
+            echo "$abi/librblue_c.so exports the C ABI and both JNI entry points"
           done
           python3 examples/flutter/tools/check-android-jni.py "$apk"
 
@@ -321,7 +322,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' && inputs.rebuild_native &&
       github.repository == 'rblue-rs/rblue' &&
-      contains(fromJSON('["refs/heads/ci/free-standard-hosted","refs/heads/test/c-abi-dart-ffi-soak"]'), github.ref)
+      contains(fromJSON('["refs/heads/ci/free-standard-hosted","refs/heads/test/c-abi-dart-ffi-soak","refs/heads/feat/adapter-power-control"]'), github.ref)
     permissions:
       contents: write
     runs-on: ${{ matrix.os }}

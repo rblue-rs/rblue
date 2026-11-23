@@ -21,7 +21,7 @@ import zipfile
 repo = Path(__file__).resolve().parents[3]
 package = repo / "examples/flutter/rblue_flutter"
 sources = package / "android/src/main/java"
-expected = {"com.rblue.RblueNative"}
+expected = {"com.rblue.RblueNative", "com.rblue.AdapterStateMonitor"}
 for source in sources.rglob("*.java"):
     package_match = re.search(r"^package\s+([\w.]+);", source.read_text(), re.MULTILINE)
     assert package_match, f"Missing package: {source}"

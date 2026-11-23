@@ -249,6 +249,18 @@ void main() {
       expect(Capability.passiveScan, 1 << 0);
       expect(Capability.backgroundScan, 1 << 12);
       expect(Capability.autoConnect, 1 << 13);
+      expect(Capability.adapterPowerControl, 1 << 14);
+      expect(
+        Capability.has(
+          Capability.adapterPowerControl,
+          Capability.adapterPowerControl,
+        ),
+        isTrue,
+      );
+      expect(
+        Capability.has(Capability.gattClient, Capability.adapterPowerControl),
+        isFalse,
+      );
       expect(
         Capability.has(Capability.autoConnect, Capability.autoConnect),
         isTrue,

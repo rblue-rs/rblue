@@ -963,6 +963,10 @@ abstract final class Capability {
   /// This is not [RblueClient.autoConnect], which is the reconnect supervisor.
   static const int autoConnect = 1 << 13;
 
+  /// Programmatic radio on/off (`Adapter::set_powered`). Querying
+  /// [RblueClient.state] does not require this bit.
+  static const int adapterPowerControl = 1 << 14;
+
   /// Returns whether [bits] includes [capability].
   static bool has(int bits, int capability) => (bits & capability) != 0;
 }

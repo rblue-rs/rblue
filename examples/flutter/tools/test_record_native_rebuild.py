@@ -32,7 +32,8 @@ class NativeRebuildTests(unittest.TestCase):
 
     def test_only_explicitly_approved_rebuild_branches_are_allowed(self):
         self.assertEqual(self.module.BRANCHES, {
-            "ci/free-standard-hosted", "test/c-abi-dart-ffi-soak"})
+            "ci/free-standard-hosted", "test/c-abi-dart-ffi-soak",
+            "feat/adapter-power-control"})
 
     def test_unknown_platform_rejected(self):
         with self.assertRaises(ValueError):

@@ -115,6 +115,23 @@ class RblueClient {
   /// Opens the adapter; on some platforms the permission prompt happens here.
   Future<void> initialize() => _request('initialize', decode: _noPayload);
 
+  /// Queries the current radio/permission state of the adapter.
+  ///
+  /// This does not require [Capability.adapterPowerControl]; that bit only
+  /// covers [setPowered]. Live transitions arrive as [AdapterStateChanged].
+  Future<AdapterState> state() => _request(
+    'state',
+    decode: (payload) =>
+        AdapterState.fromJson(jsonDecode(utf8.decode(payload))! as String),
+  );
+
+  /// Turns the adapter radio on (`true`) or off (`false`).
+  ///
+  /// Check [Capability.adapterPowerControl] first. Platforms that cannot
+  /// honor the request return `Unsupported` with `feature: set_powered`.
+  Future<void> setPowered({required bool powered}) =>
+      _request('set_powered', params: {'powered': powered}, decode: _noPayload);
+
   /// Starts scanning with [filter] (defaults to the unfiltered scan).
   /// Discoveries arrive on [events].
   Future<void> startScan({ScanFilter? filter}) =>

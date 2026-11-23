@@ -23,6 +23,7 @@ use std::ffi::c_void;
 
 use jni::{
     errors::LogErrorAndDefault,
+    objects::JClass,
     sys::{jboolean, JNIEnv},
     EnvUnowned,
 };
@@ -45,6 +46,18 @@ pub(crate) fn native_init<'caller>(mut unowned_env: EnvUnowned<'caller>) -> jboo
         })
         .resolve::<LogErrorAndDefault>();
     ok
+}
+
+/// JNI entry: `com.rblue.RblueNative.nativeOnAdapterStateChanged(int)`.
+/// Called from `AdapterStateMonitor` with `BluetoothAdapter` state codes
+/// (or the shell sentinels `-2` / `-3`).
+#[no_mangle]
+pub extern "system" fn Java_com_rblue_RblueNative_nativeOnAdapterStateChanged<'caller>(
+    _unowned_env: jni::EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    state: jni::sys::jint,
+) {
+    crate::radio::apply_native_state(state);
 }
 
 /// FFI trampoline used by consuming cdylibs.
