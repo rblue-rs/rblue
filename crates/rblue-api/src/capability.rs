@@ -44,13 +44,17 @@ pub enum Capability {
     RequestDevicePicker,
     /// The OS permits background scanning (with whatever restrictions the
     /// platform documents).
-    BackgroundScan = 12,
-    /// `Adapter::system_connected_peripherals`: the backend can list BLE
-    /// peripherals the system already considers connected that match a
-    /// nonempty service-UUID filter. Bits 13 and 14 are reserved for
-    /// `AutoConnect` (issue #17 / PR #23) and `AdapterPowerControl`
-    /// (issue #15 / PR #25), which land on independent branches from
-    /// `origin/main`.
+    BackgroundScan,
+    /// Platform/stack background connection (e.g. Android
+    /// `connectGatt(autoConnect=true)`). This is not
+    /// [`crate::SupervisorHandle::auto_connect`], which is the
+    /// application-level reconnect supervisor.
+    AutoConnect = 13,
+    /// Programmatic radio on/off ([`crate::Adapter::set_powered`]). Querying
+    /// [`crate::Adapter::state`] does not require this bit.
+    AdapterPowerControl = 14,
+    /// System-connected peripherals matching a nonempty service-UUID filter.
+    /// Returned handles still require a local connect before GATT operations.
     SystemConnectedPeripherals = 15,
 }
 
@@ -93,6 +97,10 @@ bitflags::bitflags! {
         const REQUEST_DEVICE_PICKER = 1 << Capability::RequestDevicePicker as u32;
         /// See [`Capability::BackgroundScan`].
         const BACKGROUND_SCAN = 1 << Capability::BackgroundScan as u32;
+        /// See [`Capability::AutoConnect`].
+        const AUTO_CONNECT = 1 << Capability::AutoConnect as u32;
+        /// See [`Capability::AdapterPowerControl`].
+        const ADAPTER_POWER_CONTROL = 1 << Capability::AdapterPowerControl as u32;
         /// See [`Capability::SystemConnectedPeripherals`].
         const SYSTEM_CONNECTED_PERIPHERALS =
             1 << Capability::SystemConnectedPeripherals as u32;
@@ -141,8 +149,23 @@ mod tests {
         assert_eq!(caps.bits(), 1 << 15);
         assert!(caps.has(Capability::SystemConnectedPeripherals));
         assert!(CapabilitySet::all().has(Capability::SystemConnectedPeripherals));
-        // Bits 13 and 14 stay unused on this branch so AutoConnect and
-        // AdapterPowerControl can merge without colliding.
+        // This single bit must not alias AutoConnect (13) or AdapterPowerControl (14).
         assert_eq!(caps.bits() & (1 << 13 | 1 << 14), 0);
+    }
+
+    #[test]
+    fn existing_bits_keep_their_positions_after_u32_widening() {
+        // Widening the storage must not rotate previously published bits.
+        assert_eq!(CapabilitySet::PASSIVE_SCAN.bits(), 1 << 0);
+        assert_eq!(CapabilitySet::BACKGROUND_SCAN.bits(), 1 << 12);
+        assert_eq!(CapabilitySet::AUTO_CONNECT.bits(), 1 << 13);
+        let _: u32 = CapabilitySet::all().bits();
+        assert!(CapabilitySet::all().has(Capability::AutoConnect));
+        assert!(!CapabilitySet::bit(Capability::GattClient).has(Capability::AutoConnect));
+        assert_eq!(Capability::AutoConnect as u32, 13);
+        assert_eq!(Capability::AdapterPowerControl as u32, 14);
+        assert_eq!(CapabilitySet::ADAPTER_POWER_CONTROL.bits(), 1 << 14);
+        assert!(CapabilitySet::all().has(Capability::AdapterPowerControl));
+        assert!(!CapabilitySet::bit(Capability::GattClient).has(Capability::AdapterPowerControl));
     }
 }

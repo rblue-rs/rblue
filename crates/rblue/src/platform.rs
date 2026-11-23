@@ -10,7 +10,7 @@
 //! - otherwise `mock`, the universal no-hardware fallback,
 //! - otherwise the first enabled backend in the fixed order `web`, `ohos`,
 //!   `winrt`, `corebluetooth`, `bluez`, `android`. Those runtimes fail with
-//!   [`Error::Unsupported`] at run time when away from their native target;
+//!   [`crate::Error::Unsupported`] at run time when away from their native target;
 //!   the web and ohos submodules are host-testable placeholders by design.
 //!
 //! Regardless of the selection, every compiled-in backend remains reachable
@@ -191,13 +191,32 @@ pub mod bluez {
 #[cfg(feature = "android")]
 pub mod android {
     pub use rblue_android::{backend_version, default_adapter};
+
+    /// JNI trampoline for `com.rblue.RblueNative.nativeInit()`.
+    ///
+    /// Consuming cdylibs define the `#[no_mangle]` symbol and call this so
+    /// rustc exports it from the shared library.
+    ///
+    /// # Safety
+    ///
+    /// `env` must be a valid, non-null `JNIEnv*` for the current thread, which
+    /// must be attached to the JVM for the duration of the call.
+    /// `class` is the JNI class argument and is unused.
+    #[cfg(target_os = "android")]
+    #[doc(hidden)]
+    pub unsafe fn jni_native_init(
+        env: *mut std::ffi::c_void,
+        class: *mut std::ffi::c_void,
+    ) -> bool {
+        unsafe { rblue_android::native_init_from_raw(env, class) }
+    }
 }
 
 /// Web Bluetooth backend (feature `web`, `target_arch = "wasm32"`).
 ///
 /// On wasm32 this is the real `navigator.bluetooth` implementation; on other
 /// targets the submodule compiles but [`web::default_adapter`] fails with
-/// [`Error::Unsupported`] — it exists so host builds of web-dependent code
+/// [`crate::Error::Unsupported`] — it exists so host builds of web-dependent code
 /// type-check.
 #[cfg(feature = "web")]
 pub mod web {

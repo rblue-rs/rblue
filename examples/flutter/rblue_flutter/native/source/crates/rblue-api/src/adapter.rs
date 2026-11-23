@@ -5,7 +5,7 @@ use std::sync::Arc;
 use futures::stream::BoxStream;
 
 use crate::device::AdapterId;
-use crate::event::AdapterEvent;
+use crate::event::{AdapterEvent, AdapterState};
 use crate::peripheral::Peripheral;
 use crate::scan::{RequestDeviceOptions, ScanFilter};
 use crate::{CapabilitySet, DeviceId, Error};
@@ -77,6 +77,38 @@ pub trait Adapter: Send + Sync {
     /// all.
     async fn initialize(&self) -> Result<(), Error>;
 
+    /// Queries the current radio/permission state of this adapter.
+    ///
+    /// The method name is `state` (not `power_state`) because
+    /// [`AdapterState`] also includes `Unauthorized` / `Unavailable` /
+    /// `Unknown`. This query does not require
+    /// [`crate::Capability::AdapterPowerControl`]; that bit only covers
+    /// [`Adapter::set_powered`]. Live transitions continue to arrive as
+    /// [`AdapterEvent::StateChanged`].
+    ///
+    /// The default reports [`AdapterState::Unknown`]. Backends that can
+    /// read the radio or authorization state must override this.
+    async fn state(&self) -> Result<AdapterState, Error> {
+        Ok(AdapterState::Unknown)
+    }
+
+    /// Turns the adapter radio on (`true`) or off (`false`).
+    ///
+    /// Callers should check [`crate::Capability::AdapterPowerControl`] first.
+    /// Platforms with no programmatic switch, or whose OS refuses to let the
+    /// application toggle Bluetooth, omit the capability and return
+    /// [`Error::Unsupported`] with `feature: "set_powered"` (or
+    /// [`Error::Permission`] when that is a better fit). Successful
+    /// transitions are also delivered as [`AdapterEvent::StateChanged`].
+    ///
+    /// Do not use `turn_on` / `turn_off` as public names.
+    async fn set_powered(&self, _powered: bool) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: std::env::consts::OS,
+            feature: "set_powered",
+        })
+    }
+
     /// Starts scanning with `filter`.
     ///
     /// Scanning continues until [`Adapter::stop_scan`] is called; every
@@ -118,12 +150,25 @@ pub trait Adapter: Send + Sync {
 
     /// Retrieves system-connected BLE peripherals matching any of `services`.
     ///
-    /// The list must be nonempty. The caller still needs to connect locally
-    /// before GATT operations. Returns [`Error::Unsupported`] on other backends.
+    /// `services` must be nonempty: an empty list returns
+    /// [`Error::InvalidState`]. The result is the set of BLE peripherals the
+    /// operating system already considers connected that match any given
+    /// service UUID. The caller still needs to [`Peripheral::connect`]
+    /// locally before GATT operations.
+    ///
+    /// Backends that cannot honor the lookup return [`Error::Unsupported`]
+    /// with `feature: "system_connected_peripherals"`. Check
+    /// [`Capability::SystemConnectedPeripherals`] first when the caller
+    /// wants to degrade gracefully.
     async fn system_connected_peripherals(
         &self,
-        _services: &[uuid::Uuid],
+        services: &[uuid::Uuid],
     ) -> Result<Vec<Arc<dyn Peripheral>>, Error> {
+        if services.is_empty() {
+            return Err(Error::InvalidState(
+                "at least one service UUID is required".into(),
+            ));
+        }
         Err(Error::Unsupported {
             platform: std::env::consts::OS,
             feature: "system_connected_peripherals",

@@ -33,6 +33,13 @@ without any adapter fails earlier, at adapter enumeration, with
 property changes; the collapsed `AdapterState::Unknown` never surfaces from
 this backend.
 
+`Adapter::state` reads the same `Powered` flag (via the fork after
+`initialize`, or a short bluez-async session before it). `set_powered`
+writes the BlueZ `Powered` property and this backend advertises
+`Capability::AdapterPowerControl`. If the D-Bus daemon refuses the change
+(`NotAuthorized` / `AccessDenied` / `NotPermitted`), the call returns
+`Error::Permission(Unauthorized)`.
+
 ## Capability matrix (plan section 2.3, Linux column)
 
 | Capability | Value | Reason |
@@ -49,6 +56,7 @@ this backend.
 | ScanResponse | no | BlueZ merges scan-response payloads into the cumulative device properties; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 (this is exactly what the `bluer` migration unlocks) |
 | WatchAdvertisements | no | Web-only concept |
+| AdapterPowerControl | yes | BlueZ `org.bluez.Adapter1.Powered`, written through bluez-async `set_powered` |
 | SystemConnectedPeripherals | yes | The fork's BlueZ `retrieve_peripherals` lists connected devices whose `UUIDs` property matches any requested service; returned handles still need a local `connect()` before GATT |
 
 ## System-connected peripherals

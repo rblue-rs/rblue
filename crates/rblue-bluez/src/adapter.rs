@@ -48,6 +48,7 @@ const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
     .union(CapabilitySet::bit(Capability::BackgroundScan))
+    .union(CapabilitySet::bit(Capability::AdapterPowerControl))
     .union(CapabilitySet::bit(Capability::SystemConnectedPeripherals));
 
 /// Registry entry for one device ever sighted by this adapter. Lives until
@@ -538,6 +539,31 @@ impl Adapter for BluezAdapter {
         self.resolve_state(map_central_state(state))
     }
 
+    async fn state(&self) -> Result<AdapterState, Error> {
+        if let Ok(adapter) = self.initialized_adapter().await {
+            let state = adapter.adapter_state().await.map_err(map_btleplug_error)?;
+            return Ok(map_central_state(state));
+        }
+        query_bluez_state().await
+    }
+
+    async fn set_powered(&self, powered: bool) -> Result<(), Error> {
+        set_bluez_powered(powered).await?;
+        // When the event pump is running, BlueZ `Powered` changes already
+        // arrive as `StateChanged`. Publish here only before initialize so
+        // callers who toggle first still see the transition.
+        if self.shared.initialized.lock().await.is_none() {
+            self.shared
+                .events
+                .publish(AdapterEvent::StateChanged(if powered {
+                    AdapterState::PoweredOn
+                } else {
+                    AdapterState::PoweredOff
+                }));
+        }
+        Ok(())
+    }
+
     async fn start_scan(&self, filter: &ScanFilter) -> Result<(), Error> {
         let adapter = self.initialized_adapter().await?;
         // Record the filter before the platform call so the event pump never
@@ -672,5 +698,85 @@ impl Adapter for BluezAdapter {
             platform: PLATFORM,
             feature: "request_device",
         })
+    }
+}
+
+async fn query_bluez_state() -> Result<AdapterState, Error> {
+    with_bluez_session(|session| async move {
+        let adapters = session
+            .get_adapters()
+            .await
+            .map_err(map_bluez_async_error)?;
+        let adapter = adapters.into_iter().next().ok_or(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "adapter",
+        })?;
+        Ok(if adapter.powered {
+            AdapterState::PoweredOn
+        } else {
+            AdapterState::PoweredOff
+        })
+    })
+    .await
+}
+
+async fn set_bluez_powered(powered: bool) -> Result<(), Error> {
+    with_bluez_session(|session| async move {
+        let adapters = session
+            .get_adapters()
+            .await
+            .map_err(map_bluez_async_error)?;
+        let adapter = adapters.into_iter().next().ok_or(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "adapter",
+        })?;
+        session
+            .set_powered(&adapter.id, powered)
+            .await
+            .map_err(map_bluez_async_error)
+    })
+    .await
+}
+
+async fn with_bluez_session<T, F, Fut>(f: F) -> Result<T, Error>
+where
+    F: FnOnce(bluez_async::BluetoothSession) -> Fut,
+    Fut: std::future::Future<Output = Result<T, Error>>,
+{
+    let (_handle, session) = bluez_async::BluetoothSession::new()
+        .await
+        .map_err(map_bluez_async_error)?;
+    f(session).await
+}
+
+fn map_bluez_async_error(error: bluez_async::BluetoothError) -> Error {
+    match error {
+        bluez_async::BluetoothError::NoBluetoothAdapters => Error::Unsupported {
+            platform: PLATFORM,
+            feature: "adapter",
+        },
+        bluez_async::BluetoothError::DbusError(err) => {
+            let name = err.name().unwrap_or("");
+            let message = err.message().unwrap_or("").to_owned();
+            if name.contains("NotAuthorized")
+                || name.contains("AccessDenied")
+                || name.contains("NotPermitted")
+            {
+                Error::Permission(PermissionReason::Unauthorized)
+            } else {
+                Error::Platform {
+                    code: 0,
+                    message: if name.is_empty() {
+                        message
+                    } else {
+                        format!("{name}: {message}")
+                    },
+                }
+            }
+        }
+        other => Error::Platform {
+            code: 0,
+            message: other.to_string(),
+        },
     }
 }

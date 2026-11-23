@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:rblue_flutter/rblue_flutter.dart';
 
 import '../app_state.dart';
-import '../reconnect_policy.dart';
+import '../reconnect_policy.dart' as reconnect;
 import '../widgets/expressive_button.dart';
 import 'scan_page.dart' show MaterialBannerTile;
 
@@ -223,7 +223,7 @@ class _ReconnectPageState extends State<ReconnectPage> {
 /// retry with exponential backoff until the link is back.
 class ReconnectController {
   /// Reconnect policy: 500 ms ×2, 30-second cap, ±20% jitter.
-  static const policy = ReconnectPolicy();
+  static const policy = reconnect.ReconnectPolicy();
 
   ReconnectController({
     required this.client,

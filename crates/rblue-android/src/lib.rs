@@ -67,6 +67,8 @@ mod adapter;
 mod jni_shim;
 #[cfg(target_os = "android")]
 mod peripheral;
+#[cfg(target_os = "android")]
+mod radio;
 
 #[cfg(target_os = "android")]
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -114,6 +116,24 @@ pub fn init(env: &mut jni::Env<'_>) -> Result<(), Error> {
     btleplug::platform::init(env).map_err(crate::mapping::map_btleplug_error)?;
     JNI_INITIALIZED.store(true, Ordering::Release);
     Ok(())
+}
+
+/// JNI trampoline for `com.rblue.RblueNative.nativeInit()`.
+///
+/// Consuming cdylibs (`rblue-ffi`, `rblue-c`) define the `#[no_mangle]`
+/// symbol and call this so rustc exports it from the shared library.
+///
+/// # Safety
+///
+/// `env` must be a valid, non-null `JNIEnv*` for the current thread, which
+/// must be attached to the JVM for the duration of the call.
+/// `class` is the JNI class argument and is unused.
+#[cfg(target_os = "android")]
+pub unsafe fn native_init_from_raw(
+    env: *mut std::ffi::c_void,
+    class: *mut std::ffi::c_void,
+) -> bool {
+    unsafe { jni_shim::native_init_from_raw(env, class) }
 }
 
 /// Returns the system-default Android central wrapped in the unified

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use futures::stream::BoxStream;
 
 use crate::device::AdapterId;
-use crate::event::AdapterEvent;
+use crate::event::{AdapterEvent, AdapterState};
 use crate::peripheral::Peripheral;
 use crate::scan::{RequestDeviceOptions, ScanFilter};
 use crate::{CapabilitySet, DeviceId, Error};
@@ -76,6 +76,38 @@ pub trait Adapter: Send + Sync {
     /// [`Error::Unsupported`] when the platform has no Bluetooth support at
     /// all.
     async fn initialize(&self) -> Result<(), Error>;
+
+    /// Queries the current radio/permission state of this adapter.
+    ///
+    /// The method name is `state` (not `power_state`) because
+    /// [`AdapterState`] also includes `Unauthorized` / `Unavailable` /
+    /// `Unknown`. This query does not require
+    /// [`crate::Capability::AdapterPowerControl`]; that bit only covers
+    /// [`Adapter::set_powered`]. Live transitions continue to arrive as
+    /// [`AdapterEvent::StateChanged`].
+    ///
+    /// The default reports [`AdapterState::Unknown`]. Backends that can
+    /// read the radio or authorization state must override this.
+    async fn state(&self) -> Result<AdapterState, Error> {
+        Ok(AdapterState::Unknown)
+    }
+
+    /// Turns the adapter radio on (`true`) or off (`false`).
+    ///
+    /// Callers should check [`crate::Capability::AdapterPowerControl`] first.
+    /// Platforms with no programmatic switch, or whose OS refuses to let the
+    /// application toggle Bluetooth, omit the capability and return
+    /// [`Error::Unsupported`] with `feature: "set_powered"` (or
+    /// [`Error::Permission`] when that is a better fit). Successful
+    /// transitions are also delivered as [`AdapterEvent::StateChanged`].
+    ///
+    /// Do not use `turn_on` / `turn_off` as public names.
+    async fn set_powered(&self, _powered: bool) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: std::env::consts::OS,
+            feature: "set_powered",
+        })
+    }
 
     /// Starts scanning with `filter`.
     ///

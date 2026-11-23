@@ -44,11 +44,15 @@ probe, stay unchanged either way.
 ## Radio state
 
 The fork's Android adapter tracks no radio state: `adapter_state()` is a
-constant `CentralState::Unknown`, and no state events are emitted. The
-shell's `initialize()` therefore reports `AdapterState::Unknown` and
-**succeeds even on a powered-off radio** - the state is genuinely
-unresolvable through the fork. The first real operation reports the radio
-condition instead:
+constant `CentralState::Unknown`, and the fork emits no state events. The
+shell therefore queries `BluetoothAdapter.getState()` (and listens for
+`ACTION_STATE_CHANGED` once `RblueAndroid.initialize(context)` / the
+Flutter plugin has started `AdapterStateMonitor`) so `Adapter::state`
+and live `StateChanged` events report the real radio.
+
+`initialize()` still **succeeds when the radio is off**, so an app can
+open the adapter and then prompt the user to turn Bluetooth on. The first
+real operation can also report the radio condition:
 
 - `start_scan` with the radio off: `Error::Permission(BluetoothOff)`
   (`getBluetoothLeScanner()` returns null), or a permission denial
@@ -57,7 +61,10 @@ condition instead:
   `Error::NotConnected` (the fork swallows the attempt's status; see
   error-mapping.md).
 
-Live `StateChanged` events do not occur on this backend.
+`set_powered` returns `Error::Unsupported { feature: "set_powered" }` and
+`Capability::AdapterPowerControl` is not advertised: `BluetoothAdapter.enable`
+/ `disable` are deprecated and typically forbidden for ordinary apps on
+current Android versions.
 
 ## Capability matrix (plan section 2.3, Android column)
 
@@ -75,6 +82,7 @@ Live `StateChanged` events do not occur on this backend.
 | ScanResponse | no | Android merges advertisement and scan response into one `ScanRecord`; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| AdapterPowerControl | no | `BluetoothAdapter.enable`/`disable` are deprecated and typically rejected for non-system apps; `set_powered` returns `Error::Unsupported` |
 | SystemConnectedPeripherals | yes | Shell-side `BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)`, filtered by cached `BluetoothDevice.getUuids()`. See "System-connected peripherals" below |
 
 ## System-connected peripherals

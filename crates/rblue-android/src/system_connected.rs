@@ -55,16 +55,16 @@ pub(crate) fn query_gatt_connected() -> Result<Vec<SystemConnectedDevice>, rblue
 
     let vm = jni::JavaVM::singleton()
         .map_err(|err| Error::Backend(format!("android system-connected: no Java VM: {err}")))?;
-    vm.attach_current_thread(
-        |env| match query_gatt_connected_with_env(env, GATT_PROFILE) {
+    vm.attach_current_thread(|env| {
+        Ok::<_, jni::errors::Error>(match query_gatt_connected_with_env(env, GATT_PROFILE) {
             Ok(devices) => Ok(devices),
             Err(QueryError::Permission) => Err(Error::Permission(
                 PermissionReason::BluetoothPermissionDenied,
             )),
             Err(QueryError::BluetoothOff) => Err(Error::Permission(PermissionReason::BluetoothOff)),
             Err(QueryError::Failed(message)) => Err(Error::Backend(message)),
-        },
-    )
+        })
+    })
     .map_err(|err| Error::Backend(format!("android system-connected: JNI attach: {err}")))?
 }
 
@@ -80,7 +80,7 @@ fn query_gatt_connected_with_env(
     env: &mut jni::Env<'_>,
     profile: i32,
 ) -> Result<Vec<SystemConnectedDevice>, QueryError> {
-    use jni::objects::{JObject, JObjectArray, JString, JValue};
+    use jni::objects::JValue;
     use jni::{jni_sig, jni_str};
 
     let context = match env.call_static_method(
@@ -186,7 +186,6 @@ fn read_bluetooth_device(
     env: &mut jni::Env<'_>,
     device: &jni::objects::JObject<'_>,
 ) -> Result<Option<SystemConnectedDevice>, QueryError> {
-    use jni::objects::{JObjectArray, JString};
     use jni::{jni_sig, jni_str};
 
     let address = match env.call_method(
@@ -340,8 +339,8 @@ fn jstring_to_string(
 fn map_java_exception(env: &mut jni::Env<'_>, what: &str) -> QueryError {
     use jni::jni_str;
     let occurred = env.exception_occurred();
-    let _ = env.exception_clear();
-    let Ok(exception) = occurred else {
+    env.exception_clear();
+    let Some(exception) = occurred else {
         return QueryError::Failed(format!("{what}: Java exception"));
     };
     if exception.is_null() {

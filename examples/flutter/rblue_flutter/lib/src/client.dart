@@ -32,6 +32,7 @@ class RblueClient {
   final _pending = <int, Completer<RawResponse>>{};
   final _events = StreamController<AdapterEvent>.broadcast();
   final _notifications = StreamController<DeviceNotification>.broadcast();
+  final _supervisorEvents = StreamController<SupervisorEvent>.broadcast();
   var _nextReqId = 1;
   var _disposed = false;
 
@@ -71,13 +72,19 @@ class RblueClient {
   /// characteristics of connected devices.
   Stream<DeviceNotification> get notifications => _notifications.stream;
 
+  /// Broadcast stream of application-level supervisor events (reconnect
+  /// scheduled, breaker open, ...). Distinct from [events] and from the
+  /// platform `auto_connect` flag on [connect].
+  Stream<SupervisorEvent> get supervisorEvents => _supervisorEvents.stream;
+
   /// Backend version string, for the platform page and smoke checks.
   Future<String> backendVersion() => _request(
     'backend_version',
     decode: (payload) => jsonDecode(utf8.decode(payload))! as String,
   );
 
-  /// Backend capability bitmask, using the rblue Capability bit positions.
+  /// Backend capability bitmask, using the [Capability] bit positions
+  /// (`u32` on the Rust side).
   Future<int> capabilities() => _request('capabilities', decode: _decodeInt);
 
   /// Reads the connected device RSSI when supported by the backend.
@@ -107,6 +114,23 @@ class RblueClient {
 
   /// Opens the adapter; on some platforms the permission prompt happens here.
   Future<void> initialize() => _request('initialize', decode: _noPayload);
+
+  /// Queries the current radio/permission state of the adapter.
+  ///
+  /// This does not require [Capability.adapterPowerControl]; that bit only
+  /// covers [setPowered]. Live transitions arrive as [AdapterStateChanged].
+  Future<AdapterState> state() => _request(
+    'state',
+    decode: (payload) =>
+        AdapterState.fromJson(jsonDecode(utf8.decode(payload))! as String),
+  );
+
+  /// Turns the adapter radio on (`true`) or off (`false`).
+  ///
+  /// Check [Capability.adapterPowerControl] first. Platforms that cannot
+  /// honor the request return `Unsupported` with `feature: set_powered`.
+  Future<void> setPowered({required bool powered}) =>
+      _request('set_powered', params: {'powered': powered}, decode: _noPayload);
 
   /// Starts scanning with [filter] (defaults to the unfiltered scan).
   /// Discoveries arrive on [events].
@@ -145,8 +169,41 @@ class RblueClient {
 
   /// Connects to the device. Resolves when the link is up; run
   /// [discoverServices] next.
-  Future<void> connect(DeviceId device) =>
-      _request('connect', params: {'device': device.json}, decode: _noPayload);
+  ///
+  /// [autoConnect] is the platform/stack background-connection flag
+  /// (`ConnectOptions.auto_connect`). Check [Capability.autoConnect] first;
+  /// backends without that capability return `Unsupported`. This is not
+  /// [RblueClient.autoConnect], which enables the reconnect supervisor.
+  ///
+  /// [mtu] is reserved for a connect-time ATT MTU request; backends that
+  /// do not implement it return `Unsupported` with feature `request_mtu`.
+  Future<void> connect(DeviceId device, {bool autoConnect = false, int? mtu}) =>
+      _request(
+        'connect',
+        params: {
+          'device': device.json,
+          'auto_connect': autoConnect,
+          'mtu': ?mtu,
+        },
+        decode: _noPayload,
+      );
+
+  /// Enables the application-level reconnect supervisor for [device]
+  /// (`SupervisorHandle::auto_connect`). Optional [policy] uses the
+  /// `*_ms` serde shape of [ReconnectPolicy].
+  ///
+  /// This is not the platform `auto_connect` flag on [connect].
+  Future<void> autoConnect(DeviceId device, {ReconnectPolicy? policy}) =>
+      _request(
+        'auto_connect',
+        params: {'device': device.json, 'policy': ?policy?.toJson()},
+        decode: _noPayload,
+      );
+
+  /// Stops supervising [device] (`SupervisorHandle::unwatch`). Idempotent
+  /// if the supervisor was never started.
+  Future<void> unwatch(DeviceId device) =>
+      _request('unwatch', params: {'device': device.json}, decode: _noPayload);
 
   /// Disconnects the device. Idempotent. Subscriptions of the device are
   /// dropped; subscribe again after reconnecting.
@@ -176,17 +233,21 @@ class RblueClient {
       );
 
   /// Writes [data] to the characteristic. Oversize payloads fail with
-  /// [RblueErrorKind.invalidLength] - never truncated, never chunked.
+  /// [RblueErrorKind.invalidLength] - never truncated, never chunked -
+  /// unless [allowLongWrite] is true, in which case the payload is written
+  /// as sequential MTU-sized chunks (`WriteOptions.allow_long_write`).
   Future<void> write(
     DeviceId device,
     CharacteristicId characteristic,
     List<int> data, {
     WriteMode mode = WriteMode.withResponse,
+    bool allowLongWrite = false,
   }) => _request(
     'write',
     params: {
       ..._characteristicParams(device, characteristic),
       'mode': mode.toJson(),
+      'allow_long_write': allowLongWrite,
     },
     payload: data,
     decode: _noPayload,
@@ -231,6 +292,7 @@ class RblueClient {
     _bridge.dispose(_handle);
     _events.close();
     _notifications.close();
+    _supervisorEvents.close();
   }
 
   /// The per-request timeout; generous because real hardware is slow, short
@@ -317,6 +379,8 @@ class RblueClient {
           _events.add(AdapterEvent.fromJson(envelope['event']!));
         case 'notification':
           _notifications.add(DeviceNotification.fromJson(envelope));
+        case 'supervisor_event':
+          _supervisorEvents.add(SupervisorEvent.fromJson(envelope['event']!));
         case _:
           _reportContractError('unknown event type: $eventJson');
       }

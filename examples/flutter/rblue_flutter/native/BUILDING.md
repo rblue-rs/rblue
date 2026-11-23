@@ -8,17 +8,43 @@ the package.
 ## Source provenance
 
 - Upstream repository: <https://github.com/rblue-rs/rblue>
-- Upstream base revision: `70d89cbbc3a6fb552035bb492da64fd7114cb0ea`
-- The `0.0.1-dev.2` source snapshot additionally contains the callback
-  shutdown/drain ABI used by this package. The complete package-local snapshot,
-  rather than an external working tree, is the authoritative rebuild input.
+- Rebuild source commit: `4d8b356ae47cf5bc2d6f6c6a6f9bca12bbeed80a`
+- Package-local source Git tree: `9d46425e979fea71554df771b7f21263224e7469`
+- All seven binaries were rebuilt from that self-contained snapshot in
+  [hosted rebuild run 45165332315](https://github.com/rblue-rs/rblue/actions/runs/45165332315).
+  No external working tree or old packaged binary was used as a build input.
 - Pinned btleplug fork revision:
   `1af8299c291f24fca68dfb6b7ef1b5c0475892e1`
-- Rust compiler used: `rustc 1.96.0 (ac68faa20 2026-05-25)`
-- Cargo used: `cargo 1.96.0 (30a34c682 2026-05-25)`
-- Android NDK used: `28.2.13676358`; link API: 24
-- Xcode used for Apple targets: 27.1 (build 27A9275)
-- Windows artifact built for `x86_64-pc-windows-msvc` with `cargo-xwin 0.20.2`
+- Rust compiler: `rustc 1.100.0 (0ef1bc386 2026-11-09)`
+- Cargo: `cargo 1.100.0 (3acc79c0c 2026-11-05)`
+- Android NDK: `30.0.16248370` (r30); link API: 24
+- Apple Xcode: 26.6 (build 17F113)
+- Windows: native `x86_64-pc-windows-msvc`, using the MSVC tools from
+  Visual Studio Enterprise 2026, installation `18.12.12405.243` (18.12.0).
+  The hosted record captures the Visual Studio installation, not a separate
+  `cl.exe` patch version; this rebuild did not use `cargo-xwin`.
+
+`provenance/android.json`, `provenance/apple.json`, and
+`provenance/windows.json` retain the source commit/tree, all 59 source-file
+SHA-256 values, build-input identities, actual host/toolchain records, run URL,
+and seven output checksums. They were recorded by the rebuild jobs themselves.
+Android and Apple checkouts use canonical LF bytes. The Windows checkout used
+Git's CRLF conversion: its 59 recorded source hashes match the exact bytes
+produced by `git -c core.autocrlf=true cat-file --filters HEAD:<path>` for the
+same committed source tree. The validator checks those Git clean/smudge rules
+and each current source blob identity; it does not ignore arbitrary source edits
+or relax binary checksums.
+
+The optional `rebuild_native` workflow-dispatch input on the CI repair branch
+runs only standard hosted Ubuntu/macOS/Windows runners. It records allowlisted
+native binaries and provenance with non-force Git commits, without Actions
+artifact/cache storage, releases, or package publishing. Normal CI is read-only.
+After a rebuild, update this checksum table and run both validators:
+
+```bash
+python3 examples/flutter/tools/verify-native-artifacts.py
+bash examples/flutter/tools/check-snapshot-sync.sh
+```
 
 `source/` is a release-focused workspace containing the exact implementation
 crates needed by the four declared Flutter platforms plus their frozen lockfile.
@@ -136,20 +162,20 @@ Copy-Item source/target/x86_64-pc-windows-msvc/release/rblue_c.dll `
 ```
 
 On macOS/Linux, install `cargo-xwin` and replace `cargo build` with
-`cargo xwin build`. The packaged DLL was produced directly from this snapshot.
+`cargo xwin build`. The packaged DLL was built natively from this snapshot on the hosted MSVC runner.
 
-## Published checksums
+## Packaged checksums
 
 SHA-256:
 
 ```text
-cd0e4d09eb3a6f9b923da59f160989339b8c1dec6bcdfc86fe182e205d0a02c2  android/src/main/jniLibs/arm64-v8a/librblue_c.so
-2afe0912f93c44bab44d110575b0f1316c32e527829fdacef9f76138b3991d65  android/src/main/jniLibs/armeabi-v7a/librblue_c.so
-58ad549b75d8b72adcb7f1bb0e19114118e305059ab23d7041fd54c97a705aa0  android/src/main/jniLibs/x86_64/librblue_c.so
-0b9a197027903a2d007dc04d7ec204350af4e0fb8daada61557fd11e8043f71d  ios/rblue_flutter/RblueC.xcframework/ios-arm64/librblue_c.a
-c95aef6f0ce0978e56c0e963dccc88b3c17b6eca09f19bf31c40473d167c4a47  ios/rblue_flutter/RblueC.xcframework/ios-arm64-simulator/librblue_c.a
-09910968887d3f342dcddc79e286a0fdcb31c2739dc8664945a3b61a6624a033  macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a
-906b8765a302472a98764c200d63413b72a3b51e2ce2eaad35f743a9abde7421  windows/x64/rblue_c.dll
+01a06021c07398d116073dd02ca659d8a75ced82d43f4d275ce992ee664e13e9  android/src/main/jniLibs/arm64-v8a/librblue_c.so
+f938c79a3707556c9ef1d43352b7e86883cad874e549102501c93830f8c785f9  android/src/main/jniLibs/armeabi-v7a/librblue_c.so
+96ef6bd9d8b07c27033450a6ca4a136bc5e409cdc72975d11916d4f4d67008fd  android/src/main/jniLibs/x86_64/librblue_c.so
+96381f2d7049775100348a1adc2e60a4b418c7feaeee747924eea82aecf84f9c  ios/rblue_flutter/RblueC.xcframework/ios-arm64/librblue_c.a
+339e4e4a6bb132c692a696180cd1e7dc952180ee6708146e9df5ea99556c01c9  ios/rblue_flutter/RblueC.xcframework/ios-arm64-simulator/librblue_c.a
+5711f97f3d949b47770c681baa40d806b8b597a9160a50294dd8e57503c3c639  macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a
+740a65ea2551b539ddd5f7296e8899449e9de3da6302316caf1a401945ab8e2a  windows/x64/rblue_c.dll
 ```
 
 Every artifact must expose these nine public ABI symbols (Apple prepends `_`):

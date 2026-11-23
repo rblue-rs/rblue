@@ -97,6 +97,8 @@ impl AdapterShared {
 #[derive(Debug)]
 struct AdapterInner {
     initialized: bool,
+    /// Current radio/permission state of the simulated adapter.
+    radio: AdapterState,
     scanning: bool,
     filter: Option<ScanFilter>,
     /// Every registered device in registration order, visible or not.
@@ -148,6 +150,7 @@ impl MockAdapter {
                 events: BroadcastHub::default(),
                 state: Mutex::new(AdapterInner {
                     initialized: false,
+                    radio: AdapterState::Unknown,
                     scanning: false,
                     filter: None,
                     environment: Vec::new(),
@@ -224,8 +227,31 @@ impl Adapter for MockAdapter {
         let mut state = self.shared.lock();
         if !state.initialized {
             state.initialized = true;
+            state.radio = AdapterState::PoweredOn;
             self.shared
                 .publish(AdapterEvent::StateChanged(AdapterState::PoweredOn));
+        }
+        Ok(())
+    }
+
+    async fn state(&self) -> Result<AdapterState, Error> {
+        Ok(self.shared.lock().radio)
+    }
+
+    async fn set_powered(&self, powered: bool) -> Result<(), Error> {
+        let next = if powered {
+            AdapterState::PoweredOn
+        } else {
+            AdapterState::PoweredOff
+        };
+        let previous = {
+            let mut state = self.shared.lock();
+            let previous = state.radio;
+            state.radio = next;
+            previous
+        };
+        if previous != next {
+            self.shared.publish(AdapterEvent::StateChanged(next));
         }
         Ok(())
     }
@@ -402,6 +428,9 @@ mod tests {
         assert!(adapter
             .capabilities()
             .has(Capability::SystemConnectedPeripherals));
+        assert!(adapter
+            .capabilities()
+            .has(rblue_api::Capability::AdapterPowerControl));
     }
 
     #[tokio::test]
@@ -463,6 +492,55 @@ mod tests {
             .await
             .expect("lookup");
         assert!(found.is_empty());
+    }
+
+    #[tokio::test]
+    async fn state_is_unknown_until_initialize_powers_on() {
+        let adapter = MockAdapter::new();
+        assert_eq!(adapter.state().await.expect("state"), AdapterState::Unknown);
+        adapter.initialize().await.expect("initialize");
+        assert_eq!(
+            adapter.state().await.expect("state"),
+            AdapterState::PoweredOn
+        );
+    }
+
+    #[tokio::test]
+    async fn set_powered_toggles_state_and_emits_state_changed() {
+        let adapter = MockAdapter::new();
+        let mut events = adapter.events();
+        adapter.initialize().await.expect("initialize");
+        match events.next().await {
+            Some(AdapterEvent::StateChanged(AdapterState::PoweredOn)) => {}
+            other => panic!("expected initialize StateChanged(PoweredOn), got {other:?}"),
+        }
+
+        adapter.set_powered(false).await.expect("power off");
+        assert_eq!(
+            adapter.state().await.expect("state"),
+            AdapterState::PoweredOff
+        );
+        match events.next().await {
+            Some(AdapterEvent::StateChanged(AdapterState::PoweredOff)) => {}
+            other => panic!("expected StateChanged(PoweredOff), got {other:?}"),
+        }
+
+        adapter.set_powered(true).await.expect("power on");
+        assert_eq!(
+            adapter.state().await.expect("state"),
+            AdapterState::PoweredOn
+        );
+        match events.next().await {
+            Some(AdapterEvent::StateChanged(AdapterState::PoweredOn)) => {}
+            other => panic!("expected StateChanged(PoweredOn), got {other:?}"),
+        }
+
+        // Already in the requested state: success, no extra event.
+        adapter.set_powered(true).await.expect("idempotent");
+        assert_eq!(
+            adapter.state().await.expect("state"),
+            AdapterState::PoweredOn
+        );
     }
 
     #[tokio::test]

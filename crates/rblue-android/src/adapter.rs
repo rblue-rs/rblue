@@ -10,9 +10,12 @@
 //! BlueZ shell there are no handle swaps to track.
 //!
 //! The fork tracks no radio state (`adapter_state` is a constant
-//! `CentralState::Unknown`), so `initialize` cannot fail on a powered-off
-//! radio - the first real operation reports it (see
-//! `docs/platform-notes.md`).
+//! `CentralState::Unknown`). The shell queries `BluetoothAdapter.getState()`
+//! and listens for `ACTION_STATE_CHANGED` so `state()` and live
+//! `StateChanged` events report the real radio. `initialize` still
+//! succeeds when the radio is off (the first real operation can also report
+//! it). `set_powered` is `Unsupported`: ordinary apps cannot reliably
+//! enable or disable Bluetooth on modern Android.
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -444,14 +447,19 @@ pub(crate) struct AndroidAdapter {
 
 impl AndroidAdapter {
     pub(crate) fn new() -> Self {
-        Self {
-            shared: Arc::new(AdapterShared {
-                adapter_id: AdapterId::default_adapter(),
-                state: Mutex::new(AdapterInner::default()),
-                events: EventHub::default(),
-                initialized: AsyncMutex::new(None),
-            }),
-        }
+        let shared = Arc::new(AdapterShared {
+            adapter_id: AdapterId::default_adapter(),
+            state: Mutex::new(AdapterInner::default()),
+            events: EventHub::default(),
+            initialized: AsyncMutex::new(None),
+        });
+        let weak = Arc::downgrade(&shared);
+        crate::radio::register_publisher(move |event| {
+            if let Some(shared) = weak.upgrade() {
+                shared.events.publish(event);
+            }
+        });
+        Self { shared }
     }
 
     /// The btleplug adapter handle, once [`Adapter::initialize`] fetched it
@@ -469,19 +477,23 @@ impl AndroidAdapter {
             .events
             .publish(AdapterEvent::StateChanged(state));
         match state {
-            // The fork's Android adapter tracks no radio state and always
-            // reports `Unknown` ("not tracked", not "off"): initialize
-            // cannot fail on a powered-off radio - the first real operation
-            // reports it (scan: `Permission(BluetoothOff)` or a
-            // `Permission` denial from the SecurityException text, connect:
-            // `Permission(BluetoothPermissionDenied)`).
-            AdapterState::PoweredOn | AdapterState::Unknown => Ok(()),
-            AdapterState::PoweredOff => Err(Error::Permission(PermissionReason::BluetoothOff)),
+            // Initialize stays successful when the radio is off: Android
+            // apps commonly open the adapter, then prompt the user to turn
+            // Bluetooth on. Scan/connect still report the radio condition.
+            AdapterState::PoweredOn | AdapterState::Unknown | AdapterState::PoweredOff => Ok(()),
             AdapterState::Unauthorized => Err(Error::Permission(PermissionReason::Unauthorized)),
             AdapterState::Unavailable => Err(Error::Unsupported {
                 platform: PLATFORM,
                 feature: "adapter",
             }),
+        }
+    }
+
+    /// Prefers a JNI / broadcast reading over the fork's constant `Unknown`.
+    fn resolved_radio_state(&self, fork_state: AdapterState) -> AdapterState {
+        match crate::radio::current_state() {
+            AdapterState::Unknown => fork_state,
+            state => state,
         }
     }
 
@@ -513,8 +525,6 @@ impl AndroidAdapter {
     }
 }
 
-#[async_trait::async_trait]
-
 /// Constructs a fork peripheral for `address`. droidplug's `PeripheralId`
 /// field is `pub(super)`, so the shell rebuilds the id through the type's
 /// serde representation (the colon-delimited MAC string).
@@ -538,6 +548,7 @@ fn peripheral_id_from_mac(address: [u8; 6]) -> Result<btleplug::platform::Periph
         .map_err(|err| Error::Backend(format!("android peripheral id: {err}")))
 }
 
+#[async_trait::async_trait]
 impl Adapter for AndroidAdapter {
     fn id(&self) -> &AdapterId {
         &self.shared.adapter_id
@@ -551,14 +562,16 @@ impl Adapter for AndroidAdapter {
         let mut initialized = self.shared.initialized.lock().await;
         if let Some(adapter) = initialized.as_ref() {
             // Opens or wakes the adapter: a repeated call re-reports the
-            // (fork-constant) radio state.
+            // current radio state (JNI / last broadcast, not the fork
+            // constant).
             let state = adapter.adapter_state().await.map_err(map_btleplug_error)?;
-            return self.resolve_state(map_central_state(state));
+            return self.resolve_state(self.resolved_radio_state(map_central_state(state)));
         }
         // Subscribe to the event stream before anything can publish into
         // it. No Bluetooth operation happens here: the fork's adapter
         // object was created during `init` (from the application thread
-        // with the visible ClassLoader), and `adapter_state` is a constant.
+        // with the visible ClassLoader). Radio state is read from
+        // BluetoothAdapter, not the fork's constant `Unknown`.
         let adapter = Self::platform_adapter().await?;
         let events = adapter.events().await.map_err(map_btleplug_error)?;
         let state = adapter.adapter_state().await.map_err(map_btleplug_error)?;
@@ -568,7 +581,18 @@ impl Adapter for AndroidAdapter {
             events,
         ));
         *initialized = Some(adapter);
-        self.resolve_state(map_central_state(state))
+        self.resolve_state(self.resolved_radio_state(map_central_state(state)))
+    }
+
+    async fn state(&self) -> Result<AdapterState, Error> {
+        Ok(crate::radio::current_state())
+    }
+
+    async fn set_powered(&self, _powered: bool) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "set_powered",
+        })
     }
 
     async fn start_scan(&self, filter: &ScanFilter) -> Result<(), Error> {
