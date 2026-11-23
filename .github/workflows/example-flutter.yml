@@ -46,7 +46,9 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: false
       - uses: dtolnay/rust-toolchain@stable
-      - name: Verify committed native artifact checksums
+      - name: Verify native provenance validator regression tests
+        run: python3 -m unittest discover -s examples/flutter/tools -p 'test_*native*.py'
+      - name: Verify committed native artifact checksums and source provenance
         run: python3 examples/flutter/tools/verify-native-artifacts.py
       - name: Verify native source snapshot matches workspace crates
         run: bash examples/flutter/tools/check-snapshot-sync.sh
