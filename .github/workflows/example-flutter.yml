@@ -8,6 +8,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      rebuild_native:
+        description: Record rebuilt native binaries on the CI repair branch (no artifact storage)
+        type: boolean
+        default: false
 permissions:
   contents: read
 
@@ -306,3 +311,65 @@ jobs:
           $dlls = Get-ChildItem "$env:EXAMPLE_DIR/build/windows" -Recurse -Filter rblue_c.dll
           if (-not $dlls) { throw "Flutter build did not install rblue_c.dll" }
           $dlls | ForEach-Object { Write-Host $_.FullName }
+
+  # Explicit opt-in maintenance only; ordinary CI never writes repository contents.
+  # Direct Git commits avoid metered Actions artifact storage entirely.
+  rebuild-native:
+    name: Record rebuilt native binaries (${{ matrix.platform }})
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.rebuild_native &&
+      github.repository == 'rblue-rs/rblue' &&
+      github.ref == 'refs/heads/ci/free-standard-hosted'
+    permissions:
+      contents: write
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    concurrency:
+      group: rblue-native-binary-recording
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+            targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          - platform: apple
+            os: macos-latest
+            targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-apple-darwin,x86_64-apple-darwin
+          - platform: windows
+            os: windows-latest
+            targets: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+      - name: Verify source snapshot and recorder safety tests
+        shell: bash
+        run: |
+          bash examples/flutter/tools/check-snapshot-sync.sh
+          python3 -m unittest discover -s examples/flutter/tools -p test_record_native_rebuild.py
+      - name: Rebuild Android libraries
+        if: matrix.platform == 'android'
+        shell: bash
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+          examples/flutter/tools/build-libs.sh --android-only
+      - name: Rebuild Apple libraries
+        if: matrix.platform == 'apple'
+        run: examples/flutter/tools/build-libs.sh --apple-only
+      - name: Rebuild Windows DLL and verify all nine exports
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./examples/flutter/tools/build-windows.ps1
+      - name: Record only native binaries and their source provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NATIVE_PLATFORM: ${{ matrix.platform }}
+        run: python3 examples/flutter/tools/record-native-rebuild.py "$NATIVE_PLATFORM"
