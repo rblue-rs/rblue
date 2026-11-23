@@ -1,6 +1,6 @@
 {
-  "source_commit": "ba801b5251198dfbb6f60bb14b87eaa76380e585",
-  "source_tree": "94c4ae67085a9349fb10acaa3738779deabf806d",
+  "source_commit": "c3802ca60eca0fef8384caade280e0bff6723e4d",
+  "source_tree": "89594bff03fe1b97eb67f0584e80bc6547f72c26",
   "source_files": {
     "Cargo.lock": "f858b189f329c3cb4f28c6d774f8eaa1ab229f29a8a51693d59fd0a1283b43ef",
     "Cargo.toml": "ad12ee0ff9fcef342b6796670ab7654c4967f0de8029cd3aab026a5ffb2e70b3",
@@ -17,7 +17,7 @@
     "crates/rblue-android/src/radio.rs": "44bb47d186e699f85ea0b3759279db96da51501dbe818212e3fdba7dcb22e6fb",
     "crates/rblue-android/src/system_connected.rs": "db8db3256964884a7e8d671f39d9d9a170fc93d25740fb61a17165b19731873c",
     "crates/rblue-api/Cargo.toml": "ac8ad408d26704a392b7e58c31095df726ecd37b28312127f5b61476515fb11b",
-    "crates/rblue-api/src/adapter.rs": "1e6f706eee6a001c4ee246b1fe8905573d51faf5af8c74b7de50a203f57d4f6c",
+    "crates/rblue-api/src/adapter.rs": "da8b143b41bb594779ce8bb82fc3a8bb00dc64ff752e3a4f22a1615967165916",
     "crates/rblue-api/src/cache.rs": "1949c34f2d57c1fd999b574e83a105a476229eba9d264e5c44dec5ba0bd778a2",
     "crates/rblue-api/src/capability.rs": "524c42d8385fa095b667345141e3d5baf61bc98fd831c4455e178dc89158ce3e",
     "crates/rblue-api/src/contract.rs": "221d5a5d9135ee65f8daa3c70f934f12209a76e726ee81cf9fa44a4ebcca2cef",
@@ -64,13 +64,13 @@
     "crates/rblue-winrt/src/peripheral.rs": "02cbdaed730582b42792ef0b691c647034b0822cfb416ec0ede4f3f03770a7d2"
   },
   "build_inputs": {
-    "examples/flutter/rblue_flutter/native/source": "94c4ae67085a9349fb10acaa3738779deabf806d",
+    "examples/flutter/rblue_flutter/native/source": "89594bff03fe1b97eb67f0584e80bc6547f72c26",
     "examples/flutter/rblue_flutter/native/include": "df90a5ac03b9783f892157110af1456e44ae1f9b",
     "examples/flutter/tools/build-libs.sh": "77136f22f08e357df924bdd62ab55d62b3db2dba",
     "examples/flutter/tools/build-windows.ps1": "e2325e5a09a8dafc404315af373dc736ef7182dd",
     "examples/flutter/tools/record-native-rebuild.py": "f30faf8953e235917c1a20dba4a1d30f024205cd"
   },
-  "workflow_run": "https://github.com/rblue-rs/rblue/actions/runs/45172049872",
+  "workflow_run": "https://github.com/rblue-rs/rblue/actions/runs/45174606229",
   "run_attempt": "1",
   "platform": "android",
   "host": "Linux-7.0.0-1020-azure-x86_64-with-glibc2.43",
