@@ -63,17 +63,15 @@ pub(crate) fn current_state() -> AdapterState {
 
 fn query_adapter_state() -> Result<i32, ()> {
     let vm = jni::JavaVM::singleton().map_err(|_| ())?;
-    vm.attach_current_thread(|env| {
+    vm.attach_current_thread(|env| -> Result<i32, jni::errors::Error> {
         let adapter = env
             .call_static_method(
                 jni::jni_str!("android/bluetooth/BluetoothAdapter"),
                 jni::jni_str!("getDefaultAdapter"),
                 jni::jni_sig!("()Landroid/bluetooth/BluetoothAdapter;"),
                 &[],
-            )
-            .map_err(|_| ())?
-            .l()
-            .map_err(|_| ())?;
+            )?
+            .l()?;
         if adapter.is_null() {
             return Ok(-2);
         }
@@ -83,13 +81,13 @@ fn query_adapter_state() -> Result<i32, ()> {
             jni::jni_sig!("()I"),
             &[],
         ) {
-            Ok(value) => value.i().map_err(|_| ()),
+            Ok(value) => value.i(),
             Err(jni::errors::Error::JavaException) => {
                 let _ = env.exception_occurred();
-                env.exception_clear().ok();
+                env.exception_clear();
                 Ok(-3)
             }
-            Err(_) => Err(()),
+            Err(error) => Err(error),
         }
     })
     .map_err(|_| ())

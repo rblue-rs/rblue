@@ -45,10 +45,13 @@ pub enum Capability {
     /// The OS permits background scanning (with whatever restrictions the
     /// platform documents).
     BackgroundScan,
+    /// Platform/stack background connection (e.g. Android
+    /// `connectGatt(autoConnect=true)`). This is not
+    /// [`crate::SupervisorHandle::auto_connect`], which is the
+    /// application-level reconnect supervisor.
+    AutoConnect = 13,
     /// Programmatic radio on/off ([`crate::Adapter::set_powered`]). Querying
-    /// [`crate::Adapter::state`] does not require this bit. Bit 13 is reserved
-    /// for `Capability::AutoConnect` (PR #23); this variant is pinned at 14 so
-    /// the two PRs can merge without colliding.
+    /// [`crate::Adapter::state`] does not require this bit.
     AdapterPowerControl = 14,
 }
 
@@ -91,6 +94,8 @@ bitflags::bitflags! {
         const REQUEST_DEVICE_PICKER = 1 << Capability::RequestDevicePicker as u32;
         /// See [`Capability::BackgroundScan`].
         const BACKGROUND_SCAN = 1 << Capability::BackgroundScan as u32;
+        /// See [`Capability::AutoConnect`].
+        const AUTO_CONNECT = 1 << Capability::AutoConnect as u32;
         /// See [`Capability::AdapterPowerControl`].
         const ADAPTER_POWER_CONTROL = 1 << Capability::AdapterPowerControl as u32;
     }
@@ -135,16 +140,14 @@ mod tests {
         // Widening the storage must not rotate previously published bits.
         assert_eq!(CapabilitySet::PASSIVE_SCAN.bits(), 1 << 0);
         assert_eq!(CapabilitySet::BACKGROUND_SCAN.bits(), 1 << 12);
-        // Bit 13 is reserved for AutoConnect in PR #23.
+        assert_eq!(CapabilitySet::AUTO_CONNECT.bits(), 1 << 13);
+        let _: u32 = CapabilitySet::all().bits();
+        assert!(CapabilitySet::all().has(Capability::AutoConnect));
+        assert!(!CapabilitySet::bit(Capability::GattClient).has(Capability::AutoConnect));
+        assert_eq!(Capability::AutoConnect as u32, 13);
         assert_eq!(Capability::AdapterPowerControl as u32, 14);
         assert_eq!(CapabilitySet::ADAPTER_POWER_CONTROL.bits(), 1 << 14);
-        let _: u32 = CapabilitySet::all().bits();
         assert!(CapabilitySet::all().has(Capability::AdapterPowerControl));
         assert!(!CapabilitySet::bit(Capability::GattClient).has(Capability::AdapterPowerControl));
-        assert_eq!(
-            CapabilitySet::all().bits() & (1 << 13),
-            0,
-            "bit 13 must stay free for AutoConnect"
-        );
     }
 }

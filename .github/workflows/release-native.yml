@@ -1,0 +1,96 @@
+name: Release native libraries
+
+# Never publish for a branch commit, PR, CI completion, or example tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: New semantic version tag (vX.Y.Z or vX.Y.Z-rc.N)
+        type: string
+        required: true
+      source_ref:
+        description: Full 40-character commit SHA already merged to main with green CI
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: native-release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      sha: ${{ steps.meta.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test release policy
+        run: python3 -m unittest discover -s tools/release -p 'test_*.py'
+      - name: Resolve immutable source and require successful CI
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_SOURCE: ${{ inputs.source_ref }}
+        run: python3 tools/release/release.py metadata
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      SOURCE_SHA: ${{ needs.validate.outputs.sha }}
+      EVENT_NAME: ${{ github.event_name }}
+    steps:
+      - name: Checkout workflow policy
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Checkout verified release inputs
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          path: source
+          persist-credentials: false
+      - name: Verify source, seven native libraries and hosted provenance; package locally
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release/release.py prepare
+      - name: Revalidate and create a new Release (never overwrite)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 tools/release/release.py guard
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$SOURCE_SHA"
+          fi
+          cat > release-notes.md <<EOF
+          Packaged rblue-c native libraries from commit $SOURCE_SHA.
+          Android (3 ABIs), iOS (device + simulator), macOS (universal), Windows x64, and source snapshot.
+          Each archive includes headers, build instructions and hosted rebuild provenance.
+          Verify downloads with SHA256SUMS.txt. No example app, pub.dev, crates.io or Pgyer deployment.
+          EOF
+          args=(--repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "$RELEASE_TAG" --notes-file release-notes.md)
+          [[ "${RELEASE_TAG%%+*}" == *-* ]] && args+=(--prerelease)
+          gh release create "$RELEASE_TAG" release-assets/* "${args[@]}"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false

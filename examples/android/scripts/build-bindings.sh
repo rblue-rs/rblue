@@ -119,8 +119,52 @@ build_abi() {
   [[ -f "$so" ]] || { echo "error: $so was not produced" >&2; exit 1; }
   local dest="$RBLUE_MODULE/src/$flavor/jniLibs/$abi"
   mkdir -p "$dest"
+  # Replace any previous file (including a symlink) so a later mock rebuild
+  # of the same target cannot clobber the real-backend copy in place.
+  rm -f "$dest/librblue_ffi.so"
   cp "$so" "$dest/librblue_ffi.so"
   echo "    installed $(basename "$so") -> ${dest#"$ROOT"/}"
+  if [[ "$flavor" == "real" && -x "$NM" ]]; then
+    if ! check_jni_export "$dest/librblue_ffi.so"; then
+      exit 1
+    fi
+  fi
+}
+
+# Fail if the JNI init entry is missing from a real-backend .so, and dump
+# the captured symbol table on miss. Capture nm output first: this script
+# runs under `set -o pipefail`, and `grep -q` closes the pipe early, which
+# makes llvm-nm exit 141 (SIGPIPE) when the symbol appears near the start
+# of the table (observed on aarch64 in CI even though the export was present).
+check_jni_export() {
+  local so="$1"
+  local symbol="Java_com_rblue_RblueNative_nativeInit"
+  if [[ ! -f "$so" ]]; then
+    echo "error: expected $so after the real backend build" >&2
+    return 1
+  fi
+  local nm_dyn=""
+  nm_dyn="$("$NM" -D --defined-only "$so" 2>&1)" || true
+  if grep -F -q -- "$symbol" <<<"$nm_dyn"; then
+    echo "    $symbol exported by ${so#"$ROOT"/}"
+    return 0
+  fi
+  echo "error: $symbol is not exported by $so" >&2
+  echo "       (the AAR would fail at RblueAndroid.initialize; see crates/rblue-android/src/jni_shim.rs)" >&2
+  echo "       llvm-nm -D --defined-only:" >&2
+  printf '%s\n' "$nm_dyn" >&2
+  echo "       llvm-nm --defined-only (grep $symbol / T):" >&2
+  local nm_all=""
+  nm_all="$("$NM" --defined-only "$so" 2>&1)" || true
+  printf '%s\n' "$nm_all" | grep -E "$symbol|[[:space:]]T[[:space:]]" | head -n 80 >&2 || true
+  local readelf="${NM%llvm-nm}llvm-readelf"
+  if [[ -x "$readelf" ]]; then
+    echo "       llvm-readelf --dyn-syms (grep $symbol):" >&2
+    local re_out=""
+    re_out="$("$readelf" --dyn-syms "$so" 2>&1)" || true
+    printf '%s\n' "$re_out" | grep -E "$symbol|File:|Symbol table" >&2 || true
+  fi
+  return 1
 }
 
 if [[ "$MODE" == "all" || "$MODE" == "real" ]]; then
@@ -130,15 +174,21 @@ if [[ "$MODE" == "all" || "$MODE" == "mock" ]]; then
   for abi in "${MOCK_ABIS[@]}"; do build_abi "$abi" mock; done
 fi
 
-# --- Sanity check: the JNI init entry must be in the real .so ----------------
-REAL_SO="$RBLUE_MODULE/src/real/jniLibs/arm64-v8a/librblue_ffi.so"
-if [[ -f "$REAL_SO" && -x "$NM" ]]; then
-  if ! "$NM" -D "$REAL_SO" | grep -q "Java_com_rblue_RblueNative_nativeInit"; then
-    echo "error: Java_com_rblue_RblueNative_nativeInit is not exported by $REAL_SO" >&2
-    echo "       (the AAR would fail at RblueAndroid.initialize; see crates/rblue-android/src/jni_shim.rs)" >&2
+# --- Sanity check: the JNI init entry must be in every real .so -------------
+# Individual real ABIs are already checked at install time; this pass
+# re-checks every copy after the mock builds so an in-place clobber
+# cannot slip through.
+if [[ "$MODE" == "all" || "$MODE" == "real" ]] && [[ -x "$NM" ]]; then
+  missing=0
+  for abi in "${REAL_ABIS[@]}"; do
+    if ! check_jni_export "$RBLUE_MODULE/src/real/jniLibs/$abi/librblue_ffi.so"; then
+      missing=1
+    fi
+  done
+  if [[ "$missing" -ne 0 ]]; then
     exit 1
   fi
-  echo "==> JNI init symbol present in librblue_ffi.so"
+  echo "==> JNI init symbol present in every real librblue_ffi.so"
 fi
 
 # --- UniFFI Kotlin bindings ---------------------------------------------------

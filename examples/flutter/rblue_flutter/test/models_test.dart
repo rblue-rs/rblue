@@ -245,9 +245,10 @@ void main() {
   });
 
   group('Capability', () {
-    test('keeps published bit positions and reserves bit 13', () {
+    test('published bits keep their positions after u32 widening', () {
       expect(Capability.passiveScan, 1 << 0);
       expect(Capability.backgroundScan, 1 << 12);
+      expect(Capability.autoConnect, 1 << 13);
       expect(Capability.adapterPowerControl, 1 << 14);
       expect(
         Capability.has(
@@ -260,6 +261,57 @@ void main() {
         Capability.has(Capability.gattClient, Capability.adapterPowerControl),
         isFalse,
       );
+      expect(
+        Capability.has(Capability.autoConnect, Capability.autoConnect),
+        isTrue,
+      );
+      expect(
+        Capability.has(Capability.gattClient, Capability.autoConnect),
+        isFalse,
+      );
+    });
+  });
+
+  group('ReconnectPolicy', () {
+    test('serializes durations as millisecond fields', () {
+      const policy = ReconnectPolicy(
+        initialBackoff: Duration(milliseconds: 10),
+        maxAttempts: 3,
+      );
+      expect(policy.toJson(), {'initial_backoff_ms': 10, 'max_attempts': 3});
+    });
+  });
+
+  group('SupervisorEvent', () {
+    test('parses connected and reconnect_scheduled shapes', () {
+      final connected =
+          SupervisorEvent.fromJson(const {
+                'connected': {
+                  'mac': [
+                    [2, 0, 0, 0, 0, 1],
+                    'random_static',
+                  ],
+                },
+              })
+              as SupervisorConnected;
+      expect(connected.id.display, contains('02:00:00:00:00:01'));
+
+      final scheduled =
+          SupervisorEvent.fromJson(const {
+                'reconnect_scheduled': {
+                  'id': {
+                    'mac': [
+                      [2, 0, 0, 0, 0, 1],
+                      'random_static',
+                    ],
+                  },
+                  'delay': 500,
+                  'attempt': 2,
+                },
+              })
+              as SupervisorReconnectScheduled;
+      expect(scheduled.delay, const Duration(milliseconds: 500));
+      expect(scheduled.attempt, 2);
     });
   });
 }
