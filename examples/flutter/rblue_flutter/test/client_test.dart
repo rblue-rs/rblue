@@ -322,7 +322,6 @@ void main() {
 
     client.dispose();
   });
-
 }
 
 CharacteristicId _characteristic() => CharacteristicId(
