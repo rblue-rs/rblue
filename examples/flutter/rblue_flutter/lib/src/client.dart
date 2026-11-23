@@ -162,7 +162,7 @@ class RblueClient {
         params: {
           'device': device.json,
           'auto_connect': autoConnect,
-          if (mtu != null) 'mtu': mtu,
+          'mtu': ?mtu,
         },
         decode: _noPayload,
       );
@@ -175,10 +175,7 @@ class RblueClient {
   Future<void> autoConnect(DeviceId device, {ReconnectPolicy? policy}) =>
       _request(
         'auto_connect',
-        params: {
-          'device': device.json,
-          if (policy != null) 'policy': policy.toJson(),
-        },
+        params: {'device': device.json, 'policy': ?policy?.toJson()},
         decode: _noPayload,
       );
 
