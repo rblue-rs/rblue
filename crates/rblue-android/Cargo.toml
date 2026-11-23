@@ -9,7 +9,7 @@ repository.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
-btleplug = { git = "https://github.com/rblue-rs/btleplug", rev = "983f3f1346bb1646281e0faf345a21c4a787833d" }
+btleplug = { git = "https://github.com/rblue-rs/btleplug", rev = "983f3f1346bb1646281e0faf345a21c4a787833d", features = ["serde"] }
 futures = { workspace = true }
 rblue-api = { workspace = true }
 # Minimal feature set so the crate also compiles on non-Android targets
@@ -25,3 +25,4 @@ uuid = { workspace = true }
 # exactly like inside the fork.
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.22"
+serde_json = { workspace = true }

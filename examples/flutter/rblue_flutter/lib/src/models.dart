@@ -774,6 +774,27 @@ class ServiceSet {
   }
 }
 
+/// Connection priority (`rblue_api::ConnectionPriority`).
+enum ConnectionPriority {
+  /// Lower power, higher latency (`CONNECTION_PRIORITY_LOW_POWER` on Android).
+  low('low'),
+
+  /// Default balance of throughput and power.
+  balanced('balanced'),
+
+  /// Higher throughput, lower latency; typically used temporarily for
+  /// bulk transfers.
+  high('high');
+
+  const ConnectionPriority(this.wire);
+
+  /// The serde form (snake_case variant name).
+  final String wire;
+
+  /// The serde form.
+  String toJson() => wire;
+}
+
 /// Write mode (`rblue_api::WriteMode`).
 enum WriteMode {
   /// Acknowledged, reliable (needs the WRITE property). The default.
@@ -963,6 +984,10 @@ abstract final class Capability {
   /// This is not [RblueClient.autoConnect], which is the reconnect supervisor.
   static const int autoConnect = 1 << 13;
 
+  /// Programmatic radio on/off (`Adapter::set_powered`). Querying
+  /// [RblueClient.state] does not require this bit.
+  static const int adapterPowerControl = 1 << 14;
+
   /// Returns whether [bits] includes [capability].
   static bool has(int bits, int capability) => (bits & capability) != 0;
 }
@@ -1021,18 +1046,15 @@ class ReconnectPolicy {
   /// The `*_ms` serde object sent as `auto_connect`'s `policy` field.
   Map<String, Object?> toJson() {
     return {
-      if (initialBackoff != null)
-        'initial_backoff_ms': initialBackoff!.inMilliseconds,
-      if (maxBackoff != null) 'max_backoff_ms': maxBackoff!.inMilliseconds,
-      if (multiplier != null) 'multiplier': multiplier,
-      if (jitterFraction != null) 'jitter_fraction': jitterFraction,
-      if (gatt133Backoff != null)
-        'gatt_133_backoff_ms': gatt133Backoff!.inMilliseconds,
+      'initial_backoff_ms': ?initialBackoff?.inMilliseconds,
+      'max_backoff_ms': ?maxBackoff?.inMilliseconds,
+      'multiplier': ?multiplier,
+      'jitter_fraction': ?jitterFraction,
+      'gatt_133_backoff_ms': ?gatt133Backoff?.inMilliseconds,
       if (_includeBreakerThreshold) 'breaker_threshold': breakerThreshold,
-      if (maxAttempts != null) 'max_attempts': maxAttempts,
-      if (reconnectOnLocalDisconnect != null)
-        'reconnect_on_local_disconnect': reconnectOnLocalDisconnect,
-      if (jitterSeed != null) 'jitter_seed': jitterSeed,
+      'max_attempts': ?maxAttempts,
+      'reconnect_on_local_disconnect': ?reconnectOnLocalDisconnect,
+      'jitter_seed': ?jitterSeed,
     };
   }
 }

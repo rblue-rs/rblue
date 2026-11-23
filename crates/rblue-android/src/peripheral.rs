@@ -18,15 +18,16 @@ use futures::stream::StreamExt;
 use rblue_api::device::DeviceId;
 use rblue_api::error::{AttError, Error};
 use rblue_api::gatt::{CharacteristicId, Notification, ServiceSet, WriteMode};
-use rblue_api::peripheral::{ConnectOptions, NotificationStream, Peripheral};
+use rblue_api::peripheral::{ConnectOptions, ConnectionPriority, NotificationStream, Peripheral};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::adapter::DeviceEntry;
 use crate::hub::broadcast_stream;
 use crate::mapping::{
-    att_invalid_handle, map_btleplug_error, max_write_len_from_mtu, notification_from,
-    properties_to_flags, service_set_from_btleplug, ATT_WRITE_NOT_PERMITTED, PLATFORM,
+    att_invalid_handle, connection_parameter_preset, map_btleplug_error, max_write_len_from_mtu,
+    notification_from, properties_to_flags, service_set_from_btleplug, ATT_WRITE_NOT_PERMITTED,
+    PLATFORM,
 };
 
 /// How long the notification forwarder waits before re-acquiring the fork's
@@ -330,6 +331,17 @@ impl Peripheral for AndroidPeripheral {
         rblue_api::reject_invalid_att_mtu(mtu)?;
         peripheral
             .request_mtu(mtu)
+            .await
+            .map_err(map_btleplug_error)
+    }
+
+    async fn set_connection_priority(&self, priority: ConnectionPriority) -> Result<(), Error> {
+        // `connected_handle` enforces NotConnected before the fork call.
+        // The fork maps Low/Balanced/High onto requestConnectionPriority
+        // CONNECTION_PRIORITY_LOW_POWER / BALANCED / HIGH.
+        let peripheral = self.entry.connected_handle().await?;
+        peripheral
+            .request_connection_parameters(connection_parameter_preset(priority))
             .await
             .map_err(map_btleplug_error)
     }

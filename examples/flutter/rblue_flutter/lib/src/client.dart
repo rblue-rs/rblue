@@ -125,6 +125,23 @@ class RblueClient {
   /// Opens the adapter; on some platforms the permission prompt happens here.
   Future<void> initialize() => _request('initialize', decode: _noPayload);
 
+  /// Queries the current radio/permission state of the adapter.
+  ///
+  /// This does not require [Capability.adapterPowerControl]; that bit only
+  /// covers [setPowered]. Live transitions arrive as [AdapterStateChanged].
+  Future<AdapterState> state() => _request(
+    'state',
+    decode: (payload) =>
+        AdapterState.fromJson(jsonDecode(utf8.decode(payload))! as String),
+  );
+
+  /// Turns the adapter radio on (`true`) or off (`false`).
+  ///
+  /// Check [Capability.adapterPowerControl] first. Platforms that cannot
+  /// honor the request return `Unsupported` with `feature: set_powered`.
+  Future<void> setPowered({required bool powered}) =>
+      _request('set_powered', params: {'powered': powered}, decode: _noPayload);
+
   /// Starts scanning with [filter] (defaults to the unfiltered scan).
   /// Discoveries arrive on [events].
   Future<void> startScan({ScanFilter? filter}) =>
@@ -136,8 +153,12 @@ class RblueClient {
   /// Snapshot of the devices known to the adapter.
   Future<List<PeripheralInfo>> peripherals() => _peripheralList('peripherals');
 
-  /// Finds BLE devices already connected to the system by GATT service UUID.
-  /// On iOS, call [connect] before discovering or reading GATT services.
+  /// Finds BLE devices already connected to the system that match any of
+  /// [services]. The list must be nonempty.
+  ///
+  /// Supported on Apple, Android, and Linux; other platforms return
+  /// `Unsupported`. On Android, devices whose system UUID cache is empty are
+  /// omitted. The caller must still [connect] locally before GATT operations.
   Future<List<PeripheralInfo>> systemConnectedPeripherals(
     List<String> services,
   ) => _peripheralList('system_connected_peripherals', {'services': services});
@@ -173,7 +194,7 @@ class RblueClient {
         params: {
           'device': device.json,
           'auto_connect': autoConnect,
-          if (mtu != null) 'mtu': mtu,
+          'mtu': ?mtu,
         },
         decode: _noPayload,
       );
@@ -186,10 +207,7 @@ class RblueClient {
   Future<void> autoConnect(DeviceId device, {ReconnectPolicy? policy}) =>
       _request(
         'auto_connect',
-        params: {
-          'device': device.json,
-          if (policy != null) 'policy': policy.toJson(),
-        },
+        params: {'device': device.json, 'policy': ?policy?.toJson()},
         decode: _noPayload,
       );
 
@@ -226,17 +244,21 @@ class RblueClient {
       );
 
   /// Writes [data] to the characteristic. Oversize payloads fail with
-  /// [RblueErrorKind.invalidLength] - never truncated, never chunked.
+  /// [RblueErrorKind.invalidLength] - never truncated, never chunked -
+  /// unless [allowLongWrite] is true, in which case the payload is written
+  /// as sequential MTU-sized chunks (`WriteOptions.allow_long_write`).
   Future<void> write(
     DeviceId device,
     CharacteristicId characteristic,
     List<int> data, {
     WriteMode mode = WriteMode.withResponse,
+    bool allowLongWrite = false,
   }) => _request(
     'write',
     params: {
       ..._characteristicParams(device, characteristic),
       'mode': mode.toJson(),
+      'allow_long_write': allowLongWrite,
     },
     payload: data,
     decode: _noPayload,
@@ -263,6 +285,19 @@ class RblueClient {
     'is_connected',
     params: {'device': device.json},
     decode: (payload) => jsonDecode(utf8.decode(payload))! as bool,
+  );
+
+  /// Requests a connection-priority update for [device].
+  ///
+  /// Supported on Android and Windows; other platforms return `Unsupported`.
+  /// The device must already be connected locally.
+  Future<void> setConnectionPriority(
+    DeviceId device,
+    ConnectionPriority priority,
+  ) => _request(
+    'set_connection_priority',
+    params: {'device': device.json, 'priority': priority.toJson()},
+    decode: _noPayload,
   );
 
   /// Stops native producers, fails pending requests, and closes the public

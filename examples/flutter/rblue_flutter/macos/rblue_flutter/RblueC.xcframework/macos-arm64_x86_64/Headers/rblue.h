@@ -41,7 +41,7 @@
  *   initialize         {}                              -> (empty)
  *   start_scan         ScanFilter JSON                 -> (empty)
  *   stop_scan          {}                              -> (empty)
- *   system_connected_peripherals {"services":[<UUID>,...]} -> [{ "id":..,"name":.. }] (CoreBluetooth)
+ *   system_connected_peripherals {"services":[<UUID>,...]} -> [{ "id":..,"name":.. }] (Apple, Android, Linux; Unsupported elsewhere)
  *   peripherals        {}                              -> [{"id":..,"name":..}]
  *   connect            {"device": <DeviceId>}          -> (empty)
  *   disconnect         {"device": <DeviceId>}          -> (empty)
@@ -54,6 +54,7 @@
  *   subscribe          {"device":..,"characteristic":..} -> (empty)
  *   unsubscribe        {"device":..,"characteristic":..} -> (empty)
  *   is_connected       {"device": <DeviceId>}          -> true|false
+ *   set_connection_priority {"device": <DeviceId>, "priority": "low"|"balanced"|"high"} -> (empty) (Android, Windows; Unsupported elsewhere)
  *
  * # Threading and ownership
  *

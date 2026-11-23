@@ -44,11 +44,15 @@ probe, stay unchanged either way.
 ## Radio state
 
 The fork's Android adapter tracks no radio state: `adapter_state()` is a
-constant `CentralState::Unknown`, and no state events are emitted. The
-shell's `initialize()` therefore reports `AdapterState::Unknown` and
-**succeeds even on a powered-off radio** - the state is genuinely
-unresolvable through the fork. The first real operation reports the radio
-condition instead:
+constant `CentralState::Unknown`, and the fork emits no state events. The
+shell therefore queries `BluetoothAdapter.getState()` (and listens for
+`ACTION_STATE_CHANGED` once `RblueAndroid.initialize(context)` / the
+Flutter plugin has started `AdapterStateMonitor`) so `Adapter::state`
+and live `StateChanged` events report the real radio.
+
+`initialize()` still **succeeds when the radio is off**, so an app can
+open the adapter and then prompt the user to turn Bluetooth on. The first
+real operation can also report the radio condition:
 
 - `start_scan` with the radio off: `Error::Permission(BluetoothOff)`
   (`getBluetoothLeScanner()` returns null), or a permission denial
@@ -57,7 +61,10 @@ condition instead:
   `Error::NotConnected` (the fork swallows the attempt's status; see
   error-mapping.md).
 
-Live `StateChanged` events do not occur on this backend.
+`set_powered` returns `Error::Unsupported { feature: "set_powered" }` and
+`Capability::AdapterPowerControl` is not advertised: `BluetoothAdapter.enable`
+/ `disable` are deprecated and typically forbidden for ordinary apps on
+current Android versions.
 
 ## Capability matrix (plan section 2.3, Android column)
 
@@ -75,6 +82,26 @@ Live `StateChanged` events do not occur on this backend.
 | ScanResponse | no | Android merges advertisement and scan response into one `ScanRecord`; payloads are not delivered separately |
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
+| ConnectionPriority | yes | `BluetoothGatt.requestConnectionPriority`: `Low` → `CONNECTION_PRIORITY_LOW_POWER`, `Balanced` → `BALANCED`, `High` → `HIGH`. This is a request; the controller may ignore it. Requires an established local connection (`Error::NotConnected` otherwise) |
+| AdapterPowerControl | no | `BluetoothAdapter.enable`/`disable` are deprecated and typically rejected for non-system apps; `set_powered` returns `Error::Unsupported` |
+| SystemConnectedPeripherals | yes | Shell-side `BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)`, filtered by cached `BluetoothDevice.getUuids()`. See "System-connected peripherals" below |
+
+## System-connected peripherals
+
+The fork does not implement `retrieve_peripherals`. The shell queries
+`BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)` over JNI
+(without editing the vendored fork Java), then asks the fork to
+`add_peripheral` for each match so the caller can `connect()` locally.
+The rblue session is not marked connected by the lookup itself.
+
+Service matching is strict: a connected device is returned only when
+`BluetoothDevice.getUuids()` is nonempty and intersects the requested
+list. That cache is populated from SDP/bond data and is often empty for
+devices that have never disclosed their GATT services to the system, so
+those devices are omitted rather than returned as false positives. API 31+
+requires the `BLUETOOTH_CONNECT` runtime permission; a denial surfaces as
+`Error::Permission(BluetoothPermissionDenied)`. An empty service list
+returns `Error::InvalidState`.
 
 ## Permissions matrix (write these into the app manifest)
 

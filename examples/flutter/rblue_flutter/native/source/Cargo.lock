@@ -112,7 +112,7 @@ dependencies = [
 [[package]]
 name = "btleplug"
 version = "0.13.5"
-source = "git+https://github.com/rblue-rs/btleplug?rev=1af8299c291f24fca68dfb6b7ef1b5c0475892e1#1af8299c291f24fca68dfb6b7ef1b5c0475892e1"
+source = "git+https://github.com/rblue-rs/btleplug?rev=983f3f1346bb1646281e0faf345a21c4a787833d#983f3f1346bb1646281e0faf345a21c4a787833d"
 dependencies = [
  "async-trait",
  "bitflags",
@@ -126,6 +126,8 @@ dependencies = [
  "objc2-core-bluetooth",
  "objc2-foundation",
  "once_cell",
+ "serde",
+ "serde_bytes",
  "static_assertions",
  "thiserror",
  "tokio",
@@ -740,6 +742,7 @@ dependencies = [
  "futures",
  "jni",
  "rblue-api",
+ "serde_json",
  "tokio",
  "tracing",
  "uuid",
@@ -918,6 +921,16 @@ dependencies = [
  "serde",
  "thiserror",
  "xml",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

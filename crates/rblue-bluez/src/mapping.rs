@@ -40,7 +40,6 @@ pub(crate) const ATT_WRITE_NOT_PERMITTED: u8 = 0x03;
 pub(crate) const ATT_ATTRIBUTE_NOT_FOUND: u8 = 0x0A;
 
 /// `org.bluez.Error.*` names with a unified equivalent (BlueZ `src/error.c`).
-const BLUEZ_PREFIX: &str = "org.bluez.Error.";
 const BLUEZ_NOT_CONNECTED: &str = "org.bluez.Error.NotConnected";
 const BLUEZ_NOT_PERMITTED: &str = "org.bluez.Error.NotPermitted";
 const BLUEZ_NOT_AUTHORIZED: &str = "org.bluez.Error.NotAuthorized";
@@ -95,7 +94,7 @@ pub(crate) fn map_btleplug_error(error: btleplug::Error) -> Error {
 /// `bluez_async::BluetoothError` (every D-Bus round trip) or a plain string
 /// (its own service/characteristic lookups, poisoned locks).
 #[cfg(target_os = "linux")]
-fn map_error_source(source: &(dyn std::error::Error + Send + Sync)) -> Error {
+fn map_error_source(source: &(dyn std::error::Error + Send + Sync + 'static)) -> Error {
     if let Some(error) = source.downcast_ref::<bluez_async::BluetoothError>() {
         return map_bluetooth_error(error);
     }
@@ -105,7 +104,7 @@ fn map_error_source(source: &(dyn std::error::Error + Send + Sync)) -> Error {
 /// Host builds cannot name the fork's error type; the string path covers the
 /// fork-authored messages, which is the shape the unit tests pin down.
 #[cfg(not(target_os = "linux"))]
-fn map_error_source(source: &(dyn std::error::Error + Send + Sync)) -> Error {
+fn map_error_source(source: &(dyn std::error::Error + Send + Sync + 'static)) -> Error {
     map_error_text(&source.to_string())
 }
 
