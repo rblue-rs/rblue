@@ -12,16 +12,16 @@ It was built from the self-contained Rust snapshot under `native/source`:
 This DLL was built natively on the standard GitHub-hosted Windows runner,
 using the MSVC tools supplied by Visual Studio Enterprise 2026
 (installation 18.12.12405.243), Rust/Cargo 1.100.0.
-Source commit: d482165460e50705a8affde549c99533f6b16ecc
-Source tree: 9528fa1f2863da649e3266bb78905f9fb6edfd32
-Build: https://github.com/rblue-rs/rblue/actions/runs/45146069507
+Source commit: 416f04568622e3802aa444e7d2668e8256add7c3
+Source tree: 8489a606289f143c84ded8054f6fe44541b59289
+Build: https://github.com/rblue-rs/rblue/actions/runs/45157867742
 Full recorded input/output provenance: native/provenance/windows.json
 
 For an alternative macOS/Linux rebuild, use `cargo xwin build`.
 
 Packaged SHA-256:
 
-    39a30cad424a6def3e12e88b4d39d47260a1283a16b9eebb22d5838db11fefa0
+    5613cef2cec392ff8ca37b12e6d6f74687a8b448b17e78fc901fbb4398eae053
 
 The plugin CMake configuration validates that the DLL exists, has the exact
 runtime name expected by Dart, and is being consumed by an x64 MSVC Flutter
