@@ -955,7 +955,14 @@ impl Peripheral for WebPeripheral {
         // when an encrypted characteristic is accessed.
         Err(Error::Unsupported {
             platform: PLATFORM,
-            feature: "pairing",
+            feature: "pair",
+        })
+    }
+
+    async fn unpair(&self) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "unpair",
         })
     }
 

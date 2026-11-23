@@ -862,6 +862,18 @@ public protocol RblueProtocol: AnyObject, Sendable {
     func subscribe(deviceJson: String, characteristicJson: String) async throws 
     
     /**
+     * Removes an existing bond where the platform has an API.
+     *
+     * A device that is not bonded succeeds without doing work.
+     *
+     * # Errors
+     *
+     * [`RblueError::Pairing`] with the normalized failure status,
+     * [`RblueError::Unsupported`] on platforms without an active-unpair API.
+     */
+    func unpair(deviceJson: String) async throws 
+    
+    /**
      * Cancels the subscription. Idempotent. When it was the device's last
      * subscription, its forwarder task is stopped.
      *
@@ -1405,6 +1417,32 @@ open func subscribe(deviceJson: String, characteristicJson: String)async throws 
             rustFutureFunc: {
                 uniffi_rblue_ffi_fn_method_rblue_subscribe(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceJson),FfiConverterString.lower(characteristicJson)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_void,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_void,
+            freeFunc: ffi_rblue_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
+     * Removes an existing bond where the platform has an API.
+     *
+     * A device that is not bonded succeeds without doing work.
+     *
+     * # Errors
+     *
+     * [`RblueError::Pairing`] with the normalized failure status,
+     * [`RblueError::Unsupported`] on platforms without an active-unpair API.
+     */
+open func unpair(deviceJson: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_unpair(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceJson)
                 )
             },
             pollFunc: ffi_rblue_ffi_rust_future_poll_void,
@@ -2427,6 +2465,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_method_rblue_subscribe() != 42034) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rblue_ffi_checksum_method_rblue_unpair() != 38042) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_method_rblue_unsubscribe() != 43073) {

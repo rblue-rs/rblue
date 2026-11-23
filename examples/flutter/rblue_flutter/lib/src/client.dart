@@ -216,6 +216,18 @@ class RblueClient {
   Future<void> unwatch(DeviceId device) =>
       _request('unwatch', params: {'device': device.json}, decode: _noPayload);
 
+  /// Actively initiates pairing/bonding where the platform supports it.
+  ///
+  /// Already-bonded devices succeed without starting a new procedure.
+  Future<void> pair(DeviceId device) =>
+      _request('pair', params: {'device': device.json}, decode: _noPayload);
+
+  /// Removes an existing bond with the device.
+  ///
+  /// A device that is not bonded succeeds without doing work.
+  Future<void> unpair(DeviceId device) =>
+      _request('unpair', params: {'device': device.json}, decode: _noPayload);
+
   /// Disconnects the device. Idempotent. Subscriptions of the device are
   /// dropped; subscribe again after reconnecting.
   Future<void> disconnect(DeviceId device) => _request(

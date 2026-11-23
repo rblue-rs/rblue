@@ -58,6 +58,7 @@ const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::MtuQuery))
     .union(CapabilitySet::bit(Capability::MtuNegotiation))
     .union(CapabilitySet::bit(Capability::RssiDuringConnection))
+    .union(CapabilitySet::bit(Capability::Pairing))
     .union(CapabilitySet::bit(Capability::ConnectionPriority))
     .union(CapabilitySet::bit(Capability::SystemConnectedPeripherals));
 

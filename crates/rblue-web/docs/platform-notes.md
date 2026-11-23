@@ -79,7 +79,7 @@ API-to-browser mapping table lives in `docs/error-mapping.md`.
 | `ActiveScan` / `PassiveScan` / `ScanResponse` / `BackgroundScan` | no (no browser scanning) |
 | `MtuNegotiation` / `MtuQuery` | no (MTU not observable) |
 | `RssiDuringConnection` | no (`rssi()` unsupported) |
-| `Pairing` | no (`pair()` unsupported; the browser pairs implicitly when an encrypted characteristic is accessed) |
+| `Pairing` | no (`pair()` / `unpair()` unsupported with feature `pair` / `unpair`; the browser pairs implicitly when an encrypted characteristic is accessed) |
 | `GattServer` / `Advertise` | Phase 2 |
 | `ConnectionPriority` | no (`set_connection_priority` returns `Error::Unsupported`; Web Bluetooth has no equivalent API) |
 | `SystemConnectedPeripherals` | no (`system_connected_peripherals` returns `Error::Unsupported`; Web Bluetooth has no equivalent lookup) |

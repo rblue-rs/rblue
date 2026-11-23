@@ -34,7 +34,7 @@ class NativeRebuildTests(unittest.TestCase):
         self.assertEqual(self.module.BRANCHES, {
             "ci/free-standard-hosted", "test/c-abi-dart-ffi-soak",
             "feat/adapter-power-control", "feat/system-connected-peripherals",
-            "feat/connection-priority", "feat/request-mtu"})
+            "feat/connection-priority", "feat/request-mtu", "feat/pair-unpair"})
 
     def test_unknown_platform_rejected(self):
         with self.assertRaises(ValueError):

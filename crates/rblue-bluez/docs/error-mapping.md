@@ -109,7 +109,16 @@ strings; a message that does not match a known description stays unstructured
 | `stop_scan` with no scan running | `Error::InvalidState("no scan is running")` |
 | `peripheral(id)` with a `DeviceId` that is not `DeviceId::Mac`, or an address never recorded in this adapter instance's registry | `Error::NotFound(id)` carrying the queried id (BlueZ itself could connect to cache-known devices, but the shell's registry is the contract source; `initialize` imports the BlueZ cache, so anything bluetoothd knows is normally present) |
 | `request_device` | `Error::Unsupported { platform: "bluez", feature: "request_device" }` |
-| `pair` | `Error::Unsupported { platform: "bluez", feature: "pairing" }` |
+| `pair` (already paired, or `org.bluez.Error.AlreadyExists`) | `Ok(())` |
+| `pair` (`AuthenticationFailed`) | `Error::Pairing(AuthenticationFailed)` |
+| `pair` (`AuthenticationRejected` / `Rejected` / `Canceled`) | `Error::Pairing(Rejected)` |
+| `pair` (`AuthenticationTimeout` / `Timeout` / `NoReply`) | `Error::Pairing(TimedOut)` |
+| `pair` (`InProgress`) | `Error::Pairing(InProgress)` |
+| `pair` (`NotSupported` / `NotCapable`) | `Error::Pairing(NotCapable)` |
+| `pair` / `unpair` (`NotReady`) | `Error::Permission(BluetoothOff)` |
+| `pair` / `unpair` (`NotAuthorized`) | `Error::Permission(Unauthorized)` |
+| `unpair` (not paired, or `DoesNotExist`) | `Ok(())` without evicting an unpaired cache entry when the `Paired` property is already false |
+| other BlueZ pairing names | `Error::Backend` with the verbatim name |
 | `rssi` on a connected device | `Error::Unsupported { platform: "bluez", feature: "rssi" }` |
 | `initialize` with no adapter objects on the bus | `Error::Unsupported { platform: "bluez", feature: "adapter" }` |
 

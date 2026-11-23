@@ -270,7 +270,14 @@ impl Peripheral for FakePeripheral {
     async fn pair(&self) -> Result<(), Error> {
         Err(Error::Unsupported {
             platform: "fake",
-            feature: "pairing",
+            feature: "pair",
+        })
+    }
+
+    async fn unpair(&self) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: "fake",
+            feature: "unpair",
         })
     }
 

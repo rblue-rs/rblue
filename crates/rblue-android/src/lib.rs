@@ -35,8 +35,11 @@
 //!   hardcoded 517). `set_connect_mtu(None)` disables that automatic
 //!   request. Explicit requests go through [`rblue_api::Peripheral::request_mtu`]
 //!   (`Capability::MtuNegotiation` and `MtuQuery` are both present).
-//! - `pair()` reports `Unsupported`: Android's `createBond` is not exposed
-//!   by the fork.
+//! - `pair()` / `unpair()` are implemented in the shell over JNI
+//!   (`BluetoothDevice.createBond` / hidden `removeBond`) and report
+//!   [`Capability::Pairing`](rblue_api::Capability::Pairing). The fork's
+//!   `Peripheral` trait still has no pairing API; vendored Java is left
+//!   untouched.
 //!
 //! See `docs/platform-notes.md` and `docs/error-mapping.md` in the crate
 //! root for the full platform documentation, including the Java helper
@@ -61,6 +64,7 @@
 
 mod hub;
 mod mapping;
+mod pairing;
 mod system_connected;
 
 #[cfg(target_os = "android")]

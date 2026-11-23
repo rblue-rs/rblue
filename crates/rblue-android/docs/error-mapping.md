@@ -140,7 +140,14 @@ unexpected throwables.
 | `stop_scan` with no scan running | `Error::InvalidState("no scan is running")` |
 | `peripheral(id)` with a `DeviceId` that is not `DeviceId::Mac`, or an address never recorded in this adapter instance's registry | `Error::NotFound(id)` carrying the queried id (Android's `connectGatt` could reach an arbitrary address, but the shell's registry is the contract source; scan first) |
 | `request_device` | `Error::Unsupported { platform: "android", feature: "request_device" }` |
-| `pair` | `Error::Unsupported { platform: "android", feature: "pairing" }` (Android's `createBond` is not exposed by the fork) |
+| `pair` (already bonded) | `Ok(())` without starting a new procedure |
+| `pair` (SecurityException) | `Error::Permission(BluetoothPermissionDenied)` |
+| `pair` (adapter off / missing) | `Error::Permission(BluetoothOff)` |
+| `pair` (user rejected / ended in `BOND_NONE`) | `Error::Pairing(Rejected)` |
+| `pair` (deadline while `BONDING`) | `Error::Pairing(TimedOut)` |
+| `unpair` (not bonded) | `Ok(())` without calling `removeBond` |
+| `unpair` (deadline while still bonded) | `Error::Pairing(TimedOut)` |
+| `unpair` (`removeBond` missing on the device) | `Error::Unsupported { platform: "android", feature: "unpair" }` |
 | `initialize` on a non-Android host build | `Error::Unsupported { platform: "android", feature: "adapter" }` (`default_adapter`) |
 | `initialize` state resolution when the fork ever reports `PoweredOff`/`Unauthorized`/`Unavailable` | `Error::Permission(BluetoothOff)` / `Error::Permission(Unauthorized)` / `Error::Unsupported` - the fork reports a constant `Unknown` today; the arms keep the mapping total |
 | `subscribe` on a characteristic with neither `NOTIFY` nor `INDICATE` | `Error::InvalidState("characteristic has neither notify nor indicate")` |

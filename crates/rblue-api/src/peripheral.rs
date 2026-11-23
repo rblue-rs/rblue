@@ -374,17 +374,38 @@ pub trait Peripheral: Send + Sync {
     /// characteristics subscribed via [`Peripheral::subscribe`].
     fn notifications(&self) -> NotificationStream;
 
-    /// Actively initiates pairing/bonding. 1.0 placeholder:
-    /// iOS/macOS pair implicitly when an encrypted characteristic is accessed
-    /// and return [`Error::Unsupported`] here; Windows/BlueZ/Android have
-    /// native APIs and implement this per the capability table
-    /// (`Capability::Pairing`).
+    /// Actively initiates pairing/bonding.
+    ///
+    /// Gated by [`crate::Capability::Pairing`]. iOS/macOS/Web pair
+    /// implicitly when an encrypted characteristic is accessed and return
+    /// [`Error::Unsupported`] with `feature: "pair"` here. Android and
+    /// Linux implement this when the capability is reported.
+    ///
+    /// Already-bonded devices succeed without starting a new procedure.
     ///
     /// # Errors
     ///
     /// [`Error::Pairing`] with the normalized failure status,
     /// [`Error::Unsupported`] on platforms without an active-pairing API.
     async fn pair(&self) -> Result<(), Error>;
+
+    /// Removes an existing bond with this peripheral.
+    ///
+    /// Gated by [`crate::Capability::Pairing`]. Platforms without an
+    /// active-unpair API return [`Error::Unsupported`] with
+    /// `feature: "unpair"`. A device that is not bonded succeeds without
+    /// doing work.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Pairing`] with the normalized failure status,
+    /// [`Error::Unsupported`] on platforms without an active-unpair API.
+    async fn unpair(&self) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: "unknown",
+            feature: "unpair",
+        })
+    }
 
     /// Reads the RSSI of the connected peripheral.
     ///

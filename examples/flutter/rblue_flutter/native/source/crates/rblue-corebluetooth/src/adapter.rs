@@ -1026,7 +1026,14 @@ mod tests {
             peripheral.pair().await,
             Err(Error::Unsupported {
                 platform: "corebluetooth",
-                feature: "pairing"
+                feature: "pair"
+            })
+        ));
+        assert!(matches!(
+            peripheral.unpair().await,
+            Err(Error::Unsupported {
+                platform: "corebluetooth",
+                feature: "unpair"
             })
         ));
         assert!(matches!(

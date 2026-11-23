@@ -58,8 +58,12 @@
  *   unwatch            {"device": <DeviceId>}          -> (empty)
  *                      Stops supervising the device (SupervisorHandle::unwatch).
  *   disconnect         {"device": <DeviceId>}          -> (empty)
+ *   pair               {"device": <DeviceId>}          -> (empty)
+ *   unpair             {"device": <DeviceId>}          -> (empty)
  *   capabilities       {} -> capability bitmask JSON (u32)
  *   rssi / mtu         {"device": <DeviceId>} -> integer JSON
+ *   request_mtu        {"device": <DeviceId>, "mtu": <u16>} -> integer JSON
+ *                      (negotiated ATT MTU). Check MtuNegotiation first.
  *   max_write_len      {"device":..,"characteristic":..,"mode":..} -> integer JSON
  *   discover_services  {"device": <DeviceId>}          -> ServiceSet JSON
  *   read               {"device":..,"characteristic":..} -> raw value bytes

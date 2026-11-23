@@ -58,6 +58,8 @@
  *   unwatch            {"device": <DeviceId>}          -> (empty)
  *                      Stops supervising the device (SupervisorHandle::unwatch).
  *   disconnect         {"device": <DeviceId>}          -> (empty)
+ *   pair               {"device": <DeviceId>}          -> (empty)
+ *   unpair             {"device": <DeviceId>}          -> (empty)
  *   capabilities       {} -> capability bitmask JSON (u32)
  *   rssi / mtu         {"device": <DeviceId>} -> integer JSON
  *   request_mtu        {"device": <DeviceId>, "mtu": <u16>} -> integer JSON

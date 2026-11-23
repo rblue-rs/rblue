@@ -72,7 +72,8 @@ normalize an ATT status from the stack it should send it in `code`
 | `stop_scan` with no scan running | `Error::InvalidState("no scan is running")` |
 | `peripheral(id)` with a device never recorded by this registry | `Error::NotFound(id)` carrying the queried id (scan history is the identity source; the registry never evicts entries) |
 | `request_device` | `Error::Unsupported { platform: "ohos", feature: "request_device" }` - OHOS has no user-gesture device picker |
-| `pair` | `Error::Unsupported { platform: "ohos", feature: "pairing" }` - Phase 2; pairing happens implicitly when an encrypted characteristic is accessed |
+| `pair` | `Error::Unsupported { platform: "ohos", feature: "pair" }` - Phase 2; pairing happens implicitly when an encrypted characteristic is accessed |
+| `unpair` | `Error::Unsupported { platform: "ohos", feature: "unpair" }` |
 | `rssi` on a connected device | `Error::Unsupported { platform: "ohos", feature: "read_rssi" }` - `getRssiValue` is pending real-device verification (capability `RssiDuringConnection` is not reported); the raw `ReadRssi` driver command remains available for the round-trip PoC |
 | GATT operation before `discover_services` populated the session tree | `Error::InvalidState` naming the missing service/characteristic instance |
 | `subscribe` on a characteristic with neither `NOTIFY` nor `INDICATE` | `Error::InvalidState("characteristic ... supports neither notify nor indicate")` |

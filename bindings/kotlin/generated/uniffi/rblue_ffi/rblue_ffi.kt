@@ -748,6 +748,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_subscribe(
     ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_unpair(
+    ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_unsubscribe(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_write(
@@ -822,6 +824,8 @@ internal object UniffiLib {
     external fun uniffi_rblue_ffi_fn_method_rblue_stop_scan(`ptr`: Long,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_subscribe(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,
+    ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_unpair(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_unsubscribe(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,
     ): Long
@@ -1003,6 +1007,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_subscribe() and 0xFFFF) != 42034) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_unpair() and 0xFFFF) != 38042) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_unsubscribe() and 0xFFFF) != 43073) {
@@ -1789,6 +1796,18 @@ public interface RblueInterface {
     suspend fun `subscribe`(`deviceJson`: kotlin.String, `characteristicJson`: kotlin.String)
 
     /**
+     * Removes an existing bond where the platform has an API.
+     *
+     * A device that is not bonded succeeds without doing work.
+     *
+     * # Errors
+     *
+     * [`RblueError::Pairing`] with the normalized failure status,
+     * [`RblueError::Unsupported`] on platforms without an active-unpair API.
+     */
+    suspend fun `unpair`(`deviceJson`: kotlin.String)
+
+    /**
      * Cancels the subscription. Idempotent. When it was the device's last
      * subscription, its forwarder task is stopped.
      *
@@ -2493,6 +2512,39 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
 
         FfiConverterString.lower(`deviceJson`),
         FfiConverterString.lower(`characteristicJson`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_void(future) },
+        // lift function
+        { },
+
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
+     * Removes an existing bond where the platform has an API.
+     *
+     * A device that is not bonded succeeds without doing work.
+     *
+     * # Errors
+     *
+     * [`RblueError::Pairing`] with the normalized failure status,
+     * [`RblueError::Unsupported`] on platforms without an active-unpair API.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `unpair`(`deviceJson`: kotlin.String) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_unpair(
+                uniffiHandle,
+
+        FfiConverterString.lower(`deviceJson`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },

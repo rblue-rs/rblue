@@ -378,6 +378,11 @@ uint64_t uniffi_rblue_ffi_fn_method_rblue_stop_scan(uint64_t ptr
 uint64_t uniffi_rblue_ffi_fn_method_rblue_subscribe(uint64_t ptr, RustBuffer device_json, RustBuffer characteristic_json
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_UNPAIR
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_UNPAIR
+uint64_t uniffi_rblue_ffi_fn_method_rblue_unpair(uint64_t ptr, RustBuffer device_json
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_UNSUBSCRIBE
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_UNSUBSCRIBE
 uint64_t uniffi_rblue_ffi_fn_method_rblue_unsubscribe(uint64_t ptr, RustBuffer device_json, RustBuffer characteristic_json
@@ -764,6 +769,12 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_stop_scan(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_SUBSCRIBE
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_SUBSCRIBE
 uint16_t uniffi_rblue_ffi_checksum_method_rblue_subscribe(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_UNPAIR
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_UNPAIR
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_unpair(void
     
 );
 #endif

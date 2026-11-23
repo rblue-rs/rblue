@@ -235,15 +235,11 @@ impl Peripheral for BluezPeripheral {
     }
 
     async fn pair(&self) -> Result<(), Error> {
-        // BlueZ exposes `org.bluez.Device1.Pair` (and bluez-async wraps it),
-        // but the fork's `Peripheral` surface does not surface it; the
-        // capability is reported as absent instead of pretending. Accessing
-        // an encrypted characteristic still triggers the system pairing
-        // agent.
-        Err(Error::Unsupported {
-            platform: PLATFORM,
-            feature: "pairing",
-        })
+        crate::pairing::pair(self.entry.dbus_path()).await
+    }
+
+    async fn unpair(&self) -> Result<(), Error> {
+        crate::pairing::unpair(self.entry.dbus_path()).await
     }
 
     async fn rssi(&self) -> Result<i16, Error> {

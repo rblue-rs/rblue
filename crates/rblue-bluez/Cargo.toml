@@ -23,10 +23,9 @@ uuid = { workspace = true }
 # there, exactly like inside the fork.
 [target.'cfg(target_os = "linux")'.dependencies]
 bluez-async = "0.9.0"
+# Blocking system-bus calls for Device1.Pair / Adapter1.RemoveDevice, which
+# the fork does not expose. Also used by the D-Bus error round-trip tests.
+dbus = "0.9.12"
 
 [dev-dependencies]
 tokio = { version = "1", default-features = false, features = ["sync", "rt", "macros", "time"] }
-
-# Constructing real D-Bus errors for the fork-type round-trip tests.
-[target.'cfg(target_os = "linux")'.dev-dependencies]
-dbus = "0.9.12"

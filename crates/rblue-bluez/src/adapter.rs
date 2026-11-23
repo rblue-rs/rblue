@@ -48,6 +48,7 @@ const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
     .union(CapabilitySet::bit(Capability::BackgroundScan))
+    .union(CapabilitySet::bit(Capability::Pairing))
     .union(CapabilitySet::bit(Capability::AdapterPowerControl))
     .union(CapabilitySet::bit(Capability::SystemConnectedPeripherals));
 
@@ -106,6 +107,12 @@ impl DeviceEntry {
 
     pub(crate) fn id(&self) -> &DeviceId {
         &self.id
+    }
+
+    /// D-Bus object path of the current fork handle, as stored (often
+    /// without the `/org/bluez` prefix). Used by shell-side pairing.
+    pub(crate) fn dbus_path(&self) -> String {
+        self.lock_path().clone()
     }
 
     pub(crate) fn advertisement(&self) -> AdvertisementData {

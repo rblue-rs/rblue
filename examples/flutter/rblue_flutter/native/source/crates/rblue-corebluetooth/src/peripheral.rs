@@ -237,7 +237,14 @@ impl Peripheral for CoreBluetoothPeripheral {
         // accessed; there is no active-pairing API.
         Err(Error::Unsupported {
             platform: PLATFORM,
-            feature: "pairing",
+            feature: "pair",
+        })
+    }
+
+    async fn unpair(&self) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "unpair",
         })
     }
 

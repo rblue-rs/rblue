@@ -27,9 +27,11 @@
 //!   `initialize` imports that cache into the registry as discoveries, so
 //!   cache-known devices are connectable without a fresh scan and
 //!   `Error::NotFound` means "this adapter instance never saw it".
-//! - The BlueZ `Pair` API is not exposed by the fork, so pairing reports
-//!   [`Error::Unsupported`] and the capability is absent; `request_device`
-//!   is web-only.
+//! - `pair()` / `unpair()` are implemented in the shell over D-Bus
+//!   (`org.bluez.Device1.Pair` / `org.bluez.Adapter1.RemoveDevice`) and
+//!   report [`Capability::Pairing`](rblue_api::Capability::Pairing). The
+//!   fork's `Peripheral` trait still has no pairing API.
+//! - `request_device` is web-only.
 //!
 //! See `docs/platform-notes.md` and `docs/error-mapping.md` in the crate
 //! root for the full platform documentation, including the
@@ -55,6 +57,7 @@
 
 mod hub;
 mod mapping;
+mod pairing;
 
 #[cfg(target_os = "linux")]
 mod adapter;
