@@ -79,7 +79,8 @@ pub mod prelude {
         ServiceId, ServiceSet, WriteMode,
     };
     pub use crate::peripheral::{
-        ConnectOptions, ConnectionPriority, NotificationStream, Peripheral, WriteOptions,
+        reject_invalid_att_mtu, ConnectOptions, ConnectionPriority, NotificationStream, Peripheral,
+        WriteOptions, ATT_MTU_MAX, ATT_MTU_MIN,
     };
     pub use crate::queue::{GattOpPriority, GattOpQueue, GattOperation, OpHandle, QueueConfig};
     pub use crate::scan::{
@@ -108,7 +109,8 @@ pub use crate::gatt::{
     ServiceSet, WriteMode,
 };
 pub use crate::peripheral::{
-    ConnectOptions, ConnectionPriority, NotificationStream, Peripheral, WriteOptions,
+    reject_invalid_att_mtu, ConnectOptions, ConnectionPriority, NotificationStream, Peripheral,
+    WriteOptions, ATT_MTU_MAX, ATT_MTU_MIN,
 };
 pub use crate::queue::{GattOpPriority, GattOpQueue, GattOperation, OpHandle, QueueConfig};
 pub use crate::scan::{

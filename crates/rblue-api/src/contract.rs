@@ -290,19 +290,33 @@ where
         Err(Error::Unsupported {
             feature: "request_mtu",
             ..
-        }) => {}
-        Ok(()) => panic!(
-            "contract violation at `connect_with mtu`: request_mtu must not be silently ignored"
-        ),
-        other => {
-            // A backend that later implements request_mtu may succeed; only
-            // a silent accept without doing the request is forbidden. Until
-            // that lands, success is unexpected in this suite.
-            panic!(
-                "contract violation at `connect_with mtu`: expected Err(Unsupported {{ feature: request_mtu }}), got {:?}",
-                other.as_ref().map(|_| ())
+        }) => {
+            if adapter.capabilities().has(Capability::MtuNegotiation) {
+                panic!(
+                    "contract violation at `connect_with mtu`: MtuNegotiation is set but the request was rejected as Unsupported"
+                );
+            }
+        }
+        Ok(()) => {
+            if !adapter.capabilities().has(Capability::MtuNegotiation) {
+                panic!(
+                    "contract violation at `connect_with mtu`: request_mtu must not be silently ignored"
+                );
+            }
+            let negotiated = require("mtu after connect_with", peripheral.mtu().await);
+            assert!(
+                negotiated >= 23,
+                "contract violation: negotiated ATT MTU must be at least 23, got {negotiated}"
+            );
+            require(
+                "disconnect after connect_with mtu",
+                peripheral.disconnect().await,
             );
         }
+        other => panic!(
+            "contract violation at `connect_with mtu`: expected Ok or Err(Unsupported {{ feature: request_mtu }}), got {:?}",
+            other.as_ref().map(|_| ())
+        ),
     }
 
     // -- connect -------------------------------------------------------------

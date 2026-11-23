@@ -72,8 +72,8 @@ current Android versions.
 |---|---|---|
 | ActiveScan | yes | The fork scans with `CALLBACK_TYPE_ALL_MATCHES` and default (active) scan settings |
 | GattClient | yes | Central role over `BluetoothGatt` |
-| MtuQuery | yes | The fork caches the negotiated MTU (its automatic `requestMtu(517)` at connect updates the value); `mtu()`/`max_write_len()` read it |
-| MtuNegotiation | no | The fork's `Peripheral` trait surface exposes no MTU request API - the fork requests 517 automatically at connect, and the Java-side `requestMtu` is not surfaced. **TODO**: expose it via a fork PR or the Driver-track migration; the unified trait would also need a request method |
+| MtuQuery | yes | The fork caches the negotiated MTU (updated by the connect-time request and by `request_mtu`); `mtu()`/`max_write_len()` read it |
+| MtuNegotiation | yes | `Peripheral::request_mtu` and `ConnectOptions.mtu` call the fork's `request_mtu`, which surfaces Java `requestMtu`. The connect-time default is a configurable 512 (`rblue_android::set_connect_mtu`); `None` disables the automatic request |
 | RssiDuringConnection | yes | `readRemoteRssi` is implemented over the connected link (`rssi()`) |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
 | Pairing | no | Android's `createBond` is not exposed by the fork's `Peripheral` surface. **TODO**: fork PR or Driver-track migration. Accessing an encrypted characteristic still triggers the system pairing flow, and bonds created that way are used transparently |
@@ -184,11 +184,15 @@ permission, `BluetoothOff` for a powered-off radio).
   retrying that would turn a connect to an absent device into a ~90 s
   wait). Exhausted attempts surface as `Error::NotConnected`; the raw
   attempt status does not survive (see error-mapping.md).
-- After the link comes up, the fork **automatically requests MTU 517** and
-  refreshes its properties snapshot with the system-cached GAP device name;
-  the shell mirrors the name into its cached advertisement. The `connect`
-  result therefore also covers MTU-negotiation failures, which *do* carry
-  their status (`Error::Platform`).
+- After the link comes up, the shell requests a configurable connect-time
+  ATT MTU (recommended default **512**, replacing the fork's historical
+  hardcoded 517) and the fork refreshes its properties snapshot with the
+  system-cached GAP device name; the shell mirrors the name into its cached
+  advertisement. `ConnectOptions.mtu = Some(n)` requests `n` instead;
+  `rblue_android::set_connect_mtu(None)` disables the automatic request
+  when `mtu` is omitted. The `connect` result therefore also covers
+  MTU-negotiation failures, which *do* carry their status
+  (`Error::Platform`).
 - Disconnects (local or remote) arrive as a disconnect notification without
   a status code; the shell publishes `DeviceDisconnected` with
   `DisconnectReason::Unknown` on state transitions only (repeated signals
@@ -245,15 +249,14 @@ permission, `BluetoothOff` for a powered-off radio).
   call. This is not optional on Android: the stack silently truncates
   oversize payloads (both write types enforce MTU - 3 per call).
 - `max_write_len` is the negotiated ATT MTU minus the 3-byte ATT header,
-  for both write modes. The fork requests MTU 517 at every connect; before
-  that completes the value is the ATT default 23, so the conservative limit
-  is 20. Re-query after every (re)connect instead of caching: the MTU is
+  for both write modes. The shell requests a configurable default of 512 at
+  every connect unless that automatic request is disabled; before it
+  completes the value is the ATT default 23, so the conservative limit is
+  20. Re-query after every (re)connect instead of caching: the MTU is
   renegotiated per connection.
 - `mtu()` and `max_write_len()` read the fork's cached MTU, which the
-  automatic `requestMtu(517)` updates at connect; the platform may
-  renegotiate later, and the cached value follows. `MtuNegotiation` (an
-  explicit request API) is absent through the fork - see the capability
-  table TODO.
+  connect-time request and `request_mtu` update; the platform may
+  renegotiate later, and the cached value follows.
 
 ## Pairing
 

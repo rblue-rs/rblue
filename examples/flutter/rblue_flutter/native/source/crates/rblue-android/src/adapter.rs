@@ -43,20 +43,20 @@ use crate::mapping::{
 use crate::peripheral::{spawn_notification_forwarder, AndroidPeripheral, NotificationHub};
 
 /// Static capability table for the plan's Android column: active scanning
-/// and GATT client are available, the MTU the fork's automatic
-/// `requestMtu(517)` negotiated is queryable, and RSSI is readable on the
-/// connected link (`readRemoteRssi`). Absent on this platform: MTU request
-/// API through the fork's trait surface (it negotiates automatically at
-/// connect), active pairing (`createBond` is not exposed), background
-/// scanning (API 31+ requires a foreground service - conservative), and the
-/// web-only picker. `ConnectionPriority` is honored through the fork's
-/// `request_connection_parameters` mapping onto `requestConnectionPriority`.
-/// `SystemConnectedPeripherals` uses a shell-side
-/// `BluetoothManager.getConnectedDevices(GATT)` query filtered by cached
-/// `BluetoothDevice.getUuids()`.
+/// and GATT client are available, the negotiated ATT MTU is queryable, an
+/// explicit MTU request is available (`request_mtu` / connect-time
+/// `ConnectOptions.mtu`), and RSSI is readable on the connected link
+/// (`readRemoteRssi`). Absent on this platform: active pairing (`createBond`
+/// is not exposed), background scanning (API 31+ requires a foreground
+/// service - conservative), and the web-only picker. `ConnectionPriority`
+/// is honored through the fork's `request_connection_parameters` mapping
+/// onto `requestConnectionPriority`. `SystemConnectedPeripherals` uses a
+/// shell-side `BluetoothManager.getConnectedDevices(GATT)` query filtered
+/// by cached `BluetoothDevice.getUuids()`.
 const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
+    .union(CapabilitySet::bit(Capability::MtuNegotiation))
     .union(CapabilitySet::bit(Capability::RssiDuringConnection))
     .union(CapabilitySet::bit(Capability::ConnectionPriority))
     .union(CapabilitySet::bit(Capability::SystemConnectedPeripherals));

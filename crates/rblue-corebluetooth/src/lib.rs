@@ -62,7 +62,7 @@ use rblue_api::error::Error;
 
 /// Version string of this backend: the shell crate version plus the pinned
 /// btleplug fork revision (see the `btleplug` git dependency in Cargo.toml).
-pub const BACKEND_VERSION: &str = "corebluetooth/btleplug 1af8299c291f24fca68dfb6b7ef1b5c0475892e1";
+pub const BACKEND_VERSION: &str = "corebluetooth/btleplug 983f3f1346bb1646281e0faf345a21c4a787833d";
 
 /// Returns the system-default CoreBluetooth central wrapped in the unified
 /// [`Adapter`] trait.
@@ -152,7 +152,7 @@ mod tests {
     fn backend_version_names_the_pinned_revision() {
         assert_eq!(
             super::backend_version(),
-            "corebluetooth/btleplug 1af8299c291f24fca68dfb6b7ef1b5c0475892e1"
+            "corebluetooth/btleplug 983f3f1346bb1646281e0faf345a21c4a787833d"
         );
     }
 

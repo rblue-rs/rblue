@@ -14,7 +14,7 @@ editing fork internals; adapt in the shell.
 | ActiveScan | yes | CoreBluetooth scanning is active inquiry |
 | GattClient | yes | Central role |
 | RssiDuringConnection | yes | `CBPeripheral.readRSSI` on a connected peripheral |
-| MtuNegotiation | no | macOS/iOS negotiate the ATT MTU automatically; no request API |
+| MtuNegotiation | no | macOS/iOS negotiate the ATT MTU automatically; `request_mtu` and `ConnectOptions.mtu = Some(_)` return `Error::Unsupported { feature: "request_mtu" }`. `mtu = None` must not fail for that reason |
 | MtuQuery | no | CoreBluetooth does not expose the negotiated MTU; use `max_write_len` |
 | RequestDevicePicker | no | `request_device` returns `Error::Unsupported` |
 | Pairing | no | Implicit pairing on encrypted-characteristic access; `pair()` returns `Error::Unsupported` |

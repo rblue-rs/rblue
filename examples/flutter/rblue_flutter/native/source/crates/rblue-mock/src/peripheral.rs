@@ -196,6 +196,7 @@ struct PeriphInner {
     script_position: usize,
     visible: bool,
     rssi: i16,
+    mtu: u16,
     writes_held: bool,
     write_waiters: Vec<oneshot::Sender<()>>,
 }
@@ -240,6 +241,7 @@ impl MockPeripheral {
                 script_position: 0,
                 visible: true,
                 rssi: DEFAULT_RSSI,
+                mtu: MOCK_ATT_MTU,
                 writes_held: false,
                 write_waiters: Vec::new(),
             }),
@@ -435,6 +437,7 @@ impl MockPeripheral {
         }
         inner.connected = false;
         inner.subscriptions.clear();
+        inner.mtu = MOCK_ATT_MTU;
         self.shared.publish(AdapterEvent::DeviceDisconnected(
             self.id.clone(),
             Some(reason),
@@ -746,9 +749,20 @@ impl Peripheral for MockPeripheral {
     }
 
     async fn connect_with(&self, opts: &ConnectOptions) -> Result<(), Error> {
-        // The mock has no platform/stack auto-connect or MTU request API.
-        opts.reject_unsupported("mock")?;
-        self.connect().await
+        if opts.auto_connect {
+            return Err(Error::Unsupported {
+                platform: "mock",
+                feature: "auto_connect",
+            });
+        }
+        if let Some(mtu) = opts.mtu {
+            rblue_api::reject_invalid_att_mtu(mtu)?;
+        }
+        self.connect().await?;
+        if let Some(mtu) = opts.mtu {
+            self.request_mtu(mtu).await?;
+        }
+        Ok(())
     }
     async fn disconnect(&self) -> Result<(), Error> {
         self.drop_connection(DisconnectReason::Local);
@@ -900,7 +914,17 @@ impl Peripheral for MockPeripheral {
         if !inner.connected {
             return Err(Error::NotConnected);
         }
-        Ok(MOCK_ATT_MTU)
+        Ok(inner.mtu)
+    }
+
+    async fn request_mtu(&self, mtu: u16) -> Result<u16, Error> {
+        let mut inner = self.lock();
+        if !inner.connected {
+            return Err(Error::NotConnected);
+        }
+        rblue_api::reject_invalid_att_mtu(mtu)?;
+        inner.mtu = mtu;
+        Ok(mtu)
     }
 
     async fn set_connection_priority(&self, priority: ConnectionPriority) -> Result<(), Error> {
@@ -1165,6 +1189,64 @@ mod tests {
             device.subscribe(&plain).await,
             Err(Error::InvalidState(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn request_mtu_requires_a_connection() {
+        let (_adapter, device, _, _) = setup();
+        assert!(matches!(
+            device.request_mtu(512).await,
+            Err(Error::NotConnected)
+        ));
+    }
+
+    #[tokio::test]
+    async fn request_mtu_updates_the_negotiated_value() {
+        let (_adapter, device, _, _) = setup();
+        device.connect().await.expect("connect");
+        assert_eq!(device.mtu().await.expect("default mtu"), MOCK_ATT_MTU);
+        assert_eq!(device.request_mtu(512).await.expect("request_mtu"), 512);
+        assert_eq!(device.mtu().await.expect("mtu after request"), 512);
+        assert!(matches!(
+            device.request_mtu(22).await,
+            Err(Error::InvalidState(_))
+        ));
+        assert_eq!(device.mtu().await.expect("unchanged after invalid"), 512);
+    }
+
+    #[tokio::test]
+    async fn connect_with_mtu_requests_after_the_link_is_up() {
+        let (_adapter, device, _, _) = setup();
+        device
+            .connect_with(&ConnectOptions {
+                auto_connect: false,
+                mtu: Some(185),
+            })
+            .await
+            .expect("connect_with mtu");
+        assert_eq!(device.mtu().await.expect("mtu"), 185);
+        device.disconnect().await.expect("disconnect");
+        assert!(matches!(device.mtu().await, Err(Error::NotConnected)));
+        device.connect().await.expect("reconnect");
+        assert_eq!(device.mtu().await.expect("reset default"), MOCK_ATT_MTU);
+    }
+
+    #[tokio::test]
+    async fn connect_with_still_rejects_auto_connect() {
+        let (_adapter, device, _, _) = setup();
+        assert!(matches!(
+            device
+                .connect_with(&ConnectOptions {
+                    auto_connect: true,
+                    mtu: Some(512),
+                })
+                .await,
+            Err(Error::Unsupported {
+                platform: "mock",
+                feature: "auto_connect",
+            })
+        ));
+        assert!(!device.is_connected().await.expect("is_connected"));
     }
 
     #[tokio::test]
