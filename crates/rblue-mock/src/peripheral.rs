@@ -181,6 +181,10 @@ impl MockFailure {
 #[derive(Debug)]
 struct PeriphInner {
     connected: bool,
+    /// Distinct from the local rblue session: the OS would already consider
+    /// this device connected, so `system_connected_peripherals` can return
+    /// it before `connect()`.
+    system_connected: bool,
     name: Option<String>,
     services: Vec<MockService>,
     values: HashMap<CharacteristicId, Vec<u8>>,
@@ -218,6 +222,7 @@ impl MockPeripheral {
             shared,
             state: Mutex::new(PeriphInner {
                 connected: false,
+                system_connected: false,
                 name: Some(name.to_owned()),
                 services: Vec::new(),
                 values: HashMap::new(),
@@ -250,6 +255,30 @@ impl MockPeripheral {
 
     pub(crate) fn is_connected_now(&self) -> bool {
         self.lock().connected
+    }
+
+    pub(crate) fn is_system_connected_now(&self) -> bool {
+        self.lock().system_connected
+    }
+
+    /// Service UUIDs the mock treats as known to the system: the scripted
+    /// GATT tree plus the current advertisement.
+    pub(crate) fn system_service_uuids(&self) -> Vec<Uuid> {
+        let inner = self.lock();
+        let mut services: Vec<Uuid> = inner.services.iter().map(|service| service.uuid).collect();
+        for uuid in &inner.advertisement.services {
+            if !services.contains(uuid) {
+                services.push(*uuid);
+            }
+        }
+        services
+    }
+
+    /// Marks this device as already connected at the system level, without
+    /// opening a local rblue session. Used by
+    /// [`Adapter::system_connected_peripherals`](rblue_api::Adapter::system_connected_peripherals).
+    pub fn set_system_connected(&self, connected: bool) {
+        self.lock().system_connected = connected;
     }
 
     pub(crate) fn current_advertisement(&self) -> AdvertisementData {

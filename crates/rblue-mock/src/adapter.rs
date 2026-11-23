@@ -322,11 +322,42 @@ impl Adapter for MockAdapter {
         Ok(snapshot)
     }
 
+    async fn system_connected_peripherals(
+        &self,
+        services: &[uuid::Uuid],
+    ) -> Result<Vec<Arc<dyn Peripheral>>, Error> {
+        if services.is_empty() {
+            return Err(Error::InvalidState(
+                "at least one service UUID is required".into(),
+            ));
+        }
+        let mut state = self.shared.lock();
+        let selected: Vec<Arc<MockPeripheral>> = state
+            .environment
+            .iter()
+            .filter(|device| {
+                device.is_system_connected_now()
+                    && device
+                        .system_service_uuids()
+                        .iter()
+                        .any(|uuid| services.contains(uuid))
+            })
+            .cloned()
+            .collect();
+        for device in &selected {
+            state.mark_known(device.device_id());
+        }
+        Ok(selected
+            .into_iter()
+            .map(|device| device as Arc<dyn Peripheral>)
+            .collect())
+    }
+
     async fn peripheral(&self, id: &DeviceId) -> Result<Arc<dyn Peripheral>, Error> {
         let state = self.shared.lock();
         let known = state.known_order.iter().any(|known_id| known_id == id);
         if let Some(device) = state.find_in_environment(id) {
-            if known || device.is_connected_now() {
+            if known || device.is_connected_now() || device.is_system_connected_now() {
                 return Ok(device);
             }
         }
@@ -365,6 +396,8 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
+    use rblue_api::capability::Capability;
+
     const SENSOR_SERVICE: uuid::Uuid =
         uuid::Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_00b1);
     const BEACON_SERVICE: uuid::Uuid =
@@ -394,7 +427,71 @@ mod tests {
         assert_eq!(adapter.capabilities(), CapabilitySet::all());
         assert!(adapter
             .capabilities()
+            .has(Capability::SystemConnectedPeripherals));
+        assert!(adapter
+            .capabilities()
             .has(rblue_api::Capability::AdapterPowerControl));
+    }
+
+    #[tokio::test]
+    async fn system_connected_peripherals_requires_a_service_filter() {
+        let adapter = MockAdapter::new();
+        assert!(matches!(
+            adapter.system_connected_peripherals(&[]).await,
+            Err(Error::InvalidState(message)) if message.contains("at least one service UUID")
+        ));
+    }
+
+    #[tokio::test]
+    async fn system_connected_peripherals_matches_services_without_local_connect() {
+        let adapter = MockAdapter::new();
+        let matching = adapter.add_device(mac(1), "connected-sensor");
+        matching.add_service(MockService::new(SENSOR_SERVICE));
+        matching.set_system_connected(true);
+        let other_service = adapter.add_device(mac(2), "other-service");
+        other_service.add_service(MockService::new(BEACON_SERVICE));
+        other_service.set_system_connected(true);
+        let not_system = adapter.add_device(mac(3), "local-only");
+        not_system.add_service(MockService::new(SENSOR_SERVICE));
+        let advertised = adapter.add_device(mac(4), "advertised-only");
+        advertised.set_advertisement(AdvertisementData {
+            local_name: Some("advertised-only".to_owned()),
+            services: vec![SENSOR_SERVICE],
+            ..AdvertisementData::default()
+        });
+        advertised.set_system_connected(true);
+
+        let found = adapter
+            .system_connected_peripherals(&[SENSOR_SERVICE])
+            .await
+            .expect("lookup");
+        let ids: Vec<DeviceId> = found.iter().map(|device| device.id().clone()).collect();
+        assert_eq!(ids, vec![mac(1), mac(4)]);
+        for device in &found {
+            assert!(
+                !device.is_connected().await.expect("is_connected"),
+                "system-connected handles must still be connected locally"
+            );
+        }
+
+        let resolved = adapter
+            .peripheral(&mac(1))
+            .await
+            .expect("known after lookup");
+        assert_eq!(resolved.id(), &mac(1));
+    }
+
+    #[tokio::test]
+    async fn system_connected_peripherals_returns_empty_when_nothing_matches() {
+        let adapter = MockAdapter::new();
+        let device = adapter.add_device(mac(1), "unrelated");
+        device.add_service(MockService::new(BEACON_SERVICE));
+        device.set_system_connected(true);
+        let found = adapter
+            .system_connected_peripherals(&[SENSOR_SERVICE, UNADVERTISED_SERVICE])
+            .await
+            .expect("lookup");
+        assert!(found.is_empty());
     }
 
     #[tokio::test]

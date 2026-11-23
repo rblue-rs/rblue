@@ -691,6 +691,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn system_connected_lookup_returns_marked_devices() {
+        let mut fixture = Fixture::new().await;
+        fixture.device.set_system_connected(true);
+        let params = format!(r#"{{"services":["{}"]}}"#, crate::testing::SERVICE_UUID);
+        let (status, payload) = roundtrip(
+            &mut fixture,
+            1,
+            "system_connected_peripherals",
+            &params,
+            &[],
+        )
+        .await;
+        assert!(status.is_none(), "{status:?}");
+        let infos: serde_json::Value = serde_json::from_slice(&payload).expect("infos JSON");
+        assert_eq!(infos[0]["name"], "simulated-sensor", "{infos}");
+        assert_eq!(
+            infos[0]["id"],
+            serde_json::to_value(device_id()).expect("device JSON")
+        );
+
+        let (status, payload) =
+            roundtrip(&mut fixture, 2, "is_connected", &device_params(), &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(payload, b"false");
+    }
+
+    #[tokio::test]
     async fn peripherals_and_is_connected() {
         let mut fixture = Fixture::new().await;
         let (status, payload) = roundtrip(&mut fixture, 1, "peripherals", "{}", &[]).await;

@@ -41,7 +41,7 @@
  *   initialize         {}                              -> (empty)
  *   start_scan         ScanFilter JSON                 -> (empty)
  *   stop_scan          {}                              -> (empty)
- *   system_connected_peripherals {"services":[<UUID>,...]} -> [{ "id":..,"name":.. }] (CoreBluetooth)
+ *   system_connected_peripherals {"services":[<UUID>,...]} -> [{ "id":..,"name":.. }] (Apple, Android, Linux; Unsupported elsewhere)
  *   peripherals        {}                              -> [{"id":..,"name":..}]
  *   connect            {"device": <DeviceId>}          -> (empty)
  *   disconnect         {"device": <DeviceId>}          -> (empty)

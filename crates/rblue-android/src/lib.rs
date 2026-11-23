@@ -59,6 +59,7 @@
 
 mod hub;
 mod mapping;
+mod system_connected;
 
 #[cfg(target_os = "android")]
 mod adapter;

@@ -57,6 +57,15 @@ writes the BlueZ `Powered` property and this backend advertises
 | GattServer / Advertise | no | Phase 2 (this is exactly what the `bluer` migration unlocks) |
 | WatchAdvertisements | no | Web-only concept |
 | AdapterPowerControl | yes | BlueZ `org.bluez.Adapter1.Powered`, written through bluez-async `set_powered` |
+| SystemConnectedPeripherals | yes | The fork's BlueZ `retrieve_peripherals` lists connected devices whose `UUIDs` property matches any requested service; returned handles still need a local `connect()` before GATT |
+
+## System-connected peripherals
+
+`Adapter::system_connected_peripherals` is implemented on top of the fork's
+`retrieve_peripherals` (connected BlueZ devices filtered by the `UUIDs`
+property). Matches are inserted into the shell registry without marking the
+rblue session connected; the caller must still `connect()` locally before
+GATT operations. An empty service list returns `Error::InvalidState`.
 
 ## Device identity and the RPA rule
 

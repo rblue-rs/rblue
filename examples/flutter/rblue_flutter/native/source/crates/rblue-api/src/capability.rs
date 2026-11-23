@@ -11,7 +11,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
-#[repr(u16)]
+#[repr(u32)]
 pub enum Capability {
     /// Scanning that keeps the radio idle between channels (lower power, and
     /// required for background scanning on some platforms).
@@ -53,6 +53,9 @@ pub enum Capability {
     /// Programmatic radio on/off ([`crate::Adapter::set_powered`]). Querying
     /// [`crate::Adapter::state`] does not require this bit.
     AdapterPowerControl = 14,
+    /// System-connected peripherals matching a nonempty service-UUID filter.
+    /// Returned handles still require a local connect before GATT operations.
+    SystemConnectedPeripherals = 15,
 }
 
 bitflags::bitflags! {
@@ -98,6 +101,9 @@ bitflags::bitflags! {
         const AUTO_CONNECT = 1 << Capability::AutoConnect as u32;
         /// See [`Capability::AdapterPowerControl`].
         const ADAPTER_POWER_CONTROL = 1 << Capability::AdapterPowerControl as u32;
+        /// See [`Capability::SystemConnectedPeripherals`].
+        const SYSTEM_CONNECTED_PERIPHERALS =
+            1 << Capability::SystemConnectedPeripherals as u32;
     }
 }
 
@@ -133,6 +139,18 @@ mod tests {
         let caps = CapabilitySet::default();
         assert_eq!(caps, CapabilitySet::empty());
         assert!(!caps.has(Capability::GattClient));
+    }
+
+    #[test]
+    fn system_connected_peripherals_uses_bit_15() {
+        assert_eq!(Capability::BackgroundScan as u32, 12);
+        assert_eq!(Capability::SystemConnectedPeripherals as u32, 15);
+        let caps = CapabilitySet::bit(Capability::SystemConnectedPeripherals);
+        assert_eq!(caps.bits(), 1 << 15);
+        assert!(caps.has(Capability::SystemConnectedPeripherals));
+        assert!(CapabilitySet::all().has(Capability::SystemConnectedPeripherals));
+        // This single bit must not alias AutoConnect (13) or AdapterPowerControl (14).
+        assert_eq!(caps.bits() & (1 << 13 | 1 << 14), 0);
     }
 
     #[test]

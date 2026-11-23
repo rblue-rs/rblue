@@ -45,6 +45,7 @@ not advertise `Capability::AdapterPowerControl`.
 | GattServer / Advertise | no | Phase 2 |
 | WatchAdvertisements | no | Web-only concept |
 | AdapterPowerControl | no | WinRT `Radio.SetStateAsync` is not exposed by the fork and is not offered here; `set_powered` returns `Error::Unsupported` |
+| SystemConnectedPeripherals | no | The forked WinRT backend already exposes `retrieve_peripherals`, but this backend keeps `Error::Unsupported` until a dedicated follow-up wires it through the shell |
 
 ## Device identity and the RPA rule
 

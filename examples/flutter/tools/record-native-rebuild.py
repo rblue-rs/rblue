@@ -15,7 +15,7 @@ import subprocess
 
 PACKAGE = "examples/flutter/rblue_flutter/"
 BRANCHES = {"ci/free-standard-hosted", "test/c-abi-dart-ffi-soak",
-            "feat/adapter-power-control"}
+            "feat/adapter-power-control", "feat/system-connected-peripherals"}
 REPOSITORY = "rblue-rs/rblue"
 INPUTS = [
     PACKAGE + "native/source",

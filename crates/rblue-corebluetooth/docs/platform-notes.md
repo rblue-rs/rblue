@@ -23,6 +23,16 @@ editing fork internals; adapt in the shell.
 | GattServer / Advertise | no | Phase 2 |
 | ScanResponse | no | iOS delivers consolidated advertisement data, not separate scan responses |
 | AdapterPowerControl | no | iOS cannot programmatically switch Bluetooth; macOS apps likewise have no supported CoreBluetooth API. `set_powered` returns `Error::Unsupported` |
+| SystemConnectedPeripherals | yes | `retrieveConnectedPeripheralsWithServices` via the fork's `retrieve_peripherals`; returned handles still need a local `connect()` before GATT |
+
+## System-connected peripherals
+
+`Adapter::system_connected_peripherals` is implemented. The shell calls the
+fork's `retrieve_peripherals` with the given service UUIDs (mapped to
+`retrieveConnectedPeripheralsWithServices`) and inserts matches into the
+registry without marking the rblue session connected. An empty service list
+returns `Error::InvalidState`. The caller must still `connect()` locally
+before GATT operations.
 
 ## Runtime requirements
 

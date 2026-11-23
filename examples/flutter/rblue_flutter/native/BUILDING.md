@@ -8,10 +8,10 @@ the package.
 ## Source provenance
 
 - Upstream repository: <https://github.com/rblue-rs/rblue>
-- Rebuild source commit: `4d8b356ae47cf5bc2d6f6c6a6f9bca12bbeed80a`
-- Package-local source Git tree: `9d46425e979fea71554df771b7f21263224e7469`
+- Rebuild source commit: `c3802ca60eca0fef8384caade280e0bff6723e4d`
+- Package-local source Git tree: `89594bff03fe1b97eb67f0584e80bc6547f72c26`
 - All seven binaries were rebuilt from that self-contained snapshot in
-  [hosted rebuild run 45165332315](https://github.com/rblue-rs/rblue/actions/runs/45165332315).
+  [hosted rebuild run 45174606229](https://github.com/rblue-rs/rblue/actions/runs/45174606229).
   No external working tree or old packaged binary was used as a build input.
 - Pinned btleplug fork revision:
   `1af8299c291f24fca68dfb6b7ef1b5c0475892e1`
@@ -25,11 +25,11 @@ the package.
   `cl.exe` patch version; this rebuild did not use `cargo-xwin`.
 
 `provenance/android.json`, `provenance/apple.json`, and
-`provenance/windows.json` retain the source commit/tree, all 59 source-file
+`provenance/windows.json` retain the source commit/tree, all 60 source-file
 SHA-256 values, build-input identities, actual host/toolchain records, run URL,
 and seven output checksums. They were recorded by the rebuild jobs themselves.
 Android and Apple checkouts use canonical LF bytes. The Windows checkout used
-Git's CRLF conversion: its 59 recorded source hashes match the exact bytes
+Git's CRLF conversion: its 60 recorded source hashes match the exact bytes
 produced by `git -c core.autocrlf=true cat-file --filters HEAD:<path>` for the
 same committed source tree. The validator checks those Git clean/smudge rules
 and each current source blob identity; it does not ignore arbitrary source edits
@@ -169,13 +169,13 @@ On macOS/Linux, install `cargo-xwin` and replace `cargo build` with
 SHA-256:
 
 ```text
-01a06021c07398d116073dd02ca659d8a75ced82d43f4d275ce992ee664e13e9  android/src/main/jniLibs/arm64-v8a/librblue_c.so
-f938c79a3707556c9ef1d43352b7e86883cad874e549102501c93830f8c785f9  android/src/main/jniLibs/armeabi-v7a/librblue_c.so
-96ef6bd9d8b07c27033450a6ca4a136bc5e409cdc72975d11916d4f4d67008fd  android/src/main/jniLibs/x86_64/librblue_c.so
-96381f2d7049775100348a1adc2e60a4b418c7feaeee747924eea82aecf84f9c  ios/rblue_flutter/RblueC.xcframework/ios-arm64/librblue_c.a
-339e4e4a6bb132c692a696180cd1e7dc952180ee6708146e9df5ea99556c01c9  ios/rblue_flutter/RblueC.xcframework/ios-arm64-simulator/librblue_c.a
-5711f97f3d949b47770c681baa40d806b8b597a9160a50294dd8e57503c3c639  macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a
-740a65ea2551b539ddd5f7296e8899449e9de3da6302316caf1a401945ab8e2a  windows/x64/rblue_c.dll
+c8b60d8e3f2e334cfc41a92f4ac49ed7d14934df5a61d2d17cb831b1911730d1  android/src/main/jniLibs/arm64-v8a/librblue_c.so
+0349b1d4b3be0888444af09d202cb97629f4f743d7db5395b5200d2948a4ef1a  android/src/main/jniLibs/armeabi-v7a/librblue_c.so
+02391aee7ad7c5f85b6451bc83fa78ae55ef8ceb2fa726b6812f94e33a443add  android/src/main/jniLibs/x86_64/librblue_c.so
+22fa22ab8ee57fce8e6caa375c2696ebf4a20182c4447d0dd25e8a4bf246b338  ios/rblue_flutter/RblueC.xcframework/ios-arm64/librblue_c.a
+a2194f68d5b07b42650b4f2218fed7e7b6e4d5ca29069c7d16e094da64d13b7c  ios/rblue_flutter/RblueC.xcframework/ios-arm64-simulator/librblue_c.a
+e4eb742285943f4a7395faaa7c1596c67b72cf29781db626bb248da17f5cbdf6  macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a
+92ca8ed0b3d302dfc31ae6b8e9b07d985ab8d28209622afdaa309cea7f4cd704  windows/x64/rblue_c.dll
 ```
 
 Every artifact must expose these nine public ABI symbols (Apple prepends `_`):

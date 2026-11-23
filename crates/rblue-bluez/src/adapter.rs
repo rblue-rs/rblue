@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, Weak};
 
 use btleplug::api::{
     Central as _, CentralEvent, Manager as BtleManager, Peripheral as BtlePeripheral,
+    RetrievePeripheralsOptions,
 };
 use futures::stream::{BoxStream, StreamExt};
 use rblue_api::adapter::{Adapter, AdapterEventStream};
@@ -47,7 +48,8 @@ const CAPABILITIES: CapabilitySet = CapabilitySet::bit(Capability::ActiveScan)
     .union(CapabilitySet::bit(Capability::GattClient))
     .union(CapabilitySet::bit(Capability::MtuQuery))
     .union(CapabilitySet::bit(Capability::BackgroundScan))
-    .union(CapabilitySet::bit(Capability::AdapterPowerControl));
+    .union(CapabilitySet::bit(Capability::AdapterPowerControl))
+    .union(CapabilitySet::bit(Capability::SystemConnectedPeripherals));
 
 /// Registry entry for one device ever sighted by this adapter. Lives until
 /// the adapter is dropped: `Error::NotFound` is reserved for devices that
@@ -624,6 +626,56 @@ impl Adapter for BluezAdapter {
             .iter()
             .map(|entry| Arc::new(BluezPeripheral::new(entry.clone())) as Arc<dyn Peripheral>)
             .collect())
+    }
+
+    async fn system_connected_peripherals(
+        &self,
+        services: &[uuid::Uuid],
+    ) -> Result<Vec<Arc<dyn Peripheral>>, Error> {
+        if services.is_empty() {
+            return Err(Error::InvalidState(
+                "at least one service UUID is required".into(),
+            ));
+        }
+        let adapter = self.initialized_adapter().await?;
+        let peripherals = adapter
+            .retrieve_peripherals(RetrievePeripheralsOptions {
+                identifiers: None,
+                services: Some(services.to_vec()),
+            })
+            .await
+            .map_err(map_btleplug_error)?;
+        let mut results: Vec<Arc<dyn Peripheral>> = Vec::with_capacity(peripherals.len());
+        for peripheral in peripherals {
+            let properties = peripheral.properties().await.map_err(map_btleplug_error)?;
+            let address = peripheral.address().into_inner();
+            let device_id = match &properties {
+                Some(properties) => device_id_from(address, properties.address_type),
+                None => device_id_from(address, None),
+            };
+            let advertisement = properties
+                .as_ref()
+                .map(advertisement_from_properties)
+                .unwrap_or_default();
+            let mut inner = self.shared.lock_state();
+            let entry = if let Some(entry) = inner.find(&address) {
+                if !entry.connected.load(Ordering::Acquire) {
+                    entry.set_handle(peripheral);
+                }
+                entry
+            } else {
+                let entry = Arc::new(DeviceEntry::new(
+                    device_id,
+                    address,
+                    peripheral,
+                    advertisement,
+                ));
+                inner.devices.push(entry.clone());
+                entry
+            };
+            results.push(Arc::new(BluezPeripheral::new(entry)) as Arc<dyn Peripheral>);
+        }
+        Ok(results)
     }
 
     async fn peripheral(&self, id: &DeviceId) -> Result<Arc<dyn Peripheral>, Error> {
