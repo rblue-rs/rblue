@@ -46,7 +46,6 @@
 pub mod adapter;
 pub mod cache;
 pub mod capability;
-#[cfg(any(test, feature = "contract"))]
 pub mod contract;
 pub mod debounce;
 pub mod device;
@@ -79,7 +78,9 @@ pub mod prelude {
         Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service,
         ServiceId, ServiceSet, WriteMode,
     };
-    pub use crate::peripheral::{NotificationStream, Peripheral};
+    pub use crate::peripheral::{
+        ConnectOptions, ConnectionPriority, NotificationStream, Peripheral, WriteOptions,
+    };
     pub use crate::queue::{GattOpPriority, GattOpQueue, GattOperation, OpHandle, QueueConfig};
     pub use crate::scan::{
         AdvertisementData, DiscoveredDevice, ManufacturerFilter, RequestDeviceOptions, ScanFilter,
@@ -95,7 +96,6 @@ pub mod prelude {
 pub use crate::adapter::{Adapter, AdapterEventStream};
 pub use crate::cache::{ServiceCache, ServiceCacheConfig, ValidationEvidence};
 pub use crate::capability::{Capability, CapabilitySet};
-#[cfg(any(test, feature = "contract"))]
 pub use crate::contract::{
     run_contract_suite, CONTRACT_CHARACTERISTIC_UUID, CONTRACT_SERVICE_UUID,
 };
@@ -107,7 +107,9 @@ pub use crate::gatt::{
     Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service, ServiceId,
     ServiceSet, WriteMode,
 };
-pub use crate::peripheral::{NotificationStream, Peripheral};
+pub use crate::peripheral::{
+    ConnectOptions, ConnectionPriority, NotificationStream, Peripheral, WriteOptions,
+};
 pub use crate::queue::{GattOpPriority, GattOpQueue, GattOperation, OpHandle, QueueConfig};
 pub use crate::scan::{
     AdvertisementData, DiscoveredDevice, ManufacturerFilter, RequestDeviceOptions, ScanFilter,

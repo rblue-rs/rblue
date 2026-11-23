@@ -23,6 +23,7 @@ use rblue_api::CapabilitySet;
 /// | `GattServer` / `Advertise` | no | Phase 2 scope. |
 /// | `WatchAdvertisements` | no | Web-only capability. |
 /// | `ConnectionPriority` | no | No equivalent connection-priority request; the method returns `Error::Unsupported`. |
+/// | `SystemConnectedPeripherals` | no | No equivalent system-connected lookup; the method returns `Error::Unsupported`. |
 #[must_use]
 pub const fn ohos_capabilities() -> CapabilitySet {
     CapabilitySet::ACTIVE_SCAN
@@ -57,5 +58,6 @@ mod tests {
         assert!(!caps.has(Capability::Advertise));
         assert!(!caps.has(Capability::WatchAdvertisements));
         assert!(!caps.has(Capability::ConnectionPriority));
+        assert!(!caps.has(Capability::SystemConnectedPeripherals));
     }
 }

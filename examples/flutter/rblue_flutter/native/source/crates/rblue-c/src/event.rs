@@ -5,7 +5,7 @@
 //! The inner payloads are the serde forms of the `rblue-api` types
 //! (`AdapterEvent` external tagging, `Notification` as an object).
 
-use rblue_api::{AdapterEvent, DeviceId, Notification};
+use rblue_api::{AdapterEvent, DeviceId, Notification, SupervisorEvent};
 
 /// One message of the event stream: an adapter event or a notification of one
 /// connected device.
@@ -28,6 +28,12 @@ pub(crate) enum EventEnvelope<'a> {
         device: &'a DeviceId,
         /// Characteristic identity and value bytes.
         notification: &'a Notification,
+    },
+    /// Application-level connection supervisor event, distinct from adapter
+    /// connection events and from the platform `auto_connect` flag.
+    SupervisorEvent {
+        /// The supervisor event.
+        event: &'a SupervisorEvent,
     },
 }
 

@@ -463,6 +463,19 @@ impl Adapter for WinRtAdapter {
         self.resolve_state(map_central_state(state))
     }
 
+    async fn state(&self) -> Result<AdapterState, Error> {
+        let adapter = self.initialized_adapter().await?;
+        let state = adapter.adapter_state().await.map_err(map_btleplug_error)?;
+        Ok(map_central_state(state))
+    }
+
+    async fn set_powered(&self, _powered: bool) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: PLATFORM,
+            feature: "set_powered",
+        })
+    }
+
     async fn start_scan(&self, filter: &ScanFilter) -> Result<(), Error> {
         let adapter = self.initialized_adapter().await?;
         // Record the filter before the platform call so the event pump never

@@ -62,10 +62,6 @@ pub(crate) fn att_invalid_handle() -> Error {
     })
 }
 
-/// Maps a btleplug error into the unified model. Errors that carry a device
-/// identity in the rblue model (`Error::NotFound`) are produced at the call
-/// sites that know the id, not here.
-
 /// Maps the unified connection-priority enum onto the fork's WinRT
 /// `RequestPreferredConnectionParameters` presets.
 pub(crate) fn connection_parameter_preset(
@@ -78,6 +74,9 @@ pub(crate) fn connection_parameter_preset(
     }
 }
 
+/// Maps a btleplug error into the unified model. Errors that carry a device
+/// identity in the rblue model (`Error::NotFound`) are produced at the call
+/// sites that know the id, not here.
 pub(crate) fn map_btleplug_error(error: btleplug::Error) -> Error {
     match error {
         btleplug::Error::PermissionDenied => Error::Permission(PermissionReason::Unauthorized),

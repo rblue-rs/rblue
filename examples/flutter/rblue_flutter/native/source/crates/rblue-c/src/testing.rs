@@ -175,6 +175,17 @@ impl Recorder {
         }
     }
 
+    /// Returns every event already queued or delivered within [`ABSENCE_WINDOW`].
+    ///
+    /// Soak tests use this to separate events delivered before a notify flood
+    /// (including the snapshot [`Self::drain_events`] queued in [`Fixture::new`])
+    /// from events delivered afterwards, so shutdown totals can be checked
+    /// against what the host actually received.
+    pub(crate) async fn take_pending_events(&mut self) -> Vec<String> {
+        self.drain_events().await;
+        self.events.drain(..).collect()
+    }
+
     /// Collects everything delivered within [`ABSENCE_WINDOW`] (e.g. the
     /// adapter's device snapshot right after the pump starts), queueing it by
     /// type for later awaiters.

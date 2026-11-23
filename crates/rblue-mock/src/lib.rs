@@ -19,9 +19,11 @@
 //!   `AdapterEvent::DeviceDisconnected` with a chosen
 //!   [`DisconnectReason`](rblue_api::DisconnectReason); subsequent GATT
 //!   operations fail with `Error::NotConnected`.
-//! - [Injected failures](MockPeripheral::set_failure): read/write/subscribe
-//!   return the given ATT error or platform status; see
+//! - [Injected failures](MockPeripheral::set_failure): connect, read, write,
+//!   and subscribe return the given ATT error or platform status; see
 //!   `docs/error-mapping.md` in the crate root.
+//! - [Write holds](MockPeripheral::hold_writes): park in-flight writes so a
+//!   test can [`MockPeripheral::force_disconnect`] mid-procedure.
 //! - [Scriptable GATT tree](MockPeripheral::add_service): services and
 //!   characteristics with configurable properties, values, and write bounds;
 //!   [`MockCharacteristic::with_echo`] implements the write-echo loop the
@@ -31,6 +33,10 @@
 //! - [Connection priority](rblue_api::Peripheral::set_connection_priority):
 //!   records the requested [`ConnectionPriority`](rblue_api::ConnectionPriority)
 //!   once the mock session is connected.
+//! - [System-connected devices](MockPeripheral::set_system_connected): mark a
+//!   device as already connected at the OS level so
+//!   `Adapter::system_connected_peripherals` can return it before a local
+//!   `connect()`.
 //!
 //! [`MockAdapter::with_contract_fixture`] builds the fixture the
 //! `rblue_api::contract` suite requires, and the mock reports every

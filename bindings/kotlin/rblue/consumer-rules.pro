@@ -7,6 +7,7 @@
 # JNI entry point declared in Kotlin, implemented by the exported symbol
 # Java_com_rblue_RblueNative_nativeInit in librblue_ffi.so.
 -keep class com.rblue.RblueNative { *; }
+-keep class com.rblue.AdapterStateMonitor { *; }
 
 # The btleplug fork's helper classes: instantiated and registered over JNI by
 # name (com.nonpolynomial.btleplug.android.impl.*) and through the gedgygedgy

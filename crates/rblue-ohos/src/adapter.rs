@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use rblue_api::{
-    Adapter, AdapterEventStream, AdapterId, CapabilitySet, DeviceId, Error, Peripheral,
-    RequestDeviceOptions, ScanFilter,
+    Adapter, AdapterEventStream, AdapterId, AdapterState, CapabilitySet, DeviceId, Error,
+    Peripheral, RequestDeviceOptions, ScanFilter,
 };
 use rblue_driver::{BleDriverCommand, DriverValue};
 
@@ -62,6 +62,24 @@ impl Adapter for OhosAdapter {
         let state = expect_adapter_state(self.request(BleDriverCommand::GetAdapterState).await?)?;
         self.core.set_adapter_state(state);
         Ok(())
+    }
+
+    async fn state(&self) -> Result<AdapterState, Error> {
+        match self.request(BleDriverCommand::GetAdapterState).await {
+            Ok(value) => {
+                let state = expect_adapter_state(value)?;
+                self.core.set_adapter_state(state);
+                Ok(state)
+            }
+            Err(_) => Ok(self.core.adapter_state()),
+        }
+    }
+
+    async fn set_powered(&self, _powered: bool) -> Result<(), Error> {
+        Err(Error::Unsupported {
+            platform: "ohos",
+            feature: "set_powered",
+        })
     }
 
     async fn start_scan(&self, filter: &ScanFilter) -> Result<(), Error> {

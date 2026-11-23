@@ -51,10 +51,6 @@ pub(crate) fn att_invalid_handle() -> Error {
     })
 }
 
-/// Maps a btleplug error into the unified model. Errors that carry a device
-/// identity in the rblue model (`Error::NotFound`) are produced at the call
-/// sites that know the id, not here.
-
 /// Maps the unified connection-priority enum onto the fork's Android
 /// `requestConnectionPriority` presets: `Low` is `CONNECTION_PRIORITY_LOW_POWER`,
 /// `Balanced` is `CONNECTION_PRIORITY_BALANCED`, and `High` is
@@ -69,6 +65,9 @@ pub(crate) fn connection_parameter_preset(
     }
 }
 
+/// Maps a btleplug error into the unified model. Errors that carry a device
+/// identity in the rblue model (`Error::NotFound`) are produced at the call
+/// sites that know the id, not here.
 pub(crate) fn map_btleplug_error(error: btleplug::Error) -> Error {
     match error {
         btleplug::Error::NotConnected => Error::NotConnected,
@@ -169,11 +168,27 @@ pub(crate) fn permission_reason_from_message(message: &str) -> Option<Permission
     None
 }
 
+/// Maps a `BluetoothAdapter` state code into the unified model.
+///
+/// `12`/`15` are `STATE_ON` / `STATE_BLE_ON`. The transitional off/turning
+/// codes (and `STATE_OFF`) are `PoweredOff`. The shell-local sentinels
+/// `-2` (no adapter) and `-3` (`SecurityException` from `getState`) map to
+/// `Unavailable` and `Unauthorized`.
+pub(crate) fn map_android_bluetooth_state(state: i32) -> AdapterState {
+    match state {
+        -2 => AdapterState::Unavailable,
+        -3 => AdapterState::Unauthorized,
+        12 | 15 => AdapterState::PoweredOn,
+        10 | 11 | 13 | 14 | 16 => AdapterState::PoweredOff,
+        _ => AdapterState::Unknown,
+    }
+}
+
 /// Maps the central state reported by the fork into the unified model.
 ///
 /// The fork's Android adapter tracks no radio state and always reports
-/// `Unknown`; the other arms keep the mapping total (they cannot surface
-/// through droidplug today).
+/// `Unknown`; the shell prefers [`map_android_bluetooth_state`] for
+/// `Adapter::state` and live events. The other arms keep this mapping total.
 pub(crate) fn map_central_state(state: CentralState) -> AdapterState {
     match state {
         CentralState::PoweredOn => AdapterState::PoweredOn,
@@ -596,6 +611,18 @@ mod tests {
             map_central_state(CentralState::Unknown),
             AdapterState::Unknown
         );
+    }
+
+    #[test]
+    fn android_bluetooth_state_codes_map_to_unified_states() {
+        assert_eq!(map_android_bluetooth_state(12), AdapterState::PoweredOn);
+        assert_eq!(map_android_bluetooth_state(15), AdapterState::PoweredOn);
+        for code in [10, 11, 13, 14, 16] {
+            assert_eq!(map_android_bluetooth_state(code), AdapterState::PoweredOff);
+        }
+        assert_eq!(map_android_bluetooth_state(-2), AdapterState::Unavailable);
+        assert_eq!(map_android_bluetooth_state(-3), AdapterState::Unauthorized);
+        assert_eq!(map_android_bluetooth_state(0), AdapterState::Unknown);
     }
 
     #[test]
