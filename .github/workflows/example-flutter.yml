@@ -2,20 +2,12 @@ name: Flutter package
 
 # Build and inspect the exact native artifacts distributed by rblue_flutter.
 # Physical-radio acceptance remains a separate manual/self-hosted concern.
+# GitHub-hosted jobs in this file are workflow_dispatch only while
+# hosted billing is blocked. An absent automatic run is not a pass.
+# Flutter is not installed on the current self-hosted runner, and
+# Windows/Linux Flutter package jobs cannot run there.
 on:
-  push:
-    branches: [main]
-    tags:
-      - "rblue_flutter-v[0-9]+.[0-9]+.[0-9]+*"
-  pull_request:
-    paths:
-      - ".github/workflows/example-flutter.yml"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/rblue*/**"
-      - "bindings/c/**"
-      - "examples/flutter/**"
-
+  workflow_dispatch:
 permissions:
   contents: read
 
@@ -49,9 +41,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Verify committed native artifact checksums
         run: python3 examples/flutter/tools/verify-native-artifacts.py
+      - name: Verify native source snapshot matches workspace crates
+        run: bash examples/flutter/tools/check-snapshot-sync.sh
       - name: Analyze and test package
         working-directory: ${{ env.PACKAGE_DIR }}
         run: |
+          flutter pub get
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
@@ -130,6 +125,12 @@ jobs:
       - name: Build against packaged Android libraries
         working-directory: ${{ env.EXAMPLE_DIR }}
         run: flutter build apk --debug
+      - name: Free disk before the AGP 9 consumer build
+        run: |
+          rm -rf "${{ env.EXAMPLE_DIR }}/build"
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/powershell /usr/share/swift || true
+          df -h
       - name: Build a disposable AGP 9 built-in Kotlin consumer
         run: |
           package_copy="$(mktemp -d)/rblue_flutter"
@@ -139,8 +140,24 @@ jobs:
             --exclude='native/source/target' \
             -C "$PACKAGE_DIR" -cf - . | tar -xf - -C "$package_copy"
           python3 examples/flutter/tools/prepare-agp9-test.py "$package_copy"
+          agp_log_dir="${GITHUB_WORKSPACE}/android-minimum-agp9-logs"
+          mkdir -p "$agp_log_dir"
+          set +e
           (cd "$package_copy/example" && \
             flutter build apk --debug --android-skip-build-dependency-validation)
+          status=$?
+          cp -a "$package_copy/example/build" "$agp_log_dir/" 2>/dev/null || true
+          exit "$status"
+      - name: Upload Flutter 3.41.7 logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-minimum-logs
+          path: |
+            ${{ env.EXAMPLE_DIR }}/build
+            android-minimum-agp9-logs
+          if-no-files-found: ignore
+          retention-days: 7
 
   android:
     name: Android artifacts and release APK
@@ -161,29 +178,49 @@ jobs:
           cache: true
       - name: Rebuild packaged Android C ABI
         run: examples/flutter/tools/build-libs.sh --android-only
+      - name: Free Rust target directory after staging JNI libraries
+        # build-libs.sh builds the package-local snapshot workspace, so its
+        # artifacts live under native/source/target; the staged copies in
+        # android/src/main/jniLibs are all later steps need.
+        run: rm -rf "$PACKAGE_DIR/native/source/target"
       - name: Verify generated Dart bindings
         working-directory: examples/flutter
         run: |
           flutter pub get
           dart run ffigen --config ffigen.yaml
+          dart format rblue_flutter/lib/src/ffi_bindings.dart
           git diff --exit-code -- rblue_flutter/lib/src/ffi_bindings.dart
       - name: Build debug and release APKs
         working-directory: ${{ env.EXAMPLE_DIR }}
         run: |
           flutter build apk --debug
+          rm -rf build/app/intermediates build/app/tmp
+          rm -f build/app/outputs/flutter-apk/app-debug.apk
           flutter build apk --release
       - name: Verify packaged ABIs, exports, and JNI helpers
+        shell: bash
         run: |
+          set -euo pipefail
           apk="$EXAMPLE_DIR/build/app/outputs/flutter-apk/app-release.apk"
           unzip -l "$apk" | grep 'lib/arm64-v8a/librblue_c.so'
           unzip -l "$apk" | grep 'lib/armeabi-v7a/librblue_c.so'
           unzip -l "$apk" | grep 'lib/x86_64/librblue_c.so'
-          for library in "$PACKAGE_DIR"/android/src/main/jniLibs/*/librblue_c.so; do
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            library="$PACKAGE_DIR/android/src/main/jniLibs/$abi/librblue_c.so"
+            test -f "$library"
+            # Capture first, then match a here-string: `nm | grep -q` under
+            # pipefail can fail on SIGPIPE once grep exits early.
+            exports="$(nm -D --defined-only "$library")"
             for symbol in rblue_new rblue_shutdown rblue_free rblue_request \
               rblue_set_event_callback rblue_set_owned_response_callback \
-              rblue_set_response_callback rblue_free_string rblue_free_payload; do
-              llvm-nm -D --defined-only "$library" | grep -q " $symbol$"
+              rblue_set_response_callback rblue_free_string rblue_free_payload \
+              Java_com_rblue_RblueNative_nativeInit; do
+              if ! grep -q " $symbol$" <<<"$exports"; then
+                echo "::error::$abi/librblue_c.so does not export $symbol"
+                exit 1
+              fi
             done
+            echo "$abi/librblue_c.so exports the C ABI and JNI nativeInit"
           done
           python3 examples/flutter/tools/check-android-jni.py "$apk"
 
@@ -211,10 +248,10 @@ jobs:
           plutil -lint \
             "$PACKAGE_DIR/ios/Resources/PrivacyInfo.xcprivacy" \
             "$PACKAGE_DIR/macos/Resources/PrivacyInfo.xcprivacy"
-          lipo -verify_arch arm64 \
-            "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"
-          lipo -verify_arch x86_64 \
-            "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"
+          lipo "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a" \
+            -verify_arch arm64
+          lipo "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a" \
+            -verify_arch x86_64
           for library in \
             "$PACKAGE_DIR"/ios/rblue_flutter/RblueC.xcframework/*/librblue_c.a \
             "$PACKAGE_DIR/macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a"; do
