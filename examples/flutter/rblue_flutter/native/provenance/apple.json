@@ -1,6 +1,6 @@
 {
-  "source_commit": "d482165460e50705a8affde549c99533f6b16ecc",
-  "source_tree": "9528fa1f2863da649e3266bb78905f9fb6edfd32",
+  "source_commit": "416f04568622e3802aa444e7d2668e8256add7c3",
+  "source_tree": "8489a606289f143c84ded8054f6fe44541b59289",
   "source_files": {
     "Cargo.lock": "f7d6984fda62e192bc78414b744fec8465ade4dc5d43ab5b08d6ca9cc3cbf69f",
     "Cargo.toml": "ad12ee0ff9fcef342b6796670ab7654c4967f0de8029cd3aab026a5ffb2e70b3",
@@ -38,8 +38,9 @@
     "crates/rblue-c/src/event.rs": "5b132b4faa433d006913e2372d29412d716f1ebe18a8d37efa64d7b4c3363538",
     "crates/rblue-c/src/ffi.rs": "497c25c011ea9d0e549d0e9b85aa63ff9a99dff3715f61fe68e54638b0cd6169",
     "crates/rblue-c/src/handle.rs": "f14f44ef99d61eb8337b6b8097ef47a7e6a127d5948cb80d6c4de76ca5bfa7d5",
-    "crates/rblue-c/src/lib.rs": "e094a6034b1fe4bae7b04061f15d6e02ee2de7d9735203beb0f61836b71dfe2e",
-    "crates/rblue-c/src/testing.rs": "85e3b64d0a055ca3c80ead02ba8a803e51f001a92a4351e609c4360b9d1dbe66",
+    "crates/rblue-c/src/lib.rs": "0858906335c54c28a962d4037e4b47184eab3a2abc14131238825e82cd186da8",
+    "crates/rblue-c/src/soak.rs": "dc7b89cdfbf36146fb495e57e6bdf4e4168e4ea2994eca364344dd130167dc5a",
+    "crates/rblue-c/src/testing.rs": "d144591bb4b151da8f96b87474fe6ccdea48c841482a2d8140988be97c2d5aa6",
     "crates/rblue-corebluetooth/Cargo.toml": "062658b37fd0b3400ec791dd8fdc022a606b8ce7a45a599d4168c1f0bbd7c5f7",
     "crates/rblue-corebluetooth/src/adapter.rs": "85c667f48f9dc80d6bc453cb66f98cc235fb1384c8fe85b6e173ccd7faea87c1",
     "crates/rblue-corebluetooth/src/hub.rs": "947233d3383bd229d4015e25612210dca517f87169bca424fa2f9a638706300e",
@@ -61,22 +62,22 @@
     "crates/rblue-winrt/src/peripheral.rs": "02cbdaed730582b42792ef0b691c647034b0822cfb416ec0ede4f3f03770a7d2"
   },
   "build_inputs": {
-    "examples/flutter/rblue_flutter/native/source": "9528fa1f2863da649e3266bb78905f9fb6edfd32",
+    "examples/flutter/rblue_flutter/native/source": "8489a606289f143c84ded8054f6fe44541b59289",
     "examples/flutter/rblue_flutter/native/include": "46a14bf031c2a3ccde4d05640fb3b6f6868e95f0",
     "examples/flutter/tools/build-libs.sh": "77136f22f08e357df924bdd62ab55d62b3db2dba",
     "examples/flutter/tools/build-windows.ps1": "e2325e5a09a8dafc404315af373dc736ef7182dd",
-    "examples/flutter/tools/record-native-rebuild.py": "dd1c8f27102ba944c38ab3f059f906cb23991754"
+    "examples/flutter/tools/record-native-rebuild.py": "e9d3a27d734b984c40eb7a125c7e5d0e074d5967"
   },
-  "workflow_run": "https://github.com/rblue-rs/rblue/actions/runs/45146069507",
+  "workflow_run": "https://github.com/rblue-rs/rblue/actions/runs/45157867742",
   "run_attempt": "1",
   "platform": "apple",
   "host": "macOS-26.7.2-arm64-arm-64bit-Mach-O",
   "rustc": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
   "cargo": "cargo 1.100.0 (3acc79c0c 2026-11-05)",
   "sha256": {
-    "ios/rblue_flutter/RblueC.xcframework/ios-arm64/librblue_c.a": "694790ab40e7f24933ad55a06760c347936bbe730a9a357a22269ac1b01c344c",
-    "ios/rblue_flutter/RblueC.xcframework/ios-arm64-simulator/librblue_c.a": "f4f37fd88866e62dda27b8718e03e8e455f2ff80b0d9923f9e5a9a86c4333cac",
-    "macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a": "2e8737631149baae26793a51b4f9121c4ec4a3fdb4e0c7abea09ae82e506161c"
+    "ios/rblue_flutter/RblueC.xcframework/ios-arm64/librblue_c.a": "d707b26d98da5edc616e8905366416887c9544a02748088618ef8d51896c7906",
+    "ios/rblue_flutter/RblueC.xcframework/ios-arm64-simulator/librblue_c.a": "703eb428ad9ac01fdda32b62cf0e3eb280204367393b5a6899556a5f1dd9cbd3",
+    "macos/rblue_flutter/RblueC.xcframework/macos-arm64_x86_64/librblue_c.a": "69223037e54ca197f7985fb489b860d01e36e022e8ed1d54e62ef0e728b7fc76"
   },
   "xcode": "Xcode 26.6\nBuild version 17F113"
 }

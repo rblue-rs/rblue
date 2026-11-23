@@ -66,6 +66,8 @@ mod ffi;
 mod handle;
 
 #[cfg(test)]
+mod soak;
+#[cfg(test)]
 mod testing;
 
 pub use callbacks::{RblueEventCallback, RblueResponseCallback};

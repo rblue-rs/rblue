@@ -14,7 +14,7 @@ import platform as host_platform
 import subprocess
 
 PACKAGE = "examples/flutter/rblue_flutter/"
-BRANCH = "ci/free-standard-hosted"
+BRANCHES = {"ci/free-standard-hosted", "test/c-abi-dart-ffi-soak"}
 REPOSITORY = "rblue-rs/rblue"
 INPUTS = [
     PACKAGE + "native/source",
@@ -72,13 +72,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("platform", choices=["android", "apple", "windows"])
     args = parser.parse_args()
+    branch = os.environ.get("GITHUB_REF_NAME")
     if (os.environ.get("GITHUB_REPOSITORY") != REPOSITORY
             or os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
-            or os.environ.get("GITHUB_REF") != "refs/heads/" + BRANCH):
+            or branch not in BRANCHES
+            or os.environ.get("GITHUB_REF") != "refs/heads/" + branch):
         raise RuntimeError("Manual repair-branch workflow only")
     source_commit = command("git", "rev-parse", "HEAD")
     expected = {path: command("git", "rev-parse", f"HEAD:{path}") for path in INPUTS}
-    head = api("git/ref/heads/" + BRANCH)["object"]["sha"]
+    head = api("git/ref/heads/" + branch)["object"]["sha"]
     remote_tree = api(f"git/trees/{head}?recursive=1")
     if remote_tree.get("truncated"):
         raise RuntimeError("Cannot validate truncated tree")
@@ -127,7 +129,7 @@ def main():
         "message": f"build(flutter): refresh {args.platform} native binaries from {source_commit[:12]}",
         "tree": tree["sha"], "parents": [head],
     })
-    api("git/refs/heads/" + BRANCH, {"sha": commit["sha"], "force": False}, "PATCH")
+    api("git/refs/heads/" + branch, {"sha": commit["sha"], "force": False}, "PATCH")
     print(json.dumps({"commit": commit["sha"], "provenance": provenance}, indent=2))
 
 

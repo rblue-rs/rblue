@@ -30,6 +30,10 @@ class NativeRebuildTests(unittest.TestCase):
             source.write_text("after")
             self.assertNotEqual(before, self.module.source_checksums(root))
 
+    def test_only_explicitly_approved_rebuild_branches_are_allowed(self):
+        self.assertEqual(self.module.BRANCHES, {
+            "ci/free-standard-hosted", "test/c-abi-dart-ffi-soak"})
+
     def test_unknown_platform_rejected(self):
         with self.assertRaises(ValueError):
             self.module.platform_paths("../../main")
