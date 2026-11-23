@@ -36,10 +36,10 @@ def request(event, ref, version, source):
 
 def require_ci(runs):
     for path in CI_PATHS:
-        candidates = [r for r in runs if r["path"] == path and r["event"] == "push"]
+        candidates = [r for r in runs if r["path"] == path and r["event"] in ("push", "workflow_dispatch")]
         latest = max(candidates, key=lambda r: r["id"], default={})
         if latest.get("status") != "completed" or latest.get("conclusion") != "success":
-            raise ValueError(f"latest main push CI must succeed for {path}")
+            raise ValueError(f"latest main push/manual CI must succeed for {path}")
 
 
 def run(*args, cwd=None):

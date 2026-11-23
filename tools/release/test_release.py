@@ -25,6 +25,7 @@ class ReleaseTests(unittest.TestCase):
     def test_requires_latest_success_for_all_workflows(self):
         runs = [{"id": n, "path": p, "conclusion": "success", "status": "completed", "event": "push"} for n, p in enumerate(release.CI_PATHS)]
         release.require_ci(runs)
+        release.require_ci([dict(r, event="workflow_dispatch") for r in runs])
         with self.assertRaises(ValueError):
             release.require_ci(runs[:-1])
         with self.assertRaises(ValueError):

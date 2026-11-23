@@ -10,7 +10,7 @@ It creates no Release until one of the explicit triggers below is used.
 - **Manual:** on the main branch, run **Release native libraries** with
   `version` (a new `vX.Y.Z` semantic-version tag, optionally prerelease/build
   metadata) and `source_ref` (the exact full 40-character commit SHA).
-  Only commits already merged into main with successful main-push CI can release.
+  Only commits already merged into main with successful main-branch CI can release.
   The workflow creates that new tag only after validation. Tags created with its
   `GITHUB_TOKEN` do not start another workflow run.
 - **Version tag:** deliberately push `v1.2.3` or e.g. `v1.2.3-rc.1` pointing to
@@ -24,9 +24,11 @@ this workflow and the final provenance verifier from PR #46.
 
 ## Gates and assets
 
-The newest main-push runs of `ci.yml`, `example-android.yml`,
+The newest main-branch push or manual runs of `ci.yml`, `example-android.yml`,
 `example-flutter.yml` and `example-ios.yml` for the exact chosen SHA must all
-succeed. Source snapshot sync, the complete seven-library checksum set, exact
+succeed. If a path-filtered workflow (e.g. iOS) did not run for this SHA, run
+it manually on main at that exact commit and wait for success before releasing.
+Source snapshot sync, the complete seven-library checksum set, exact
 source/binary provenance, and successful recorded hosted rebuild runs are
 required. An older checksum-only verifier fails closed. Failed, pending, skipped
 or missing checks are not bypassed. API failures also stop publication.
