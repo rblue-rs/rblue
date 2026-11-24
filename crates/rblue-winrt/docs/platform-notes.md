@@ -145,6 +145,11 @@ not advertise `Capability::AdapterPowerControl`.
   maps keep only the first entry), so instance indices are always 0 in
   practice; same-UUID duplicates are not addressable on Windows (inherited
   fork limitation).
+- `read_descriptor` / `write_descriptor` are implemented, but the pinned
+  btleplug fork addresses descriptors by UUID only. If a characteristic
+  exposes more than one descriptor with the same UUID, or a `DescriptorId`
+  with `instance > 0` is used, the shell returns `Error::Backend` rather
+  than silently forwarding the first matching UUID.
 - Discovery failures may surface late: the fork returns `Ok` with an empty
   tree when the service fetch reports a non-success status, and the failure
   appears as an invalid-handle `Error::Att` on the first characteristic

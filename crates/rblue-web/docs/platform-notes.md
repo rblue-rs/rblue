@@ -57,7 +57,9 @@ API-to-browser mapping table lives in `docs/error-mapping.md`.
   permission-filters the result against `optionalServices` before it reaches
   Rust. Descriptor enumeration uses `getDescriptors()` when the browser
   allows it; a rejected or blocked enumeration leaves that characteristic's
-  descriptor list empty rather than failing the whole tree.
+  descriptor list empty rather than failing the whole tree. An empty list
+  after a failed `getDescriptors()` is not an authoritative "no
+  descriptors" result — it only means enumeration was unavailable.
   `read_descriptor` / `write_descriptor` map to the Web Bluetooth
   descriptor `readValue()` / `writeValue()` APIs. Oversize writes still
   fail with `InvalidLength` at the conservative 20-byte default ATT cap.

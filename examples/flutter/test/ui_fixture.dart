@@ -80,7 +80,7 @@ class UiBridge extends FakeNativeBridge {
                     {
                       'uuid': testCharacteristic,
                       'properties': 'READ | WRITE | NOTIFY',
-                      'descriptors': <String>[],
+                      'descriptors': <Object>[],
                     },
                   ],
                 },

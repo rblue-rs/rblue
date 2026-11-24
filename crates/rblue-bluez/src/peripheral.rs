@@ -79,9 +79,10 @@ impl BluezPeripheral {
 
     /// Resolves a session-scoped descriptor identity against the discovered
     /// tree of the current connection and rebuilds the fork's descriptor
-    /// value. The fork addresses descriptors by UUID, so `instance` is
-    /// validated against the discovered tree and cannot be forwarded when
-    /// two same-UUID descriptors are present.
+    /// value. The fork addresses descriptors by UUID only, so a
+    /// `DescriptorId` with `instance > 0` or a characteristic that exposes
+    /// more than one descriptor with this UUID returns [`Error::Backend`]
+    /// rather than silently forwarding the first UUID match.
     fn resolve_descriptor(&self, id: &DescriptorId) -> Result<btleplug::api::Descriptor, Error> {
         let Some(services) = self.entry.services() else {
             return Err(att_invalid_handle());
@@ -98,16 +99,24 @@ impl BluezPeripheral {
                 .filter(|characteristic| characteristic.uuid == id.characteristic.uuid)
                 .nth(id.characteristic.instance as usize)
         });
-        let descriptor = characteristic.and_then(|characteristic| {
-            characteristic
-                .descriptors
-                .iter()
-                .filter(|descriptor| descriptor.uuid == id.uuid)
-                .nth(id.instance as usize)
-        });
-        let Some(descriptor) = descriptor else {
+        let Some(characteristic) = characteristic else {
             return Err(att_invalid_handle());
         };
+        let same_uuid: Vec<_> = characteristic
+            .descriptors
+            .iter()
+            .filter(|descriptor| descriptor.uuid == id.uuid)
+            .collect();
+        let Some(descriptor) = same_uuid.get(id.instance as usize) else {
+            return Err(att_invalid_handle());
+        };
+        // The fork identifies descriptors by UUID only. Do not silently
+        // forward a colliding instance to whatever the first UUID match is.
+        if id.instance > 0 || same_uuid.len() > 1 {
+            return Err(Error::Backend(
+                "this backend addresses GATT descriptors by UUID only and cannot distinguish multiple descriptors that share a UUID (including DescriptorId.instance > 0)".to_owned(),
+            ));
+        }
         Ok(btleplug::api::Descriptor {
             uuid: descriptor.uuid,
             service_uuid: id.characteristic.service.uuid,

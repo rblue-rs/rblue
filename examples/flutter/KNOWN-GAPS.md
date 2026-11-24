@@ -24,5 +24,10 @@ silent claims of platform support.
    status values such as 133 are preserved when present, but some connection
    paths in the fork retry and collapse their final failure to `NotConnected`.
 7. **The C ABI is intentionally small.** RSSI, MTU query, capabilities and
-   `max_write_len`, and descriptor `read_descriptor` / `write_descriptor` are
-   exposed. Explicit MTU requests and pairing remain platform-specific.
+   `max_write_len` are exposed by the current packaged C ABI. Descriptor
+   `read_descriptor` / `write_descriptor` are implemented in the Rust core and
+   in-tree Dart client, but the packaged `so`/`dylib` and `native/source`
+   snapshot are still pre-#12 (UUID-string `descriptors`, no descriptor
+   methods) until a provenance-checked native rebuild. The Dart parser accepts
+   both descriptor JSON shapes so `discoverServices` against that snapshot does
+   not throw. Explicit MTU requests and pairing remain platform-specific.

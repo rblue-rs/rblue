@@ -757,18 +757,21 @@ class Characteristic {
   final List<Descriptor> descriptors;
 
   /// Parses the serde form.
-  factory Characteristic.fromJson(Map<String, Object?> json) => Characteristic(
-    uuid: json['uuid']! as String,
-    properties: CharacteristicProperties.fromJson(
-      json['properties']! as String,
-    ),
-    descriptors: (json['descriptors']! as List<Object?>)
-        .map(
-          (value) =>
-              Descriptor.fromJson((value! as Map).cast<String, Object?>()),
-        )
-        .toList(),
-  );
+  ///
+  /// Accepts both the current `Descriptor` object list and the pre-#12
+  /// UUID-string list used by packaged native snapshots. Legacy strings
+  /// get a placeholder [CharacteristicId] (empty service UUID) until
+  /// [ServiceSet.fromJson] fills in the owning session id.
+  factory Characteristic.fromJson(Map<String, Object?> json) {
+    final uuid = json['uuid']! as String;
+    return Characteristic(
+      uuid: uuid,
+      properties: CharacteristicProperties.fromJson(
+        json['properties']! as String,
+      ),
+      descriptors: _descriptorsFromJson(json['descriptors'], uuid),
+    );
+  }
 
   const Characteristic({
     required this.uuid,
@@ -830,13 +833,20 @@ class ServiceSet {
   final List<Service> services;
 
   /// Parses the serde form.
-  factory ServiceSet.fromJson(Map<String, Object?> json) => ServiceSet(
-    services: (json['services']! as List<Object?>)
-        .map(
-          (value) => Service.fromJson((value! as Map).cast<String, Object?>()),
-        )
-        .toList(),
-  );
+  ///
+  /// Legacy UUID-string descriptor lists are rewritten so each [Descriptor]
+  /// carries the owning [CharacteristicId] derived from discovery order.
+  factory ServiceSet.fromJson(Map<String, Object?> json) {
+    final parsed = ServiceSet(
+      services: (json['services']! as List<Object?>)
+          .map(
+            (value) =>
+                Service.fromJson((value! as Map).cast<String, Object?>()),
+          )
+          .toList(),
+    );
+    return parsed._withLegacyDescriptorOwners();
+  }
 
   const ServiceSet({required this.services});
 
@@ -880,6 +890,95 @@ class ServiceSet {
     }
     return null;
   }
+
+  /// Fills the owning [CharacteristicId] on descriptors parsed from the
+  /// pre-#12 UUID-string list (placeholder service UUID is empty).
+  ServiceSet _withLegacyDescriptorOwners() {
+    final serviceCounts = <String, int>{};
+    final services = <Service>[];
+    for (final service in this.services) {
+      final serviceInstance = serviceCounts.update(
+        service.uuid,
+        (n) => n + 1,
+        ifAbsent: () => 0,
+      );
+      final characteristicCounts = <String, int>{};
+      final characteristics = <Characteristic>[];
+      for (final characteristic in service.characteristics) {
+        final instance = characteristicCounts.update(
+          characteristic.uuid,
+          (n) => n + 1,
+          ifAbsent: () => 0,
+        );
+        final owner = CharacteristicId(
+          service: ServiceId(uuid: service.uuid, instance: serviceInstance),
+          uuid: characteristic.uuid,
+          instance: instance,
+        );
+        characteristics.add(
+          Characteristic(
+            uuid: characteristic.uuid,
+            properties: characteristic.properties,
+            descriptors: [
+              for (final descriptor in characteristic.descriptors)
+                descriptor.characteristic.service.uuid.isEmpty
+                    ? Descriptor(
+                        characteristic: owner,
+                        uuid: descriptor.uuid,
+                        instance: descriptor.instance,
+                      )
+                    : descriptor,
+            ],
+          ),
+        );
+      }
+      services.add(
+        Service(
+          uuid: service.uuid,
+          primary: service.primary,
+          characteristics: characteristics,
+        ),
+      );
+    }
+    return ServiceSet(services: services);
+  }
+}
+
+/// Parses `descriptors` as either `Descriptor` objects or legacy UUID strings.
+List<Descriptor> _descriptorsFromJson(Object? raw, String characteristicUuid) {
+  if (raw == null) {
+    return const [];
+  }
+  if (raw is! List) {
+    throw FormatException(
+      'descriptors must be a JSON list, got ${raw.runtimeType}',
+    );
+  }
+  final values = List<Object?>.from(raw);
+  final descriptors = <Descriptor>[];
+  for (final value in values) {
+    if (value is String) {
+      final instance = descriptors.where((d) => d.uuid == value).length;
+      descriptors.add(
+        Descriptor(
+          characteristic: CharacteristicId(
+            service: const ServiceId(uuid: '', instance: 0),
+            uuid: characteristicUuid,
+            instance: 0,
+          ),
+          uuid: value,
+          instance: instance,
+        ),
+      );
+    } else if (value is Map) {
+      descriptors.add(Descriptor.fromJson(value.cast<String, Object?>()));
+    } else {
+      throw FormatException(
+        'descriptor entry must be a UUID string or a Descriptor object, got ${value.runtimeType}',
+      );
+    }
+  }
+  return descriptors;
 }
 
 /// Connection priority (`rblue_api::ConnectionPriority`).

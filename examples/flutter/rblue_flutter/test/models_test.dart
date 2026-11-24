@@ -182,7 +182,44 @@ void main() {
       final descriptor = set.allCharacteristics.single.descriptors.single;
       expect(descriptor.uuid, '00000000-0000-0000-0000-000000002901');
       expect(descriptor.instance, 0);
-      expect(descriptor.id.characteristic.uuid, '00000000-0000-0000-0000-000000002a19');
+      expect(
+        descriptor.id.characteristic.uuid,
+        '00000000-0000-0000-0000-000000002a19',
+      );
+    });
+
+    test('parses a legacy UUID-string descriptor list from packaged natives', () {
+      const cccd = '00002902-0000-1000-8000-00805f9b34fb';
+      const payload =
+          '{"services":[{"uuid":"00000000-0000-0000-0000-00000000180f",'
+          '"primary":true,"characteristics":[{"uuid":"00000000-0000-0000-0000-000000002a19",'
+          '"properties":"READ | NOTIFY",'
+          '"descriptors":["00002902-0000-1000-8000-00805f9b34fb",'
+          '"00002902-0000-1000-8000-00805f9b34fb"]}]}]}';
+      final set = ServiceSet.fromJson(
+        (jsonDecode(payload)! as Map).cast<String, Object?>(),
+      );
+      final characteristic = set.allCharacteristics.single;
+      expect(characteristic.descriptors.map((d) => d.uuid), [cccd, cccd]);
+      expect(characteristic.descriptors.map((d) => d.instance), [0, 1]);
+      final owner = set.find('00000000-0000-0000-0000-000000002a19')!;
+      expect(
+        characteristic.descriptors.every((d) => d.characteristic == owner),
+        isTrue,
+      );
+    });
+
+    test('Characteristic.fromJson accepts a non-empty UUID-string list', () {
+      final characteristic = Characteristic.fromJson(const {
+        'uuid': '00000000-0000-0000-0000-000000002a19',
+        'properties': 'NOTIFY',
+        'descriptors': ['00002902-0000-1000-8000-00805f9b34fb'],
+      });
+      expect(characteristic.descriptors, hasLength(1));
+      expect(
+        characteristic.descriptors.single.uuid,
+        '00002902-0000-1000-8000-00805f9b34fb',
+      );
     });
   });
 

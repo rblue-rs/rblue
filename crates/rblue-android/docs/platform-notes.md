@@ -231,6 +231,11 @@ permission, `BluetoothOff` for a powered-off radio).
   while walking the cache and the Rust side keys services by UUID, so
   same-UUID duplicates are not addressable and instance indices are 0 in
   practice (inherited fork limitation, same as the BlueZ shell).
+- `read_descriptor` / `write_descriptor` are implemented, but the pinned
+  btleplug fork addresses descriptors by UUID only. If a characteristic
+  exposes more than one descriptor with the same UUID, or a `DescriptorId`
+  with `instance > 0` is used, the shell returns `Error::Backend` rather
+  than silently forwarding the first matching UUID.
 - `subscribe` writes the CCCD explicitly (Android requires it): the value
   is indication when the characteristic supports `INDICATE`, notification
   otherwise. A failed CCCD write reports its raw GATT status

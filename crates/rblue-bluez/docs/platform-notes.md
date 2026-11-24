@@ -188,6 +188,11 @@ GATT operations. An empty service list returns `Error::InvalidState`.
   collapses same-UUID entries (first wins), so instance indices are 0 in
   practice; same-UUID duplicates are not addressable on Linux (inherited
   fork limitation).
+- `read_descriptor` / `write_descriptor` are implemented, but the pinned
+  btleplug fork addresses descriptors by UUID only. If a characteristic
+  exposes more than one descriptor with the same UUID, or a `DescriptorId`
+  with `instance > 0` is used, the shell returns `Error::Backend` rather
+  than silently forwarding the first matching UUID.
 - BlueZ's own GATT attribute cache can serve stale trees for bonded devices
   after a firmware GATT-table change; see the deployment notes for the
   `/etc/bluetooth/main.conf` knob and the plan's forced-refresh note.

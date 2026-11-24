@@ -19,7 +19,7 @@
  * # JSON contracts (serde forms of the rblue-api types)
  *
  * - `params_json`: a JSON object of the method's parameters, using the serde
- *   shapes of `ScanFilter`, `DeviceId`, `CharacteristicId`, `WriteMode`
+ *   shapes of `ScanFilter`, `DeviceId`, `CharacteristicId`, `DescriptorId`, `WriteMode`
  *   (snake_case fields, externally tagged enums). `NULL` counts as `{}`.
  * - `status_json`: NULL on success; otherwise `rblue_api::Error` serialized
  *   with serde's default (PascalCase) variant tags, e.g.
@@ -69,6 +69,9 @@
  *   read               {"device":..,"characteristic":..} -> raw value bytes
  *   write              {"device":..,"characteristic":..,"mode":.., "allow_long_write"?: bool} + payload -> (empty)
  *                      allow_long_write defaults to false (oversize -> InvalidLength).
+ *   read_descriptor    {"device":..,"descriptor": <DescriptorId>} -> raw value bytes
+ *   write_descriptor   {"device":..,"descriptor": <DescriptorId>} + payload -> (empty)
+ *                      oversize -> InvalidLength; no allow_long_write.
  *   subscribe          {"device":..,"characteristic":..} -> (empty)
  *   unsubscribe        {"device":..,"characteristic":..} -> (empty)
  *   is_connected       {"device": <DeviceId>}          -> true|false

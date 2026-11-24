@@ -33,6 +33,15 @@ The driver implements the `BleDriver` interface over these OHOS APIs
 | `readRssi` | `gattClient.getRssiValue()` - **pending real-device verification**; the capability table reports `RssiDuringConnection: false` and `Peripheral::rssi()` returns `Error::Unsupported` until it is verified on hardware. The protocol command exists and is exercised by the round-trip PoC |
 | connection state | `gattClient.on('BLEConnectionStateChange', ...)` -> `DeviceConnected` / `DeviceDisconnected` events via `emitEvent` |
 
+
+## ServiceSet JSON (descriptor objects)
+
+`discoverServices` now returns `Characteristic.descriptors` as a list of
+`Descriptor` objects (`characteristic` + `uuid` + `instance`), not UUID
+strings. Hosts must upgrade their parsers together with this Rust core.
+`PROTOCOL_VERSION` remains `1`, so `hello` will not reject an old host; an
+old host that still expects UUID strings will fail when decoding the tree.
+
 ## Adapter state comes from `@ohos.bluetooth.access`
 
 The adapter power/availability state is **not** in the `ble` module: the
