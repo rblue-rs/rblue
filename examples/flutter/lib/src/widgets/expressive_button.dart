@@ -179,21 +179,33 @@ class _SquishButtonGroupState extends State<SquishButtonGroup>
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.textScalerOf(context).scale(14) > 20) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final action in widget.actions) ...[
-            ExpressiveButton(
-              label: action.label,
-              onPressed: action.onPressed,
-              tonal: action.tonal,
-            ),
-            const SizedBox(height: 8),
-          ],
-        ],
-      );
-    }
+    final largeText = MediaQuery.textScalerOf(context).scale(14) > 20;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tight =
+            constraints.maxWidth.isFinite &&
+            constraints.maxWidth < 88 * widget.actions.length;
+        if (largeText || tight) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final action in widget.actions) ...[
+                ExpressiveButton(
+                  label: action.label,
+                  onPressed: action.onPressed,
+                  tonal: action.tonal,
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
+          );
+        }
+        return _row();
+      },
+    );
+  }
+
+  Widget _row() {
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, _) => Row(

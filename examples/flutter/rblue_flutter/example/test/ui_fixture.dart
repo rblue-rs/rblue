@@ -16,6 +16,21 @@ const testCharacteristic = '0000fff1-0000-1000-8000-00805f9b34fb';
 /// Automatic C-ABI replies for widget tests, with no native library or radio.
 class UiBridge extends FakeNativeBridge {
   bool holdSubscription = false;
+  int capabilitiesBits =
+      Capability.passiveScan |
+      Capability.activeScan |
+      Capability.scanResponse |
+      Capability.gattClient |
+      Capability.rssiDuringConnection |
+      Capability.mtuNegotiation |
+      Capability.mtuQuery |
+      Capability.pairing |
+      Capability.autoConnect |
+      Capability.adapterPowerControl;
+  final unsupportedMethods = <String>{};
+  var systemConnectedResults = [
+    {'id': testDeviceId.json, 'name': 'System Sensor'},
+  ];
 
   @override
   int send(
@@ -29,6 +44,15 @@ class UiBridge extends FakeNativeBridge {
     if (method == 'subscribe' && holdSubscription) return result;
     scheduleMicrotask(() {
       if (disposed) return;
+      if (unsupportedMethods.contains(method)) {
+        failRequest(
+          reqId,
+          jsonEncode({
+            'Unsupported': {'platform': 'test', 'feature': method},
+          }),
+        );
+        return;
+      }
       Object? response;
       switch (method) {
         case 'initialize':
@@ -41,11 +65,13 @@ class UiBridge extends FakeNativeBridge {
         case 'backend_version':
           response = 'widget-test-bridge';
         case 'capabilities':
-          response = 7;
+          response = capabilitiesBits;
         case 'max_write_len':
           response = 244;
         case 'mtu':
           response = 247;
+        case 'request_mtu':
+          response = params['mtu'] ?? 185;
         case 'rssi':
           response = -48;
         case 'connect':
@@ -65,9 +91,7 @@ class UiBridge extends FakeNativeBridge {
             }),
           );
         case 'system_connected_peripherals':
-          response = [
-            {'id': testDeviceId.json, 'name': 'System Sensor'},
-          ];
+          response = systemConnectedResults;
         case 'discover_services':
           response = {
             'services': [
@@ -129,6 +153,9 @@ class UiBridge extends FakeNativeBridge {
       },
     }),
   );
+
+  void emitSupervisor(Object event) =>
+      emitEvent(jsonEncode({'type': 'supervisor_event', 'event': event}));
 }
 
 ({AppState state, UiBridge bridge}) createUiFixture() {

@@ -170,6 +170,32 @@ class AppState extends ChangeNotifier {
   /// The most recent notification of any device, for the platform page.
   DeviceNotification? lastNotification;
 
+  /// Backend capability bitmask, or null if it has not been read yet.
+  int? capabilities;
+
+  /// Device keys imported from [findSystemConnected] in this session.
+  final Set<String> systemConnected = {};
+
+  /// Features that returned [RblueErrorKind.unsupported] in this session.
+  final Set<String> unsupportedFeatures = {};
+
+  /// Whether [capabilities] includes [capability].
+  bool hasCapability(int capability) =>
+      capabilities != null && Capability.has(capabilities!, capability);
+
+  /// Whether [device] was imported from a system-connected lookup.
+  bool isSystemConnected(DeviceId device) =>
+      systemConnected.contains(deviceKey(device));
+
+  /// Whether [feature] already failed with Unsupported in this session.
+  bool isUnsupported(String feature) => unsupportedFeatures.contains(feature);
+
+  /// Remembers an Unsupported result so the UI does not retry it.
+  void markUnsupported(String feature) {
+    if (_disposed) return;
+    if (unsupportedFeatures.add(feature)) notifyListeners();
+  }
+
   RblueClient? get client => _client;
 
   /// Label for the app bar: backend name once ready.
@@ -217,6 +243,7 @@ class AppState extends ChangeNotifier {
       if (_disposed) return;
       ready = true;
       record('initialize', '蓝牙适配器已初始化');
+      unawaited(_loadCapabilities(client));
     } on RblueException catch (error) {
       lastError = error.message;
       record('initialize.error', error.toString(), isError: true);
@@ -259,27 +286,70 @@ class AppState extends ChangeNotifier {
   /// Imports the matching system-connected peripherals into the device list.
   Future<int> findSystemConnected(List<String> services) async {
     final client = _client;
-    if (!ready || client == null) return 0;
-    final matches = await client.systemConnectedPeripherals(services);
-    if (_disposed || !identical(client, _client)) return 0;
-    for (final device in matches) {
-      devices.putIfAbsent(
-        deviceKey(device.id),
-        () => DiscoveredDevice(
-          id: device.id,
-          advertisement: AdvertisementData(
-            localName: device.name,
-            services: const [],
-            rssi: null,
-            isConnectable: null,
-            manufacturerData: null,
-          ),
-        ),
-      );
+    if (!ready ||
+        client == null ||
+        isUnsupported('system_connected_peripherals')) {
+      return 0;
     }
-    record('system_connected.lookup', '找到 ${matches.length} 台系统已连接设备');
-    notifyListeners();
-    return matches.length;
+    try {
+      final matches = await client.systemConnectedPeripherals(services);
+      if (_disposed || !identical(client, _client)) return 0;
+      for (final device in matches) {
+        final key = deviceKey(device.id);
+        systemConnected.add(key);
+        devices.putIfAbsent(
+          key,
+          () => DiscoveredDevice(
+            id: device.id,
+            advertisement: AdvertisementData(
+              localName: device.name,
+              services: const [],
+              rssi: null,
+              isConnectable: null,
+              manufacturerData: null,
+            ),
+          ),
+        );
+      }
+      record('system_connected.lookup', '找到 ${matches.length} 台系统已连接设备');
+      notifyListeners();
+      return matches.length;
+    } catch (error) {
+      if (error is RblueException && error.kind == RblueErrorKind.unsupported) {
+        markUnsupported('system_connected_peripherals');
+      }
+      record('system_connected.lookup', error.toString(), isError: true);
+      rethrow;
+    }
+  }
+
+  /// Turns the adapter radio on or off when the backend allows it.
+  Future<void> setPowered({required bool powered}) async {
+    final client = _client;
+    if (client == null || !ready) return;
+    try {
+      await operation(
+        powered ? 'set_powered.on' : 'set_powered.off',
+        () => client.setPowered(powered: powered),
+      );
+    } on RblueException catch (error) {
+      if (error.kind == RblueErrorKind.unsupported) {
+        markUnsupported('set_powered');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _loadCapabilities(RblueClient client) async {
+    try {
+      final bits = await client.capabilities();
+      if (_disposed || !identical(client, _client)) return;
+      capabilities = bits;
+      notifyListeners();
+    } catch (error) {
+      if (_disposed) return;
+      record('capabilities', error.toString(), isError: true);
+    }
   }
 
   /// The connection state of one device.

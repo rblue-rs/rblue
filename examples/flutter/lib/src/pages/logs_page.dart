@@ -7,8 +7,9 @@ import '../app_state.dart';
 Future<void> copySession(BuildContext context, AppState state) async {
   await Clipboard.setData(ClipboardData(text: state.sessionJson()));
   if (context.mounted) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('会话 JSON 已复制到剪贴板')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('会话 JSON 已复制到剪贴板')));
   }
 }
 

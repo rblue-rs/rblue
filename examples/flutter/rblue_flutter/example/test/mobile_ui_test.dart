@@ -135,6 +135,12 @@ void main() {
           TargetPlatform.iOS;
       expect(find.text(ios ? 'iOS 蓝牙连接' : 'Android 蓝牙权限'), findsOneWidget);
       expect(find.text(ios ? 'Android 蓝牙权限' : 'iOS 蓝牙连接'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('写入行为'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('写入行为'), findsOneWidget);
       expect(find.text('能力与环境'), findsNothing);
 
@@ -158,7 +164,7 @@ void main() {
   );
 
   testWidgets(
-    'iOS finds system devices without typing a UUID',
+    'finds system devices without typing a UUID',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(390, 900);
@@ -168,9 +174,7 @@ void main() {
       addTearDown(fixture.state.dispose);
       await tester.pumpWidget(RblueExampleApp(state: fixture.state));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('设备选项'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('查找系统已连接设备'));
+      await tester.tap(find.text('查找系统已连接'));
       await tester.pumpAndSettle();
 
       final request = fixture.bridge.sent.singleWhere(
@@ -178,8 +182,13 @@ void main() {
       );
       expect(jsonDecode(request.params)['services'], hasLength(3));
       expect(find.text('System Sensor'), findsOneWidget);
+      expect(find.text('系统已连接'), findsOneWidget);
+      expect(find.text('找到 1 台。请选择设备并在本 App 中连接。'), findsOneWidget);
     },
-    variant: const TargetPlatformVariant({TargetPlatform.iOS}),
+    variant: const TargetPlatformVariant({
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+    }),
   );
 
   testWidgets(
@@ -202,7 +211,7 @@ void main() {
       }
       await tester.pumpAndSettle();
       expect(find.text('Test Sensor').first.hitTestable(), findsOneWidget);
-      expect(find.text('查找系统已连接设备'), findsNothing);
+      expect(find.text('查找系统已连接'), findsOneWidget);
       expect(find.text('全部设备'), findsNothing);
       await tester.tap(find.byTooltip('设备选项'));
       await tester.pumpAndSettle();
@@ -239,7 +248,10 @@ void main() {
       ]);
       expect(tester.takeException(), isNull);
     },
-    variant: const TargetPlatformVariant({TargetPlatform.iOS}),
+    variant: const TargetPlatformVariant({
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+    }),
   );
 
   testWidgets('all destinations fit small screens and large text', (
@@ -339,5 +351,196 @@ void main() {
     expect(session['packets'], hasLength(200));
     expect(session['packets'][0]['characteristic']['service']['instance'], 0);
     fixture.state.dispose();
+  });
+
+  testWidgets('unsupported system lookup disables further requests', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final fixture = createUiFixture();
+    fixture.bridge.unsupportedMethods.add('system_connected_peripherals');
+    addTearDown(fixture.state.dispose);
+    await tester.pumpWidget(RblueExampleApp(state: fixture.state));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('查找系统已连接'));
+    await tester.pumpAndSettle();
+    expect(find.text('当前平台不支持查找系统已连接设备。'), findsWidgets);
+    final before = fixture.bridge.sent
+        .where((call) => call.method == 'system_connected_peripherals')
+        .length;
+    await tester.tap(find.text('查找系统已连接'));
+    await tester.pumpAndSettle();
+    expect(
+      fixture.bridge.sent
+          .where((call) => call.method == 'system_connected_peripherals')
+          .length,
+      before,
+    );
+  });
+
+  testWidgets('device tools use new APIs after a local connection', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final fixture = createUiFixture();
+    addTearDown(fixture.state.dispose);
+    await tester.pumpWidget(RblueExampleApp(state: fixture.state));
+    await tester.pumpAndSettle();
+    fixture.bridge.discover();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Test Sensor'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('连接选项'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('系统后台连接'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '连接后请求 MTU'), '185');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('连接设备'));
+    await tester.pumpAndSettle();
+    final connect = fixture.bridge.sent.lastWhere(
+      (call) => call.method == 'connect',
+    );
+    expect(jsonDecode(connect.params)['auto_connect'], isTrue);
+    expect(jsonDecode(connect.params)['mtu'], 185);
+
+    await tester.tap(find.text('连接信息'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('请求 MTU').last);
+    await tester.enterText(find.widgetWithText(TextField, '请求 MTU'), '185');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '请求 MTU'));
+    await tester.pumpAndSettle();
+    expect(find.text('已协商为 185 bytes'), findsOneWidget);
+    await tester.ensureVisible(find.text('配对'));
+    await tester.tap(find.text('配对'));
+    await tester.pumpAndSettle();
+    expect(find.text('已配对。'), findsOneWidget);
+    await tester.tap(find.text('高吞吐'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('已请求改为高吞吐'), findsOneWidget);
+    expect(
+      fixture.bridge.sent.where((call) => call.method == 'request_mtu'),
+      isNotEmpty,
+    );
+    expect(
+      fixture.bridge.sent.where((call) => call.method == 'pair'),
+      isNotEmpty,
+    );
+    expect(
+      fixture.bridge.sent.where(
+        (call) => call.method == 'set_connection_priority',
+      ),
+      isNotEmpty,
+    );
+  });
+
+  testWidgets('long write switch is forwarded on oversize payloads', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final fixture = createUiFixture();
+    addTearDown(fixture.state.dispose);
+    await tester.pumpWidget(RblueExampleApp(state: fixture.state));
+    await tester.pumpAndSettle();
+    fixture.bridge.discover();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Test Sensor'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('连接设备'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('允许长写'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('允许长写'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('超长写入（已允许长写）'));
+    await tester.pumpAndSettle();
+    final write = fixture.bridge.sent.lastWhere(
+      (call) => call.method == 'write',
+    );
+    expect(jsonDecode(write.params)['allow_long_write'], isTrue);
+  });
+
+  testWidgets(
+    'environment can power the radio and lists readable capabilities',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final fixture = createUiFixture();
+      addTearDown(fixture.state.dispose);
+      await tester.pumpWidget(RblueExampleApp(state: fixture.state));
+      await tester.pumpAndSettle();
+      await tester.tap(destination('环境'));
+      await tester.pumpAndSettle();
+      expect(find.text('后端版本'), findsOneWidget);
+      expect(find.text('后端能力'), findsOneWidget);
+      expect(find.textContaining('应用内配对：已支持'), findsOneWidget);
+      expect(find.text('系统后台连接与应用监督器'), findsOneWidget);
+      await tester.ensureVisible(find.text('关闭蓝牙'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('关闭蓝牙'));
+      await tester.pumpAndSettle();
+      expect(
+        fixture.bridge.sent.where((call) => call.method == 'set_powered'),
+        isNotEmpty,
+      );
+    },
+  );
+
+  testWidgets('reconnect page starts the application supervisor', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final fixture = createUiFixture();
+    addTearDown(fixture.state.dispose);
+    await tester.pumpWidget(RblueExampleApp(state: fixture.state));
+    await tester.pumpAndSettle();
+    fixture.bridge.discover();
+    await tester.pumpAndSettle();
+    await tester.tap(destination('重连'));
+    await tester.pumpAndSettle();
+    expect(find.text('这里启动的是应用监督器，断线后按退避策略重试。这不是设备页里的系统后台连接。'), findsOneWidget);
+    expect(find.text('连接并监听'), findsNothing);
+    await tester.tap(find.text('选择设备'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Test Sensor').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始监督'));
+    await tester.pumpAndSettle();
+    final request = fixture.bridge.sent.lastWhere(
+      (call) => call.method == 'auto_connect',
+    );
+    final params = jsonDecode(request.params) as Map<String, Object?>;
+    expect(params['policy'], {
+      'initial_backoff_ms': 500,
+      'max_backoff_ms': 30000,
+      'jitter_fraction': 0.2,
+    });
+    expect(find.text('监督中'), findsWidgets);
+    await tester.tap(find.text('停止监督'));
+    await tester.pumpAndSettle();
+    expect(
+      fixture.bridge.sent.where((call) => call.method == 'unwatch'),
+      isNotEmpty,
+    );
+    expect(find.text('已停止'), findsWidgets);
   });
 }
