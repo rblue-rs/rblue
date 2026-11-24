@@ -45,8 +45,9 @@ class NotificationsPage extends StatelessWidget {
                       );
                     } catch (error) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text('$error')));
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('$error')));
                       }
                     }
                   },

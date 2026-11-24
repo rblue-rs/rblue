@@ -26,6 +26,8 @@ class DeviceDetailPage extends StatefulWidget {
 
 class _DeviceDetailPageState extends State<DeviceDetailPage> {
   final _payload = TextEditingController(text: '48 65 6C 6C 6F');
+  final _connectMtu = TextEditingController();
+  final _requestMtu = TextEditingController();
   StreamSubscription<AdapterEvent>? _events;
   ServiceSet? _services;
   (CharacteristicId, Characteristic)? _selected;
@@ -40,6 +42,10 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   String _result = '选择特征后执行操作。';
   int? _rssi;
   int? _mtu;
+  bool _systemAutoConnect = false;
+  bool _allowLongWrite = false;
+  bool _optionsExpanded = false;
+  String? _infoStatus;
 
   AppState get state => widget.state;
   RblueClient get client => state.client!;
@@ -75,6 +81,8 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   void dispose() {
     _events?.cancel();
     _payload.dispose();
+    _connectMtu.dispose();
+    _requestMtu.dispose();
     super.dispose();
   }
 
@@ -102,11 +110,26 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
     }
   }
 
+  int? _parseOptionalMtu(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return null;
+    final mtu = int.tryParse(text);
+    if (mtu == null || mtu <= 0) {
+      throw const FormatException('请输入有效的 MTU 数值。');
+    }
+    return mtu;
+  }
+
   Future<void> _connect() async {
     final revision = _revision;
+    final autoConnect =
+        state.hasCapability(Capability.autoConnect) && _systemAutoConnect;
+    final mtu = state.hasCapability(Capability.mtuNegotiation)
+        ? _parseOptionalMtu(_connectMtu.text)
+        : null;
     await state.operation(
       'connect / ${device.display}',
-      () => client.connect(device),
+      () => client.connect(device, autoConnect: autoConnect, mtu: mtu),
     );
     if (!mounted || revision != _revision) return;
     state.connected.add(state.deviceKey(device));
@@ -221,15 +244,31 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
         ? List.filled((_maximum ?? 599) + 1, 0x41)
         : parsePayload(_payload.text, hex: _hex);
     if (data.isEmpty) throw const FormatException('请输入发送内容。');
-    if (!oversize && _maximum != null && data.length > _maximum!) {
+    final exceeds = _maximum != null && data.length > _maximum!;
+    final longWrite = _allowLongWrite && (oversize || exceeds);
+    if (!longWrite && !oversize && exceeds) {
       throw FormatException(
         'InvalidLength: ${data.length} bytes > $_maximum bytes，不会截断或自动分包。',
       );
     }
-    await state.operation(
-      'write / ${selected.$1.uuid} #${selected.$1.instance} / ${_mode.name} / ${data.length} B',
-      () => client.write(device, selected.$1, data, mode: _mode),
-    );
+    try {
+      await state.operation(
+        'write / ${selected.$1.uuid} #${selected.$1.instance} / ${_mode.name} / ${data.length} B',
+        () => client.write(
+          device,
+          selected.$1,
+          data,
+          mode: _mode,
+          allowLongWrite: longWrite,
+        ),
+      );
+    } on RblueException catch (error) {
+      if (longWrite && error.kind == RblueErrorKind.unsupported) {
+        state.markUnsupported('allow_long_write');
+        if (mounted) setState(() => _allowLongWrite = false);
+      }
+      rethrow;
+    }
     if (!mounted || revision != _revision) return;
     _result = oversize
         ? '超长写入被后端接受，请核对平台限制。'
@@ -239,13 +278,81 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   String _format(List<int> data) =>
       data.map((value) => value.toRadixString(16).padLeft(2, '0')).join(' ');
 
+  Future<void> _requestMtuChange() async {
+    final mtu = _parseOptionalMtu(_requestMtu.text);
+    if (mtu == null) throw const FormatException('请输入有效的 MTU 数值。');
+    try {
+      final value = await state.operation(
+        'request_mtu / ${device.display}',
+        () => client.requestMtu(device, mtu),
+      );
+      if (!mounted) return;
+      _mtu = value;
+      _infoStatus = '已协商为 $value bytes';
+    } on RblueException catch (error) {
+      if (error.kind == RblueErrorKind.unsupported) {
+        state.markUnsupported('request_mtu');
+        _infoStatus = '当前平台不能主动协商 ATT MTU。';
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _pair({required bool pair}) async {
+    try {
+      await state.operation(
+        '${pair ? "pair" : "unpair"} / ${device.display}',
+        () => pair ? client.pair(device) : client.unpair(device),
+      );
+      if (mounted) _infoStatus = pair ? '已配对。' : '已取消配对。';
+    } on RblueException catch (error) {
+      if (error.kind == RblueErrorKind.unsupported) {
+        state.markUnsupported('pair');
+        _infoStatus = '当前平台不支持应用内配对';
+      }
+      rethrow;
+    }
+  }
+
+  static String _priorityLabel(ConnectionPriority priority) =>
+      switch (priority) {
+        ConnectionPriority.low => '低功耗',
+        ConnectionPriority.balanced => '均衡',
+        ConnectionPriority.high => '高吞吐',
+      };
+
+  Future<void> _setPriority(ConnectionPriority priority) async {
+    try {
+      await state.operation(
+        'set_connection_priority / ${device.display} / ${priority.wire}',
+        () => client.setConnectionPriority(device, priority),
+      );
+      if (mounted) {
+        final label = _priorityLabel(priority);
+        _infoStatus = '已请求改为$label。高吞吐适合短时大批量传输，用完请改回均衡。';
+      }
+    } on RblueException catch (error) {
+      if (error.kind == RblueErrorKind.unsupported) {
+        state.markUnsupported('set_connection_priority');
+        _infoStatus = '此平台不支持调整连接优先级。';
+      }
+      rethrow;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     AppStateScope.of(context);
     final colors = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final linked = state.isConnected(device);
-    final systemManagedMtu = Theme.of(context).platform == TargetPlatform.iOS;
+    final canQueryMtu = state.hasCapability(Capability.mtuQuery);
+    final canNegotiateMtu =
+        state.hasCapability(Capability.mtuNegotiation) &&
+        !state.isUnsupported('request_mtu');
+    final canPair = state.hasCapability(Capability.pairing);
+    final canAutoConnect = state.hasCapability(Capability.autoConnect);
+    final priorityUnsupported = state.isUnsupported('set_connection_priority');
     final characteristic = _selected?.$2;
     final writable =
         characteristic != null &&
@@ -297,6 +404,51 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                       ),
                     ],
                   ),
+                  InkWell(
+                    onTap: () =>
+                        setState(() => _optionsExpanded = !_optionsExpanded),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          const Expanded(child: Text('连接选项')),
+                          Icon(
+                            _optionsExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_optionsExpanded) ...[
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('系统后台连接'),
+                      subtitle: const Text(
+                        '这是平台 connect(autoConnect)，不是重连页的应用监督器。',
+                      ),
+                      value: _systemAutoConnect && canAutoConnect,
+                      onChanged: canAutoConnect && !linked
+                          ? (value) =>
+                                setState(() => _systemAutoConnect = value)
+                          : null,
+                    ),
+                    if (!canAutoConnect)
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('当前后端不支持系统后台连接。'),
+                      ),
+                    TextField(
+                      controller: _connectMtu,
+                      enabled: canNegotiateMtu && !linked && !_busy,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '连接后请求 MTU',
+                        hintText: '省略则使用后端默认',
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -472,11 +624,31 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                               : '最大可写 $_maximum bytes · 当前写入方式',
                           style: text.bodySmall,
                         ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('允许长写'),
+                          subtitle: const Text(
+                            '关闭时超长写入会返回 InvalidLength，不会截断或自动分包；打开后按 MTU 顺序分段写入，不保证外设协议层会重组。',
+                          ),
+                          value:
+                              _allowLongWrite &&
+                              !state.isUnsupported('allow_long_write'),
+                          onChanged:
+                              _busy || state.isUnsupported('allow_long_write')
+                              ? null
+                              : (value) =>
+                                    setState(() => _allowLongWrite = value),
+                        ),
                         TextButton(
                           onPressed: _busy
                               ? null
                               : () => _run(() => _write(oversize: true)),
-                          child: const Text('超长写入验证（预期 InvalidLength）'),
+                          child: Text(
+                            _allowLongWrite &&
+                                    !state.isUnsupported('allow_long_write')
+                                ? '超长写入（已允许长写）'
+                                : '超长写入验证（长写关闭，预期 InvalidLength）',
+                          ),
                         ),
                       ],
                       const SizedBox(height: 12),
@@ -566,7 +738,11 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'RSSI: ${_rssi ?? "—"} dBm\nATT MTU: ${systemManagedMtu ? "由系统管理" : "${_mtu ?? "—"} bytes"}',
+                      'RSSI: ${_rssi ?? "—"} dBm\nATT MTU: ${canNegotiateMtu
+                          ? "${_mtu ?? "—"} bytes"
+                          : _mtu == null
+                          ? "由系统管理"
+                          : "由系统管理（$_mtu bytes）"}',
                     ),
                     const SizedBox(height: 12),
                     SquishButtonGroup(
@@ -584,7 +760,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                                   if (mounted) _rssi = value;
                                 }),
                         ),
-                        if (!systemManagedMtu)
+                        if (canQueryMtu)
                           (
                             label: '查询 MTU',
                             tonal: true,
@@ -600,8 +776,89 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    const Text('主动 MTU 协商、配对及描述符读写尚未通过 C ABI 暴露。'),
+                    if (canNegotiateMtu) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _requestMtu,
+                        enabled: linked && !_busy,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: '请求 MTU',
+                          helperText: linked ? null : '先连接设备再请求 MTU。',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ExpressiveButton(
+                        label: '请求 MTU',
+                        tonal: true,
+                        height: 48,
+                        onPressed: !linked || _busy
+                            ? null
+                            : () => _run(_requestMtuChange),
+                      ),
+                    ] else
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Text('ATT MTU 由系统管理'),
+                      ),
+                    const SizedBox(height: 16),
+                    SquishButtonGroup(
+                      actions: [
+                        (
+                          label: '配对',
+                          tonal: false,
+                          onPressed: !canPair || !linked || _busy
+                              ? null
+                              : () => _run(() => _pair(pair: true)),
+                        ),
+                        (
+                          label: '取消配对',
+                          tonal: true,
+                          onPressed: !canPair || !linked || _busy
+                              ? null
+                              : () => _run(() => _pair(pair: false)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      !canPair
+                          ? '当前后端不支持应用内配对。'
+                          : linked
+                          ? ''
+                          : '请先在本 App 中连接。',
+                    ),
+                    const SizedBox(height: 16),
+                    Text('连接优先级', style: text.titleSmall),
+                    const SizedBox(height: 4),
+                    Text(
+                      priorityUnsupported
+                          ? '此平台不支持调整连接优先级。'
+                          : linked
+                          ? 'Android 与 Windows 可调整；其他平台会返回不支持。'
+                          : '请先在本 App 中连接。',
+                      style: text.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final priority in ConnectionPriority.values)
+                          FilterChip(
+                            label: Text(_priorityLabel(priority)),
+                            selected: false,
+                            onSelected: !linked || _busy || priorityUnsupported
+                                ? null
+                                : (_) => _run(() => _setPriority(priority)),
+                          ),
+                      ],
+                    ),
+                    if (_infoStatus != null) ...[
+                      const SizedBox(height: 12),
+                      Text(_infoStatus!),
+                    ],
+                    const SizedBox(height: 16),
+                    const Text('描述符读写仍未暴露。'),
                   ],
                 ),
               ),

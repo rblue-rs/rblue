@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,10 +89,11 @@ void main() {
     await tester.pumpAndSettle();
   });
   test(
-    'reconnect rediscovers services before restoring fresh subscription ids',
+    'supervisor rediscovers services before restoring fresh subscription ids',
     () async {
       final fixture = createUiFixture();
       await fixture.state.start();
+      await Future<void>.delayed(Duration.zero);
       fixture.bridge.discover();
       await Future<void>.delayed(Duration.zero);
       await fixture.state.client!.connect(testDeviceId);
@@ -102,38 +104,54 @@ void main() {
         instance: 0,
       );
       await fixture.state.setSubscription(testDeviceId, desired, true);
-      var restored = 0;
-      final first = Completer<void>();
-      final second = Completer<void>();
-      late final ReconnectController controller;
-      controller = ReconnectController(
+      final session = SupervisorSession(
         client: fixture.state.client!,
+        state: fixture.state,
         device: fixture.state.sortedDevices().single,
-        onLog: () {},
-        onSessionRestored: (services) async {
-          fixture.state.invalidateSubscriptions(testDeviceId);
-          final fresh = services.identifiedCharacteristics
-              .firstWhere((entry) => entry.$1 == desired)
-              .$1;
-          await fixture.state.setSubscription(testDeviceId, fresh, true);
-          restored++;
-          if (restored == 1) first.complete();
-          if (restored == 2) second.complete();
-        },
+        restoreNotifications: true,
+        onUpdate: () {},
       );
-      final events = fixture.state.client!.events.listen((event) {
-        if (event is AdapterDeviceConnected) controller.onConnected();
-        if (event is AdapterDeviceDisconnected) controller.onDisconnected();
-      });
       addTearDown(() async {
-        controller.stop();
-        await events.cancel();
+        await session.stop();
         fixture.state.dispose();
       });
-      await controller.start();
-      await first.future.timeout(const Duration(seconds: 5));
+      await session.start();
+      expect(session.running, isTrue);
+      final auto = fixture.bridge.sent.lastWhere(
+        (call) => call.method == 'auto_connect',
+      );
+      expect(jsonDecode(auto.params)['policy'], {
+        'initial_backoff_ms': 500,
+        'max_backoff_ms': 30000,
+        'jitter_fraction': 0.2,
+      });
+
       await fixture.state.client!.disconnect(testDeviceId);
-      await second.future.timeout(const Duration(seconds: 5));
+      await Future<void>.delayed(Duration.zero);
+      fixture.bridge.emitSupervisor({
+        'reconnect_scheduled': {
+          'id': testDeviceId.json,
+          'delay': 500,
+          'attempt': 1,
+        },
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(session.log.map((entry) => entry.text), contains('已断开'));
+      expect(
+        session.log.map((entry) => entry.text),
+        contains('正在退避（第 1 次，500 ms）'),
+      );
+
+      fixture.bridge.emitEvent(
+        jsonEncode({
+          'type': 'adapter_event',
+          'event': {'device_connected': testDeviceId.json},
+        }),
+      );
+      fixture.bridge.emitSupervisor({'connected': testDeviceId.json});
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
       expect(fixture.state.subscriptions, contains((testDeviceId, desired)));
       final methods = fixture.bridge.sent.map((call) => call.method).toList();
       expect(

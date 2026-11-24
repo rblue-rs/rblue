@@ -4,18 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:rblue_flutter/rblue_flutter.dart';
 
 import '../app_state.dart';
-import '../reconnect_policy.dart' as reconnect;
 import '../widgets/expressive_button.dart';
 import 'scan_page.dart' show MaterialBannerTile;
 
-/// Reconnect tab: connects to a device and, when the link drops, retries with
-/// a visible exponential backoff (500 ms ×2, capped at 30 seconds, ±20%
-/// jitter). On real hardware you trigger the drop by powering the peripheral
-/// off; the demo watches the adapter's `DeviceDisconnected` event.
-///
-/// Automatic reconnect lives on the host side by design: the Rust supervisor
-/// is not exported through the FFI surface (see examples/README.md), so the
-/// example shows the pattern instead.
+/// The prefilled supervisor policy shown as a read-only summary.
+const supervisorPolicy = ReconnectPolicy(
+  initialBackoff: Duration(milliseconds: 500),
+  maxBackoff: Duration(seconds: 30),
+  jitterFraction: 0.20,
+);
+
+/// Reconnect tab: starts the application-level supervisor
+/// ([RblueClient.autoConnect] / [RblueClient.unwatch]) for a selected device.
+/// After a drop, the supervisor retries with the prefilled backoff policy
+/// (500 ms start, 30 s cap, ±20% jitter). This is not the platform
+/// `connect(autoConnect)` flag on the device page.
 class ReconnectPage extends StatefulWidget {
   const ReconnectPage({super.key});
 
@@ -23,9 +26,9 @@ class ReconnectPage extends StatefulWidget {
   State<ReconnectPage> createState() => _ReconnectPageState();
 }
 
-/// One line of the demo's activity log.
+/// One line of the supervisor activity log.
 class LogEntry {
-  /// Time of the entry, relative to the demo start.
+  /// Time of the entry, relative to the session start.
   final Duration sinceStart;
 
   /// The message.
@@ -40,88 +43,60 @@ class LogEntry {
 class _ReconnectPageState extends State<ReconnectPage> {
   DeviceId? selectedId;
   DiscoveredDevice? device;
-  ReconnectController? controller;
+  SupervisorSession? session;
   bool restoreNotifications = true;
-  StreamSubscription<AdapterEvent>? _eventsSub;
 
   @override
   void dispose() {
-    _eventsSub?.cancel();
-    controller?.stop();
+    session?.dispose();
     super.dispose();
   }
 
   void _select(DiscoveredDevice selected) {
+    session?.dispose();
     setState(() {
       selectedId = selected.id;
       device = selected;
-      _eventsSub?.cancel();
-      controller?.stop();
-      controller = null;
+      session = null;
     });
   }
 
-  void _startDemo() {
+  Future<void> _start() async {
     final state = AppStateScope.of(context);
     final selected = device;
-    if (selected == null || state.client == null) return;
-    _eventsSub?.cancel();
-    _eventsSub = state.client!.events.listen((event) {
-      if (event is AdapterDeviceDisconnected && event.id == selected.id) {
-        controller?.onDisconnected();
-      } else if (event is AdapterDeviceConnected && event.id == selected.id) {
-        controller?.onConnected();
-      }
-    });
-    controller?.stop();
-    final wanted = restoreNotifications
-        ? state.subscriptions
-              .where((entry) => entry.$1 == selected.id)
-              .map((entry) => entry.$2)
-              .toList()
-        : <CharacteristicId>[];
-    setState(() {
-      controller = ReconnectController(
-        client: state.client!,
-        device: selected,
-        onSessionRestored: (services) async {
-          state.invalidateSubscriptions(selected.id);
-          for (final id in wanted) {
-            if (!mounted || controller == null || controller!.stopped) return;
-            final fresh = services.identifiedCharacteristics
-                .where((entry) => entry.$1 == id && entry.$2.notifiable)
-                .firstOrNull;
-            if (fresh != null) {
-              await state.setSubscription(selected.id, fresh.$1, true);
-            } else {
-              state.record(
-                'reconnect.subscription',
-                '特征已不存在: ${id.uuid} #${id.instance}',
-                isError: true,
-              );
-            }
-          }
-        },
-        onLog: () {
-          if (!mounted) return;
-          setState(() {});
-          final current = controller;
-          if (current != null && current.log.isNotEmpty) {
-            final entry = current.log.first;
-            state.record('reconnect', entry.text, isError: entry.isError);
-          }
-        },
-      )..start();
-    });
+    if (selected == null || state.client == null || session != null) return;
+    final next = SupervisorSession(
+      client: state.client!,
+      state: state,
+      device: selected,
+      restoreNotifications: restoreNotifications,
+      onUpdate: () {
+        if (mounted) setState(() {});
+      },
+    );
+    setState(() => session = next);
+    await next.start();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _stop() async {
+    final current = session;
+    if (current == null) return;
+    await current.stop();
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
+    final unsupported = state.isUnsupported('auto_connect_supervisor');
+    final running = session?.running ?? false;
     return ListView(
       key: const PageStorageKey('reconnect'),
       padding: const EdgeInsets.all(16),
       children: [
+        const Text('这里启动的是应用监督器，断线后按退避策略重试。这不是设备页里的系统后台连接。'),
+        const SizedBox(height: 12),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -144,7 +119,7 @@ class _ReconnectPageState extends State<ReconnectPage> {
                         ),
                       ),
                   ],
-                  onChanged: state.ready
+                  onChanged: state.ready && !running
                       ? (id) {
                           if (id != null) {
                             _select(state.devices[state.deviceKey(id)]!);
@@ -157,7 +132,7 @@ class _ReconnectPageState extends State<ReconnectPage> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('恢复开始监听时已有的通知订阅'),
                   value: restoreNotifications,
-                  onChanged: controller != null
+                  onChanged: running
                       ? null
                       : (value) =>
                             setState(() => restoreNotifications = value!),
@@ -166,30 +141,31 @@ class _ReconnectPageState extends State<ReconnectPage> {
                 SquishButtonGroup(
                   actions: [
                     (
-                      label: '连接并监听',
+                      label: '开始监督',
                       tonal: false,
                       onPressed:
-                          device == null || !state.ready || controller != null
+                          device == null ||
+                              !state.ready ||
+                              running ||
+                              unsupported
                           ? null
-                          : _startDemo,
+                          : _start,
                     ),
                     (
-                      label: '停止监听',
+                      label: '停止监督',
                       tonal: true,
-                      onPressed: controller == null
-                          ? null
-                          : () => setState(() {
-                              controller?.stop();
-                              controller = null;
-                              _eventsSub?.cancel();
-                            }),
+                      onPressed: running ? _stop : null,
                     ),
                   ],
                 ),
-                if (controller != null) ...[
+                if (unsupported) ...[
+                  const SizedBox(height: 12),
+                  const Text('当前构建未提供应用监督器。'),
+                ],
+                if (session != null) ...[
                   const SizedBox(height: 16),
                   Text(
-                    controller!.statusText,
+                    session!.statusText,
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ],
@@ -199,14 +175,14 @@ class _ReconnectPageState extends State<ReconnectPage> {
         ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
-          child: Text('500ms 起始退避 · 30s 上限 · ±20% jitter · 重连后重新发现服务'),
+          child: Text('500ms 起始退避 · 30s 上限 · ±20% jitter'),
         ),
-        if (controller?.lastError != null)
+        if (session?.lastError != null)
           MaterialBannerTile(
             icon: Icons.error_outline,
-            text: controller!.lastError!,
+            text: session!.lastError!,
           ),
-        for (final entry in controller?.log ?? <LogEntry>[])
+        for (final entry in session?.log ?? <LogEntry>[])
           ListTile(
             leading: Icon(
               entry.isError ? Icons.warning_amber : Icons.check_circle_outline,
@@ -219,133 +195,180 @@ class _ReconnectPageState extends State<ReconnectPage> {
   }
 }
 
-/// The reconnect state machine: connect, wait for the disconnect event, then
-/// retry with exponential backoff until the link is back.
-class ReconnectController {
-  /// Reconnect policy: 500 ms ×2, 30-second cap, ±20% jitter.
-  static const policy = reconnect.ReconnectPolicy();
-
-  ReconnectController({
+/// Host-side session around the application supervisor: start/stop the
+/// native supervisor, record its events, and optionally rediscover plus
+/// resubscribe after a successful reconnect.
+class SupervisorSession {
+  SupervisorSession({
     required this.client,
+    required this.state,
     required this.device,
-    required this.onLog,
-    required this.onSessionRestored,
-  }) : _startedAt = DateTime.now();
+    required this.restoreNotifications,
+    required this.onUpdate,
+  }) : _startedAt = DateTime.now(),
+       _wanted = restoreNotifications
+           ? state.subscriptions
+                 .where((entry) => entry.$1 == device.id)
+                 .map((entry) => entry.$2)
+                 .toList()
+           : const <CharacteristicId>[];
 
   final RblueClient client;
+  final AppState state;
   final DiscoveredDevice device;
-  final void Function() onLog;
-  final Future<void> Function(ServiceSet services) onSessionRestored;
+  final bool restoreNotifications;
+  final void Function() onUpdate;
   final DateTime _startedAt;
+  final List<CharacteristicId> _wanted;
   final log = <LogEntry>[];
-  Timer? _timer;
-  var _attempt = 0;
-  Duration? _pendingDelay;
-  var _connecting = false;
-  var stopped = false;
+  StreamSubscription<SupervisorEvent>? _supervisorSub;
+  StreamSubscription<AdapterEvent>? _eventsSub;
+  var running = false;
+  String statusText = '未开始';
   String? lastError;
 
-  /// Human-readable state line under the controls.
-  String get statusText {
-    if (_connecting) return 'connecting (attempt ${_attempt + 1})...';
-    if (_timer != null) {
-      final milliseconds = _pendingDelay?.inMilliseconds ?? 0;
-      final seconds = (milliseconds / 1000).toStringAsFixed(1);
-      return 'link down - retrying in ${seconds}s';
-    }
-    return 'connected - watching for drops';
-  }
-
-  /// Connects once and enters the watch state.
   Future<void> start() async {
-    stopped = false;
-    await _connect();
+    if (running) return;
+    lastError = null;
+    _supervisorSub = client.supervisorEvents.listen(_onSupervisor);
+    _eventsSub = client.events.listen(_onAdapter);
+    try {
+      await state.operation(
+        'auto_connect / ${device.id.display}',
+        () => client.autoConnect(device.id, policy: supervisorPolicy),
+      );
+      running = true;
+      statusText = '监督中';
+      _log('监督中');
+    } on RblueException catch (error) {
+      await _cancelSubscriptions();
+      if (error.kind == RblueErrorKind.unsupported) {
+        state.markUnsupported('auto_connect_supervisor');
+        lastError = '当前构建未提供应用监督器。';
+      } else {
+        lastError = error.message;
+      }
+      statusText = lastError!;
+      _log(lastError!, isError: true);
+    }
   }
 
-  /// Aborts the demo; pending retries are cancelled.
-  void stop() {
-    stopped = true;
-    _timer?.cancel();
-    _timer = null;
-    _pendingDelay = null;
+  Future<void> stop() async {
+    if (!running && _supervisorSub == null) return;
+    try {
+      await state.operation(
+        'unwatch / ${device.id.display}',
+        () => client.unwatch(device.id),
+      );
+    } on RblueException catch (error) {
+      if (error.kind == RblueErrorKind.unsupported) {
+        state.markUnsupported('auto_connect_supervisor');
+        lastError = '当前构建未提供应用监督器。';
+      } else {
+        lastError = error.message;
+        _log(error.message, isError: true);
+      }
+    }
+    running = false;
+    statusText = '已停止';
+    _log('已停止');
+    _detach();
   }
 
-  /// Called by the page when `DeviceDisconnected` arrives.
-  void onDisconnected() {
-    if (stopped || _timer != null || _connecting) return;
-    _attempt = 0;
-    _log('link dropped - starting backoff retries', isError: true);
-    _scheduleRetry();
+  void dispose() {
+    unawaited(stop());
   }
 
-  /// Called by the page when `DeviceConnected` arrives.
-  void onConnected() {
-    if (stopped) return;
-    _timer?.cancel();
-    _timer = null;
-    _pendingDelay = null;
-    _connecting = false;
-    _attempt = 0;
-    _restoreSession();
+  void _onSupervisor(SupervisorEvent event) {
+    if (!running) return;
+    switch (event) {
+      case SupervisorConnected(:final id) when id == device.id:
+        statusText = '已重新连接';
+        _log('已重新连接');
+        unawaited(_restoreSession());
+      case SupervisorReconnectScheduled(:final id, :final delay, :final attempt)
+          when id == device.id:
+        statusText = '正在退避';
+        _log('正在退避（第 $attempt 次，${delay.inMilliseconds} ms）');
+      case SupervisorAttemptFailed(
+            :final id,
+            :final attempt,
+            :final platform133,
+            :final nextRetry,
+          )
+          when id == device.id:
+        final extra = [
+          if (platform133) 'GATT 133',
+          if (nextRetry != null) '下次 ${nextRetry.inMilliseconds} ms',
+        ];
+        final detail = extra.isEmpty ? '' : '（${extra.join('，')}）';
+        lastError = '重连尝试失败（第 $attempt 次）$detail';
+        _log(lastError!, isError: true);
+      case SupervisorBreakerOpen(:final id, :final consecutiveFailures)
+          when id == device.id:
+        lastError = '熔断已打开（连续失败 $consecutiveFailures 次）';
+        statusText = lastError!;
+        _log(lastError!, isError: true);
+      case SupervisorGaveUp(:final id, :final consecutiveFailures)
+          when id == device.id:
+        running = false;
+        lastError = '监督器已放弃（连续失败 $consecutiveFailures 次）';
+        statusText = lastError!;
+        _log(lastError!, isError: true);
+      default:
+        break;
+    }
+  }
+
+  void _onAdapter(AdapterEvent event) {
+    if (!running) return;
+    switch (event) {
+      case AdapterDeviceDisconnected(:final id) when id == device.id:
+        statusText = '已断开';
+        _log('已断开');
+      default:
+        break;
+    }
   }
 
   Future<void> _restoreSession() async {
     try {
       final services = await client.discoverServices(device.id);
-      if (stopped) return;
-      await onSessionRestored(services);
-      if (stopped) return;
-      _log(
-        'link re-established; services rediscovered; subscription restoration completed',
-      );
-    } on RblueException catch (error) {
-      if (stopped) return;
-      lastError =
-          'reconnected, but service rediscovery failed: ${error.message}';
-      _log(lastError!, isError: true);
-    }
-  }
-
-  Future<void> _connect() async {
-    if (stopped) return;
-    _connecting = true;
-    onLog();
-    try {
-      await client.connect(device.id);
-      _connecting = false;
-      if (stopped) return;
-      _log('connected');
-    } on RblueException catch (error) {
-      _connecting = false;
-      if (stopped) return;
-      if (error.isAndroidGattStatus133) {
-        lastError =
-            'Platform status 133 (GATT_ERROR): the classic Android connect '
-            'failure. The demo keeps retrying; move closer, re-scan, or '
-            'toggle Bluetooth if it persists.';
-      } else {
-        lastError = error.message;
+      if (!running) return;
+      state.invalidateSubscriptions(device.id);
+      for (final id in _wanted) {
+        if (!running) return;
+        final fresh = services.identifiedCharacteristics
+            .where((entry) => entry.$1 == id && entry.$2.notifiable)
+            .firstOrNull;
+        if (fresh != null) {
+          await state.setSubscription(device.id, fresh.$1, true);
+        } else {
+          state.record(
+            'reconnect.subscription',
+            '特征已不存在: ${id.uuid} #${id.instance}',
+            isError: true,
+          );
+        }
       }
-      _log(
-        'connect failed: ${error.message} (code ${error.platformCode ?? "n/a"})',
-        isError: true,
-      );
-      _scheduleRetry();
+      if (!running) return;
+      _log('已重新发现服务并完成订阅恢复');
+    } on RblueException catch (error) {
+      if (!running) return;
+      lastError = error.message;
+      _log(error.message, isError: true);
     }
   }
 
-  void _scheduleRetry() {
-    if (stopped) return;
-    final delay = policy.delayForAttempt(_attempt);
-    _attempt += 1;
-    _timer?.cancel();
-    _pendingDelay = delay;
-    _timer = Timer(delay, () {
-      _timer = null;
-      _pendingDelay = null;
-      if (!stopped) _connect();
-    });
-    onLog();
+  Future<void> _cancelSubscriptions() async {
+    _detach();
+  }
+
+  void _detach() {
+    unawaited(_supervisorSub?.cancel());
+    unawaited(_eventsSub?.cancel());
+    _supervisorSub = null;
+    _eventsSub = null;
   }
 
   void _log(String text, {bool isError = false}) {
@@ -353,9 +376,8 @@ class ReconnectController {
       0,
       LogEntry(DateTime.now().difference(_startedAt), text, isError: isError),
     );
-    if (log.length > 50) {
-      log.removeLast();
-    }
-    onLog();
+    if (log.length > 50) log.removeLast();
+    state.record('reconnect', text, isError: isError);
+    onUpdate();
   }
 }

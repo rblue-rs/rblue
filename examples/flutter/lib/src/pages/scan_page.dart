@@ -32,8 +32,9 @@ class _ScanPageState extends State<ScanPage> {
     if (RegExp(r'^[0-9a-f]{8}$').hasMatch(uuid)) {
       uuid = '$uuid-0000-1000-8000-00805f9b34fb';
     }
-    if (!RegExp(r'^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
-        .hasMatch(uuid)) {
+    if (!RegExp(
+      r'^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$',
+    ).hasMatch(uuid)) {
       return null;
     }
     return uuid;
@@ -51,13 +52,20 @@ class _ScanPageState extends State<ScanPage> {
     try {
       final count = await state.findSystemConnected(services);
       if (!mounted) return;
-      setState(() {
-        lookupStatus = count == 0
-            ? '未找到匹配设备。可尝试自定义服务或普通扫描。'
-            : '找到 $count 台。请选择设备并在本 App 中连接。';
-      });
+      var status = count == 0
+          ? '未找到匹配设备。可尝试自定义服务或普通扫描。'
+          : '找到 $count 台。请选择设备并在本 App 中连接。';
+      if (count == 0 && Theme.of(context).platform == TargetPlatform.android) {
+        status = '$status系统 UUID 缓存为空的设备不会出现。';
+      }
+      setState(() => lookupStatus = status);
     } on RblueException catch (error) {
-      if (mounted) setState(() => lookupStatus = error.message);
+      if (!mounted) return;
+      setState(() {
+        lookupStatus = error.kind == RblueErrorKind.unsupported
+            ? '当前平台不支持查找系统已连接设备。'
+            : error.message;
+      });
     } finally {
       if (mounted) setState(() => lookupPending = false);
     }
@@ -65,7 +73,7 @@ class _ScanPageState extends State<ScanPage> {
 
   static const _filters = ['全部设备', '可连接', '强信号 > -60'];
 
-  Future<void> _showOptions(AppState state, bool supportsLookup) async {
+  Future<void> _showOptions(AppState state) async {
     final form = GlobalKey<FormState>();
     final selection = await showModalBottomSheet<Object>(
       context: context,
@@ -99,51 +107,44 @@ class _ScanPageState extends State<ScanPage> {
                     ),
                 ],
               ),
-              if (supportsLookup) ...[
-                const Divider(height: 24),
-                FilledButton.tonalIcon(
-                  onPressed: state.ready && !lookupPending
-                      ? () => Navigator.pop(context, _commonServices)
-                      : null,
-                  icon: const Icon(Icons.bluetooth_connected),
-                  label: const Text('查找系统已连接设备'),
-                ),
-                const Text('按设备信息、电池和 RingConn 服务查找。'),
-                ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  title: const Text('按自定义服务查找'),
-                  maintainState: true,
-                  children: [
-                    Form(
-                      key: form,
-                      child: TextFormField(
-                        initialValue: serviceQuery,
-                        decoration: const InputDecoration(
-                          labelText: 'GATT 服务 UUID',
-                          hintText: '180F 或完整 UUID',
-                        ),
-                        autocorrect: false,
-                        onChanged: (value) => serviceQuery = value,
-                        validator: (value) => _serviceUuid(value ?? '') == null
-                            ? '请输入有效的 GATT 服务 UUID'
-                            : null,
+              const Divider(height: 24),
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('按自定义服务查找'),
+                maintainState: true,
+                children: [
+                  Form(
+                    key: form,
+                    child: TextFormField(
+                      initialValue: serviceQuery,
+                      decoration: const InputDecoration(
+                        labelText: 'GATT 服务 UUID',
+                        hintText: '180F 或完整 UUID',
                       ),
-                    ),
-                    TextButton(
-                      onPressed: state.ready && !lookupPending
-                          ? () {
-                              if (form.currentState!.validate()) {
-                                Navigator.pop(context, [
-                                  _serviceUuid(serviceQuery)!,
-                                ]);
-                              }
-                            }
+                      autocorrect: false,
+                      onChanged: (value) => serviceQuery = value,
+                      validator: (value) => _serviceUuid(value ?? '') == null
+                          ? '请输入有效的 GATT 服务 UUID'
                           : null,
-                      child: const Text('查找设备'),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  TextButton(
+                    onPressed:
+                        state.ready &&
+                            !lookupPending &&
+                            !state.isUnsupported('system_connected_peripherals')
+                        ? () {
+                            if (form.currentState!.validate()) {
+                              Navigator.pop(context, [
+                                _serviceUuid(serviceQuery)!,
+                              ]);
+                            }
+                          }
+                        : null,
+                    child: const Text('查找设备'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -228,9 +229,25 @@ class _ScanPageState extends State<ScanPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(child: Text('附近设备', style: text.titleMedium)),
+                  Text('附近设备', style: text.titleMedium),
+                  ExpressiveButton(
+                    key: const Key('find-system-connected'),
+                    tonal: true,
+                    height: 40,
+                    label: '查找系统已连接',
+                    icon: Icons.bluetooth_connected,
+                    onPressed:
+                        state.ready &&
+                            !lookupPending &&
+                            !state.isUnsupported('system_connected_peripherals')
+                        ? () => _findSystemConnected(state, _commonServices)
+                        : null,
+                  ),
                   IconButton(
                     tooltip: filter == 0
                         ? '设备选项'
@@ -239,13 +256,16 @@ class _ScanPageState extends State<ScanPage> {
                       isLabelVisible: filter != 0,
                       child: const Icon(Icons.tune),
                     ),
-                    onPressed: () => _showOptions(
-                      state,
-                      Theme.of(context).platform == TargetPlatform.iOS,
-                    ),
+                    onPressed: () => _showOptions(state),
                   ),
                 ],
               ),
+              if (state.isUnsupported('system_connected_peripherals') &&
+                  lookupStatus == null)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text('当前平台不支持查找系统已连接设备。'),
+                ),
               if (filter != 0)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -318,12 +338,17 @@ class _Banner extends StatelessWidget {
     } else if (!state.permissionsGranted) {
       banner = const MaterialBannerTile(
         icon: Icons.lock_outline,
-        text: 'Bluetooth permissions were not granted; scanning will fail.',
+        text: '尚未授予蓝牙权限，扫描将会失败。',
       );
     } else if (state.ready && state.adapterState == AdapterState.poweredOff) {
-      banner = const MaterialBannerTile(
+      final canPower =
+          state.hasCapability(Capability.adapterPowerControl) &&
+          !state.isUnsupported('set_powered');
+      banner = MaterialBannerTile(
         icon: Icons.bluetooth_disabled,
-        text: 'The Bluetooth radio is powered off. Turn it on and retry.',
+        text: canPower ? '蓝牙电台已关闭。' : '请在系统设置中打开蓝牙后重试。',
+        action: canPower ? () => state.setPowered(powered: true) : null,
+        actionLabel: canPower ? '打开蓝牙' : null,
       );
     }
     if (banner == null) return const SizedBox.shrink();
@@ -423,6 +448,14 @@ class _DeviceTile extends StatelessWidget {
                           : '连接能力未知',
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
+                    if (state.isSystemConnected(device.id)) ...[
+                      const SizedBox(height: 4),
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        label: const Text('系统已连接'),
+                      ),
+                    ],
                   ],
                 ),
               ),
