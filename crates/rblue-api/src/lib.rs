@@ -75,8 +75,8 @@ pub mod prelude {
     pub use crate::error::{AttError, Error, PairingStatus, PermissionReason};
     pub use crate::event::{AdapterEvent, AdapterState, DisconnectReason};
     pub use crate::gatt::{
-        Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service,
-        ServiceId, ServiceSet, WriteMode,
+        descriptors_from_uuids, Characteristic, CharacteristicId, CharacteristicProperties,
+        Descriptor, DescriptorId, Notification, Service, ServiceId, ServiceSet, WriteMode,
     };
     pub use crate::peripheral::{
         reject_invalid_att_mtu, ConnectOptions, ConnectionPriority, NotificationStream, Peripheral,
@@ -98,15 +98,16 @@ pub use crate::adapter::{Adapter, AdapterEventStream};
 pub use crate::cache::{ServiceCache, ServiceCacheConfig, ValidationEvidence};
 pub use crate::capability::{Capability, CapabilitySet};
 pub use crate::contract::{
-    run_contract_suite, CONTRACT_CHARACTERISTIC_UUID, CONTRACT_SERVICE_UUID,
+    run_contract_suite, CONTRACT_CHARACTERISTIC_UUID, CONTRACT_DESCRIPTOR_UUID,
+    CONTRACT_SERVICE_UUID,
 };
 pub use crate::debounce::{DebounceConfig, DebouncedEvent, ScanDebouncer};
 pub use crate::device::{AdapterId, AddressType, DeviceId, Rssi};
 pub use crate::error::{AttError, Error, PairingStatus, PermissionReason};
 pub use crate::event::{AdapterEvent, AdapterState, DisconnectReason};
 pub use crate::gatt::{
-    Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service, ServiceId,
-    ServiceSet, WriteMode,
+    descriptors_from_uuids, Characteristic, CharacteristicId, CharacteristicProperties, Descriptor,
+    DescriptorId, Notification, Service, ServiceId, ServiceSet, WriteMode,
 };
 pub use crate::peripheral::{
     reject_invalid_att_mtu, ConnectOptions, ConnectionPriority, NotificationStream, Peripheral,

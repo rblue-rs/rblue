@@ -365,10 +365,17 @@ data class ServiceJson(
  * `properties` is the raw `CharacteristicProperties` bitflags value.
  */
 @Serializable
+data class DescriptorJson(
+    val characteristic: CharacteristicIdJson,
+    val uuid: String,
+    val instance: Int = 0,
+)
+
+@Serializable
 data class CharacteristicJson(
     val uuid: String,
     val properties: Int = 0,
-    val descriptors: List<String> = emptyList(),
+    val descriptors: List<DescriptorJson> = emptyList(),
 ) {
     // GATT property bits (Bluetooth Core Spec, Vol 3 Part G 3.3.1.1).
     val canRead: Boolean get() = properties and READ_BIT != 0

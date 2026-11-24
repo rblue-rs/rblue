@@ -13,8 +13,8 @@ use rblue_api::device::DeviceId;
 use rblue_api::error::{AttError, Error};
 use rblue_api::event::{AdapterEvent, DisconnectReason};
 use rblue_api::gatt::{
-    Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service, ServiceId,
-    ServiceSet, WriteMode,
+    descriptors_from_uuids, Characteristic, CharacteristicId, CharacteristicProperties,
+    DescriptorId, Notification, Service, ServiceId, ServiceSet, WriteMode,
 };
 use rblue_api::peripheral::{ConnectOptions, ConnectionPriority, NotificationStream, Peripheral};
 use rblue_api::scan::{AdvertisementData, RequestDeviceOptions, ScanFilter};
@@ -44,8 +44,38 @@ pub struct MockCharacteristic {
     /// behavior the contract fixture requires).
     pub echo: bool,
     /// Maximum accepted write payload in bytes; larger writes are rejected
-    /// with `Error::InvalidLength`, never truncated.
+    /// with `Error::InvalidLength`, never truncated. Descriptor writes use
+    /// the same bound.
     pub max_write_len: usize,
+    /// Descriptors of this characteristic, in discovery order.
+    pub descriptors: Vec<MockDescriptor>,
+}
+
+/// Configuration of one simulated descriptor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MockDescriptor {
+    /// Descriptor UUID.
+    pub uuid: Uuid,
+    /// Value served to `read_descriptor` until the first write.
+    pub initial_value: Vec<u8>,
+}
+
+impl MockDescriptor {
+    /// Creates a descriptor with an empty initial value.
+    #[must_use]
+    pub fn new(uuid: Uuid) -> Self {
+        Self {
+            uuid,
+            initial_value: Vec::new(),
+        }
+    }
+
+    /// Sets the value served to reads.
+    #[must_use]
+    pub fn with_initial_value(mut self, initial_value: Vec<u8>) -> Self {
+        self.initial_value = initial_value;
+        self
+    }
 }
 
 impl MockCharacteristic {
@@ -59,6 +89,7 @@ impl MockCharacteristic {
             initial_value: Vec::new(),
             echo: false,
             max_write_len: DEFAULT_MAX_WRITE_LEN,
+            descriptors: Vec::new(),
         }
     }
 
@@ -80,6 +111,13 @@ impl MockCharacteristic {
     #[must_use]
     pub fn with_max_write_len(mut self, max_write_len: usize) -> Self {
         self.max_write_len = max_write_len;
+        self
+    }
+
+    /// Appends a descriptor configuration.
+    #[must_use]
+    pub fn with_descriptor(mut self, descriptor: MockDescriptor) -> Self {
+        self.descriptors.push(descriptor);
         self
     }
 }
@@ -189,6 +227,7 @@ struct PeriphInner {
     name: Option<String>,
     services: Vec<MockService>,
     values: HashMap<CharacteristicId, Vec<u8>>,
+    descriptor_values: HashMap<DescriptorId, Vec<u8>>,
     subscriptions: HashSet<CharacteristicId>,
     failures: HashMap<(MockOp, Option<Uuid>), MockFailure>,
     advertisement: AdvertisementData,
@@ -229,6 +268,7 @@ impl MockPeripheral {
                 name: Some(name.to_owned()),
                 services: Vec::new(),
                 values: HashMap::new(),
+                descriptor_values: HashMap::new(),
                 subscriptions: HashSet::new(),
                 failures: HashMap::new(),
                 advertisement: AdvertisementData {
@@ -672,7 +712,48 @@ fn seed_values(inner: &mut PeriphInner, service: &MockService) {
             .values
             .entry(id)
             .or_insert_with(|| characteristic.initial_value.clone());
+        for (desc_position, descriptor) in characteristic.descriptors.iter().enumerate() {
+            let desc_instance = characteristic.descriptors[..desc_position]
+                .iter()
+                .filter(|listed| listed.uuid == descriptor.uuid)
+                .count() as u16;
+            let descriptor_id = DescriptorId {
+                characteristic: id,
+                uuid: descriptor.uuid,
+                instance: desc_instance,
+            };
+            inner
+                .descriptor_values
+                .entry(descriptor_id)
+                .or_insert_with(|| descriptor.initial_value.clone());
+        }
     }
+}
+
+/// Write bound of a resolved descriptor, inherited from its characteristic.
+struct ResolvedDescriptor {
+    max_write_len: usize,
+}
+
+fn resolve_descriptor(services: &[MockService], id: &DescriptorId) -> Option<ResolvedDescriptor> {
+    let resolved = resolve_characteristic(services, &id.characteristic)?;
+    let service = services
+        .iter()
+        .filter(|service| service.uuid == id.characteristic.service.uuid)
+        .nth(id.characteristic.service.instance as usize)?;
+    let characteristic = service
+        .characteristics
+        .iter()
+        .filter(|characteristic| characteristic.uuid == id.characteristic.uuid)
+        .nth(id.characteristic.instance as usize)?;
+    let found = characteristic
+        .descriptors
+        .iter()
+        .filter(|descriptor| descriptor.uuid == id.uuid)
+        .nth(id.instance as usize);
+    found.map(|_| ResolvedDescriptor {
+        max_write_len: resolved.max_write_len,
+    })
 }
 
 /// Property bits, echo flag, and write bound of a resolved characteristic.
@@ -774,24 +855,48 @@ impl Peripheral for MockPeripheral {
         if !inner.connected {
             return Err(Error::NotConnected);
         }
-        let services = inner
+        let mut services = Vec::new();
+        for service in inner
             .services
             .iter()
             .filter(|service| filter.is_empty() || filter.contains(&service.uuid))
-            .map(|service| Service {
+        {
+            let service_id = ServiceId {
+                uuid: service.uuid,
+                instance: services
+                    .iter()
+                    .filter(|listed: &&Service| listed.uuid == service.uuid)
+                    .count() as u16,
+            };
+            let mut characteristics = Vec::new();
+            for characteristic in &service.characteristics {
+                let instance = characteristics
+                    .iter()
+                    .filter(|listed: &&Characteristic| listed.uuid == characteristic.uuid)
+                    .count() as u16;
+                let id = CharacteristicId {
+                    service: service_id,
+                    uuid: characteristic.uuid,
+                    instance,
+                };
+                characteristics.push(Characteristic {
+                    uuid: characteristic.uuid,
+                    properties: characteristic.properties,
+                    descriptors: descriptors_from_uuids(
+                        id,
+                        characteristic
+                            .descriptors
+                            .iter()
+                            .map(|descriptor| descriptor.uuid),
+                    ),
+                });
+            }
+            services.push(Service {
                 uuid: service.uuid,
                 primary: service.primary,
-                characteristics: service
-                    .characteristics
-                    .iter()
-                    .map(|c| Characteristic {
-                        uuid: c.uuid,
-                        properties: c.properties,
-                        descriptors: Vec::new(),
-                    })
-                    .collect(),
-            })
-            .collect();
+                characteristics,
+            });
+        }
         Ok(ServiceSet { services })
     }
 
@@ -860,6 +965,32 @@ impl Peripheral for MockPeripheral {
         let resolved = resolve_characteristic(&inner.services, ch)
             .ok_or_else(|| att_error(ATT_INVALID_HANDLE))?;
         Ok(resolved.max_write_len)
+    }
+
+    async fn read_descriptor(&self, id: &DescriptorId) -> Result<Vec<u8>, Error> {
+        let inner = self.lock();
+        if !inner.connected {
+            return Err(Error::NotConnected);
+        }
+        resolve_descriptor(&inner.services, id).ok_or_else(|| att_error(ATT_INVALID_HANDLE))?;
+        Ok(inner.descriptor_values.get(id).cloned().unwrap_or_default())
+    }
+
+    async fn write_descriptor(&self, id: &DescriptorId, data: &[u8]) -> Result<(), Error> {
+        let mut inner = self.lock();
+        if !inner.connected {
+            return Err(Error::NotConnected);
+        }
+        let resolved =
+            resolve_descriptor(&inner.services, id).ok_or_else(|| att_error(ATT_INVALID_HANDLE))?;
+        if data.len() > resolved.max_write_len {
+            return Err(Error::InvalidLength {
+                len: data.len(),
+                max: resolved.max_write_len,
+            });
+        }
+        inner.descriptor_values.insert(*id, data.to_vec());
+        Ok(())
     }
 
     async fn subscribe(&self, ch: &CharacteristicId) -> Result<(), Error> {
@@ -955,6 +1086,7 @@ mod tests {
     const SERVICE_UUID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_00a1);
     const ECHO_UUID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_00a2);
     const PLAIN_UUID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_00a3);
+    const DESC_UUID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_00a4);
 
     /// Echo characteristic (read/write/notify) plus a read-only characteristic.
     fn setup() -> (
@@ -979,7 +1111,10 @@ mod tests {
                             | CharacteristicProperties::NOTIFY,
                     )
                     .with_initial_value(b"init".to_vec())
-                    .with_echo(),
+                    .with_echo()
+                    .with_descriptor(
+                        MockDescriptor::new(DESC_UUID).with_initial_value(b"desc-init".to_vec()),
+                    ),
                 )
                 .characteristic(MockCharacteristic::new(
                     PLAIN_UUID,
@@ -1129,6 +1264,56 @@ mod tests {
         assert_eq!(notification.data, b"ping");
         // The write also updated the readable value.
         assert_eq!(device.read(&echo).await.expect("read"), b"ping");
+    }
+
+    #[tokio::test]
+    async fn descriptor_read_write_and_invalid_length() {
+        let (_adapter, device, echo, _) = setup();
+        let descriptor = DescriptorId {
+            characteristic: echo,
+            uuid: DESC_UUID,
+            instance: 0,
+        };
+        let missing = DescriptorId {
+            characteristic: echo,
+            uuid: Uuid::from_u128(0x00d1),
+            instance: 0,
+        };
+
+        assert!(matches!(
+            device.read_descriptor(&descriptor).await,
+            Err(Error::NotConnected)
+        ));
+        device.connect().await.expect("connect");
+
+        let services = device.discover_services(&[]).await.expect("discover");
+        let discovered = &services.services[0].characteristics[0].descriptors;
+        assert_eq!(discovered.len(), 1);
+        assert_eq!(discovered[0].id(), descriptor);
+        assert_eq!(
+            device.read_descriptor(&descriptor).await.expect("read"),
+            b"desc-init"
+        );
+        device
+            .write_descriptor(&descriptor, b"hello")
+            .await
+            .expect("write");
+        assert_eq!(
+            device.read_descriptor(&descriptor).await.expect("read"),
+            b"hello"
+        );
+        assert!(matches!(
+            device.read_descriptor(&missing).await,
+            Err(Error::Att(att)) if att.code == ATT_INVALID_HANDLE
+        ));
+        assert!(matches!(
+            device.write_descriptor(&missing, b"x").await,
+            Err(Error::Att(att)) if att.code == ATT_INVALID_HANDLE
+        ));
+        assert!(matches!(
+            device.write_descriptor(&descriptor, &[0u8; 515]).await,
+            Err(Error::InvalidLength { len: 515, max: 514 })
+        ));
     }
 
     #[tokio::test]

@@ -150,7 +150,7 @@ final class DeviceDetailModel: ObservableObject {
                     serviceUuid: service.uuid,
                     uuid: characteristic.uuid,
                     properties: characteristic.properties,
-                    descriptorUuids: characteristic.descriptors,
+                    descriptorUuids: characteristic.descriptors.map(\.uuid),
                     value: nil,
                     lastAction: nil,
                     subscribed: false

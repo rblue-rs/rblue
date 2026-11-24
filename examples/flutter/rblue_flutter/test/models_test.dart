@@ -167,6 +167,23 @@ void main() {
       expect(characteristic.notifiable, isTrue);
       expect(set.find('00000000-0000-0000-0000-000000002a19'), isNotNull);
     });
+
+    test('parses discovered descriptors with session ids', () {
+      const payload =
+          '{"services":[{"uuid":"00000000-0000-0000-0000-00000000180f",'
+          '"primary":true,"characteristics":[{"uuid":"00000000-0000-0000-0000-000000002a19",'
+          '"properties":"READ",'
+          '"descriptors":[{"characteristic":{"service":{"uuid":"00000000-0000-0000-0000-00000000180f","instance":0},'
+          '"uuid":"00000000-0000-0000-0000-000000002a19","instance":0},'
+          '"uuid":"00000000-0000-0000-0000-000000002901","instance":0}]}]}]}';
+      final set = ServiceSet.fromJson(
+        (jsonDecode(payload)! as Map).cast<String, Object?>(),
+      );
+      final descriptor = set.allCharacteristics.single.descriptors.single;
+      expect(descriptor.uuid, '00000000-0000-0000-0000-000000002901');
+      expect(descriptor.instance, 0);
+      expect(descriptor.id.characteristic.uuid, '00000000-0000-0000-0000-000000002a19');
+    });
   });
 
   group('RblueException', () {

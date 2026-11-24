@@ -98,4 +98,6 @@ mod hub;
 mod peripheral;
 
 pub use crate::adapter::MockAdapter;
-pub use crate::peripheral::{MockCharacteristic, MockFailure, MockOp, MockPeripheral, MockService};
+pub use crate::peripheral::{
+    MockCharacteristic, MockDescriptor, MockFailure, MockOp, MockPeripheral, MockService,
+};

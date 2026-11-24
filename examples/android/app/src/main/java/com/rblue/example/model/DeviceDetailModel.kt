@@ -187,7 +187,7 @@ class DeviceDetailModel(
                     serviceUuid = service.uuid,
                     uuid = characteristic.uuid,
                     properties = characteristic.properties,
-                    descriptorUuids = characteristic.descriptors,
+                    descriptorUuids = characteristic.descriptors.map { it.uuid },
                     value = null,
                     lastAction = null,
                     subscribed = false,

@@ -55,7 +55,12 @@ API-to-browser mapping table lives in `docs/error-mapping.md`.
   already-connected device.
 - `discover_services()` maps to `getPrimaryServices()`; the browser
   permission-filters the result against `optionalServices` before it reaches
-  Rust. Descriptor enumeration is not performed (Phase 2).
+  Rust. Descriptor enumeration uses `getDescriptors()` when the browser
+  allows it; a rejected or blocked enumeration leaves that characteristic's
+  descriptor list empty rather than failing the whole tree.
+  `read_descriptor` / `write_descriptor` map to the Web Bluetooth
+  descriptor `readValue()` / `writeValue()` APIs. Oversize writes still
+  fail with `InvalidLength` at the conservative 20-byte default ATT cap.
 - The `gattserverdisconnected` event is translated into
   `AdapterEvent::DeviceDisconnected` on the adapter event stream (reason
   `Local` after an explicit `disconnect()`, otherwise `Unknown`).

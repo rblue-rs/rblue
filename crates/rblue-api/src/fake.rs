@@ -6,6 +6,7 @@
 //! is the only suite self-test; it is kept until then so the suite can still
 //! be checked in isolation.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
@@ -13,13 +14,15 @@ use futures::stream::{BoxStream, StreamExt};
 
 use crate::adapter::{Adapter, AdapterEventStream};
 use crate::capability::CapabilitySet;
-use crate::contract::{CONTRACT_CHARACTERISTIC_UUID, CONTRACT_SERVICE_UUID};
+use crate::contract::{
+    CONTRACT_CHARACTERISTIC_UUID, CONTRACT_DESCRIPTOR_UUID, CONTRACT_SERVICE_UUID,
+};
 use crate::device::{AdapterId, AddressType, DeviceId};
-use crate::error::Error;
+use crate::error::{AttError, Error};
 use crate::event::{AdapterEvent, DisconnectReason};
 use crate::gatt::{
-    Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service, ServiceSet,
-    WriteMode,
+    descriptors_from_uuids, Characteristic, CharacteristicId, CharacteristicProperties,
+    DescriptorId, Notification, Service, ServiceId, ServiceSet, WriteMode,
 };
 use crate::peripheral::Peripheral;
 use crate::scan::{AdvertisementData, DiscoveredDevice, RequestDeviceOptions, ScanFilter};
@@ -151,6 +154,7 @@ impl Adapter for FakeAdapter {
 struct FakePeripheral {
     id: DeviceId,
     connected: Mutex<bool>,
+    descriptor_values: Mutex<HashMap<DescriptorId, Vec<u8>>>,
     notifications: BroadcastHub<Notification>,
     events: Arc<BroadcastHub<AdapterEvent>>,
 }
@@ -163,6 +167,7 @@ impl FakePeripheral {
                 AddressType::RandomStatic,
             ),
             connected: Mutex::new(false),
+            descriptor_values: Mutex::new(HashMap::new()),
             notifications: BroadcastHub::default(),
             events,
         }
@@ -172,6 +177,31 @@ impl FakePeripheral {
         self.connected
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn lock_descriptor_values(&self) -> std::sync::MutexGuard<'_, HashMap<DescriptorId, Vec<u8>>> {
+        self.descriptor_values
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn contract_characteristic_id() -> CharacteristicId {
+        CharacteristicId {
+            service: ServiceId {
+                uuid: CONTRACT_SERVICE_UUID,
+                instance: 0,
+            },
+            uuid: CONTRACT_CHARACTERISTIC_UUID,
+            instance: 0,
+        }
+    }
+
+    fn descriptor_exists(id: &DescriptorId) -> bool {
+        *id == DescriptorId {
+            characteristic: Self::contract_characteristic_id(),
+            uuid: CONTRACT_DESCRIPTOR_UUID,
+            instance: 0,
+        }
     }
 }
 
@@ -216,7 +246,10 @@ impl Peripheral for FakePeripheral {
                         | CharacteristicProperties::WRITE
                         | CharacteristicProperties::WRITE_WITHOUT_RESPONSE
                         | CharacteristicProperties::NOTIFY,
-                    descriptors: Vec::new(),
+                    descriptors: descriptors_from_uuids(
+                        Self::contract_characteristic_id(),
+                        [CONTRACT_DESCRIPTOR_UUID],
+                    ),
                 }],
             }],
         })
@@ -253,6 +286,38 @@ impl Peripheral for FakePeripheral {
         _mode: WriteMode,
     ) -> Result<usize, Error> {
         Ok(20)
+    }
+
+    async fn read_descriptor(&self, id: &DescriptorId) -> Result<Vec<u8>, Error> {
+        if !Self::descriptor_exists(id) {
+            return Err(Error::Att(AttError {
+                code: 0x01,
+                handle: None,
+            }));
+        }
+        Ok(self
+            .lock_descriptor_values()
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| b"rblue-fake-desc".to_vec()))
+    }
+
+    async fn write_descriptor(&self, id: &DescriptorId, data: &[u8]) -> Result<(), Error> {
+        const FAKE_MAX_WRITE_LEN: usize = 20;
+        if !Self::descriptor_exists(id) {
+            return Err(Error::Att(AttError {
+                code: 0x01,
+                handle: None,
+            }));
+        }
+        if data.len() > FAKE_MAX_WRITE_LEN {
+            return Err(Error::InvalidLength {
+                len: data.len(),
+                max: FAKE_MAX_WRITE_LEN,
+            });
+        }
+        self.lock_descriptor_values().insert(*id, data.to_vec());
+        Ok(())
     }
 
     async fn subscribe(&self, _ch: &CharacteristicId) -> Result<(), Error> {

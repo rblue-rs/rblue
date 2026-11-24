@@ -10,8 +10,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rblue::prelude::*;
-use rblue_api::{CharacteristicId, ServiceId};
-use rblue_mock::{MockAdapter, MockCharacteristic, MockPeripheral, MockService};
+use rblue_api::{CharacteristicId, DescriptorId, ServiceId};
+use rblue_mock::{MockAdapter, MockCharacteristic, MockDescriptor, MockPeripheral, MockService};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::handle::Core;
@@ -27,6 +27,9 @@ pub(crate) const SERVICE_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x180F);
 
 /// UUID of the fixture characteristic.
 pub(crate) const CHAR_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x2A19);
+
+/// UUID of the fixture descriptor on [`CHAR_UUID`].
+pub(crate) const DESC_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x2901);
 
 /// Properties of the fixture characteristic: readable, writable both ways,
 /// and notifiable/indicatable.
@@ -61,6 +64,24 @@ pub(crate) fn device_params() -> String {
     format!(
         r#"{{"device":{}}}"#,
         serde_json::to_string(&device_id()).expect("device JSON serialization cannot fail")
+    )
+}
+
+/// The fixture descriptor's session id, exactly as discovery reports it.
+pub(crate) fn descriptor_id() -> DescriptorId {
+    DescriptorId {
+        characteristic: char_id(),
+        uuid: DESC_UUID,
+        instance: 0,
+    }
+}
+
+/// `{"device": ..., "descriptor": ...}` parameter JSON for the fixture.
+pub(crate) fn descriptor_params() -> String {
+    format!(
+        r#"{{"device":{},"descriptor":{}}}"#,
+        serde_json::to_string(&device_id()).expect("device JSON serialization cannot fail"),
+        serde_json::to_string(&descriptor_id()).expect("descriptor JSON serialization cannot fail")
     )
 }
 
@@ -299,8 +320,13 @@ impl Fixture {
         let adapter = Arc::new(MockAdapter::new());
         let device = adapter.add_device(device_id(), "simulated-sensor");
         device.add_service(
-            MockService::new(SERVICE_UUID)
-                .characteristic(MockCharacteristic::new(CHAR_UUID, CHAR_PROPERTIES).with_echo()),
+            MockService::new(SERVICE_UUID).characteristic(
+                MockCharacteristic::new(CHAR_UUID, CHAR_PROPERTIES)
+                    .with_echo()
+                    .with_descriptor(
+                        MockDescriptor::new(DESC_UUID).with_initial_value(b"desc".to_vec()),
+                    ),
+            ),
         );
         device
             .find_characteristic(CHAR_UUID)

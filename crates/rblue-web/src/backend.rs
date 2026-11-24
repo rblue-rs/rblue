@@ -24,8 +24,9 @@ use web_sys::Event;
 use rblue_api::{
     Adapter, AdapterEvent, AdapterEventStream, AdapterId, AdapterState, AdvertisementData,
     Capability, CapabilitySet, Characteristic, CharacteristicId, CharacteristicProperties,
-    DeviceId, DisconnectReason, DiscoveredDevice, Error, Notification, NotificationStream,
-    Peripheral, RequestDeviceOptions, ScanFilter, Service, ServiceId, ServiceSet, WriteMode,
+    Descriptor, DescriptorId, DeviceId, DisconnectReason, DiscoveredDevice, Error, Notification,
+    NotificationStream, Peripheral, RequestDeviceOptions, ScanFilter, Service, ServiceId,
+    ServiceSet, WriteMode,
 };
 
 use crate::broadcast::{BroadcastBus, Delivery};
@@ -195,6 +196,29 @@ extern "C" {
         type_: &str,
         callback: &js_sys::Function,
     );
+    #[wasm_bindgen(catch, method, js_name = "getDescriptors")]
+    fn get_descriptors(
+        this: &BluetoothRemoteGattCharacteristic,
+    ) -> Result<js_sys::Promise, JsValue>;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    /// One GATT descriptor.
+    #[derive(Clone)]
+    type BluetoothRemoteGattDescriptor;
+
+    #[wasm_bindgen(method, getter, js_name = "uuid")]
+    fn uuid(this: &BluetoothRemoteGattDescriptor) -> String;
+    #[wasm_bindgen(method, getter, js_name = "value")]
+    fn value(this: &BluetoothRemoteGattDescriptor) -> Option<js_sys::DataView>;
+    #[wasm_bindgen(catch, method, js_name = "readValue")]
+    fn read_value(this: &BluetoothRemoteGattDescriptor) -> Result<js_sys::Promise, JsValue>;
+    #[wasm_bindgen(catch, method, js_name = "writeValue")]
+    fn write_value(
+        this: &BluetoothRemoteGattDescriptor,
+        value: &[u8],
+    ) -> Result<js_sys::Promise, JsValue>;
 }
 
 #[wasm_bindgen]
@@ -227,6 +251,7 @@ extern "C" {
 struct Connection {
     server: Option<JsSend<BluetoothRemoteGattServer>>,
     characteristics: HashMap<CharacteristicId, JsSend<BluetoothRemoteGattCharacteristic>>,
+    descriptors: HashMap<DescriptorId, JsSend<BluetoothRemoteGattDescriptor>>,
     listeners: HashMap<CharacteristicId, NotifyListener>,
     disconnect_listener: Option<NotifyListener>,
 }
@@ -556,6 +581,22 @@ impl WebPeripheral {
                 )
             })
     }
+
+    /// The discovered descriptor for `id`. Descriptors only exist after
+    /// discovery on the current connection.
+    fn descriptor(
+        &self,
+        id: &DescriptorId,
+    ) -> Result<JsSend<BluetoothRemoteGattDescriptor>, Error> {
+        lock(&self.connection)
+            .descriptors
+            .get(id)
+            .cloned()
+            .ok_or(Error::Att(rblue_api::AttError {
+                code: 0x01,
+                handle: None,
+            }))
+    }
 }
 
 #[async_trait]
@@ -769,6 +810,7 @@ impl Peripheral for WebPeripheral {
         })?);
         let mut found = Vec::with_capacity(services.length() as usize);
         let mut characteristics = HashMap::new();
+        let mut descriptors = HashMap::new();
         let mut service_instances: HashMap<uuid::Uuid, u16> = HashMap::new();
         for service_value in services.iter() {
             let service: JsSend<BluetoothRemoteGattService> =
@@ -814,10 +856,43 @@ impl Peripheral for WebPeripheral {
                         characteristic_uuid,
                     ),
                 };
+                let mut listed_descriptors = Vec::new();
+                // Descriptor enumeration is best-effort: some browsers reject
+                // getDescriptors() or block listed descriptors, and that
+                // must not fail the rest of the GATT tree.
+                if let Ok(descs_promise) = characteristic.get_descriptors() {
+                    if let Ok(descs_resolved) = JsSend::new(JsFuture::from(descs_promise)).await {
+                        if let Ok(descs) = descs_resolved.dyn_into::<Array>() {
+                            let mut descriptor_instances: HashMap<uuid::Uuid, u16> = HashMap::new();
+                            for descriptor_value in descs.iter() {
+                                let descriptor: JsSend<BluetoothRemoteGattDescriptor> =
+                                    JsSend::new(descriptor_value.unchecked_into());
+                                let uuid_text = descriptor.uuid();
+                                let Ok(descriptor_uuid) = uuid::Uuid::parse_str(&uuid_text) else {
+                                    continue;
+                                };
+                                let descriptor_id = DescriptorId {
+                                    characteristic: id,
+                                    uuid: descriptor_uuid,
+                                    instance: next_instance_index(
+                                        &mut descriptor_instances,
+                                        descriptor_uuid,
+                                    ),
+                                };
+                                listed_descriptors.push(Descriptor {
+                                    characteristic: id,
+                                    uuid: descriptor_uuid,
+                                    instance: descriptor_id.instance,
+                                });
+                                descriptors.insert(descriptor_id, descriptor);
+                            }
+                        }
+                    }
+                }
                 listed.push(Characteristic {
                     uuid: characteristic_uuid,
                     properties: read_properties(&characteristic),
-                    descriptors: Vec::new(),
+                    descriptors: listed_descriptors,
                 });
                 characteristics.insert(id, characteristic);
             }
@@ -827,7 +902,11 @@ impl Peripheral for WebPeripheral {
                 characteristics: listed,
             });
         }
-        lock(&self.connection).characteristics = characteristics;
+        {
+            let mut connection = lock(&self.connection);
+            connection.characteristics = characteristics;
+            connection.descriptors = descriptors;
+        }
         Ok(ServiceSet { services: found })
     }
 
@@ -883,6 +962,38 @@ impl Peripheral for WebPeripheral {
         // The negotiated MTU is not observable; report the conservative
         // default-ATT-MTU ceiling for both modes.
         Ok(MAX_WRITE_LEN)
+    }
+
+    async fn read_descriptor(&self, id: &DescriptorId) -> Result<Vec<u8>, Error> {
+        let descriptor = self.descriptor(id)?;
+        let promise = descriptor
+            .read_value()
+            .map_err(|js| gatt_error(js, &self.device_id, "read_descriptor"))?;
+        JsSend::new(JsFuture::from(promise))
+            .await
+            .map_err(|js| gatt_error(js, &self.device_id, "read_descriptor"))?;
+        Ok(descriptor
+            .value()
+            .as_ref()
+            .map(data_view_bytes)
+            .unwrap_or_default())
+    }
+
+    async fn write_descriptor(&self, id: &DescriptorId, data: &[u8]) -> Result<(), Error> {
+        if data.len() > MAX_WRITE_LEN {
+            return Err(Error::InvalidLength {
+                len: data.len(),
+                max: MAX_WRITE_LEN,
+            });
+        }
+        let descriptor = self.descriptor(id)?;
+        let promise = descriptor
+            .write_value(data)
+            .map_err(|js| gatt_error(js, &self.device_id, "write_descriptor"))?;
+        JsSend::new(JsFuture::from(promise))
+            .await
+            .map_err(|js| gatt_error(js, &self.device_id, "write_descriptor"))?;
+        Ok(())
     }
 
     async fn subscribe(&self, ch: &CharacteristicId) -> Result<(), Error> {

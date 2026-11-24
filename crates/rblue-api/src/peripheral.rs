@@ -4,7 +4,7 @@ use futures::stream::BoxStream;
 
 use crate::device::DeviceId;
 use crate::error::Error;
-use crate::gatt::{CharacteristicId, Notification, ServiceSet, WriteMode};
+use crate::gatt::{CharacteristicId, DescriptorId, Notification, ServiceSet, WriteMode};
 
 /// Stream of GATT notifications and indications from one connected
 /// peripheral.
@@ -344,6 +344,54 @@ pub trait Peripheral: Send + Sync {
     ///
     /// [`Error::NotConnected`], platform failures as [`Error::Platform`].
     async fn max_write_len(&self, ch: &CharacteristicId, mode: WriteMode) -> Result<usize, Error>;
+
+    /// Reads the current value of a descriptor.
+    ///
+    /// Descriptor read/write is part of [`crate::Capability::GattClient`]; there
+    /// is no separate capability bit. A missing descriptor returns
+    /// [`Error::NotFound`] or [`Error::Att`]. A backend with no descriptor
+    /// API returns [`Error::Unsupported`] with `feature: "read_descriptor"`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotConnected`], [`Error::NotFound`] or [`Error::Att`] when
+    /// the descriptor is absent or the procedure fails,
+    /// [`Error::Unsupported`] when the backend has no descriptor API,
+    /// [`Error::Disconnected`] when the link drops mid-read.
+    async fn read_descriptor(&self, id: &DescriptorId) -> Result<Vec<u8>, Error> {
+        let _ = id;
+        Err(Error::Unsupported {
+            platform: "unknown",
+            feature: "read_descriptor",
+        })
+    }
+
+    /// Writes `data` to a descriptor.
+    ///
+    /// Unified write semantics match [`Peripheral::write`]: when `data`
+    /// exceeds the current maximum write length this returns
+    /// [`Error::InvalidLength`] - values are never silently truncated or
+    /// chunked. Long writes via [`WriteOptions::allow_long_write`] apply to
+    /// characteristic writes ([`Peripheral::write_with`]) only; this method
+    /// has no options argument.
+    ///
+    /// A missing descriptor returns [`Error::NotFound`] or [`Error::Att`].
+    /// A backend with no descriptor API returns [`Error::Unsupported`] with
+    /// `feature: "write_descriptor"`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidLength`] for oversize payloads, [`Error::NotConnected`],
+    /// [`Error::NotFound`] or [`Error::Att`] when the descriptor is absent
+    /// or the procedure fails, [`Error::Unsupported`] when the backend has
+    /// no descriptor API.
+    async fn write_descriptor(&self, id: &DescriptorId, data: &[u8]) -> Result<(), Error> {
+        let _ = (id, data);
+        Err(Error::Unsupported {
+            platform: "unknown",
+            feature: "write_descriptor",
+        })
+    }
 
     /// Subscribes to value changes of a characteristic.
     ///

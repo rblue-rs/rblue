@@ -38,8 +38,8 @@ use futures_timer::Delay;
 use crate::adapter::AdapterEventStream;
 use crate::{
     Adapter, AdapterEvent, AdapterState, Capability, CharacteristicId, CharacteristicProperties,
-    ConnectOptions, ConnectionPriority, DeviceId, Error, RequestDeviceOptions, ScanFilter,
-    ServiceId, WriteMode, WriteOptions,
+    ConnectOptions, ConnectionPriority, DescriptorId, DeviceId, Error, RequestDeviceOptions,
+    ScanFilter, ServiceId, WriteMode, WriteOptions,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -52,6 +52,12 @@ pub const CONTRACT_SERVICE_UUID: uuid::Uuid =
 /// contract fixture must expose inside [`CONTRACT_SERVICE_UUID`].
 pub const CONTRACT_CHARACTERISTIC_UUID: uuid::Uuid =
     uuid::Uuid::from_u128(0x5b6e_1f2a_9c3d_4e8f_a1b2_c3d4_e5f6_0002);
+
+/// Descriptor UUID the mock contract fixture exposes on
+/// [`CONTRACT_CHARACTERISTIC_UUID`]. Real-hardware fixtures may omit it;
+/// successful read/write assertions run only when this descriptor is present.
+pub const CONTRACT_DESCRIPTOR_UUID: uuid::Uuid =
+    uuid::Uuid::from_u128(0x5b6e_1f2a_9c3d_4e8f_a1b2_c3d4_e5f6_0003);
 
 /// Largest ATT_MTU allowed by the Bluetooth spec (517); sanity bound for
 /// reported `max_write_len` values.
@@ -551,6 +557,74 @@ where
                 other.as_ref().map(|_| ())
             ),
         }
+    }
+
+    // -- descriptor read / write -------------------------------------------
+    let missing = DescriptorId {
+        characteristic: char_id,
+        uuid: uuid::Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0d00),
+        instance: 0,
+    };
+    match peripheral.read_descriptor(&missing).await {
+        Err(Error::NotFound(_) | Error::Att(_)) => {}
+        other => panic!(
+            "contract violation at `read_descriptor missing`: expected Err(NotFound or Att), got {:?}",
+            other.as_ref().map(|_| ())
+        ),
+    }
+    match peripheral.write_descriptor(&missing, b"x").await {
+        Err(Error::NotFound(_) | Error::Att(_)) => {}
+        other => panic!(
+            "contract violation at `write_descriptor missing`: expected Err(NotFound or Att), got {:?}",
+            other.as_ref().map(|_| ())
+        ),
+    }
+
+    if let Some(descriptor) = characteristic
+        .descriptors
+        .iter()
+        .find(|descriptor| descriptor.uuid == CONTRACT_DESCRIPTOR_UUID)
+    {
+        assert_eq!(
+            descriptor.characteristic, char_id,
+            "contract violation: discovered Descriptor must carry its owning CharacteristicId"
+        );
+        assert_eq!(descriptor.id().uuid, CONTRACT_DESCRIPTOR_UUID);
+        let descriptor_id = descriptor.id();
+        let _read = require(
+            "read_descriptor",
+            peripheral.read_descriptor(&descriptor_id).await,
+        );
+        let max_len = require(
+            "max_write_len (descriptor)",
+            peripheral
+                .max_write_len(&char_id, WriteMode::WithResponse)
+                .await,
+        );
+        let oversize = vec![0u8; max_len + 1];
+        match peripheral.write_descriptor(&descriptor_id, &oversize).await {
+            Err(Error::InvalidLength { len, max }) => {
+                assert_eq!(len, max_len + 1);
+                assert_eq!(max, max_len);
+            }
+            other => panic!(
+                "contract violation at `write_descriptor oversize`: expected Err(InvalidLength), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+        let written = b"desc";
+        require(
+            "write_descriptor",
+            peripheral.write_descriptor(&descriptor_id, written).await,
+        );
+        let read_back = require(
+            "read_descriptor after write",
+            peripheral.read_descriptor(&descriptor_id).await,
+        );
+        assert_eq!(
+            read_back, written,
+            "contract violation: fixture descriptor must retain the written value"
+        );
     }
 
     // -- subscribe and notification echo -----------------------------------

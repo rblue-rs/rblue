@@ -276,6 +276,32 @@ class RblueClient {
     decode: _noPayload,
   );
 
+  /// Reads the descriptor value.
+  ///
+  /// The C ABI method name is `read_descriptor`. The Dart name follows the
+  /// existing client (`requestMtu`, `discoverServices`).
+  Future<Uint8List> readDescriptor(DeviceId device, DescriptorId descriptor) =>
+      _request(
+        'read_descriptor',
+        params: _descriptorParams(device, descriptor),
+        decode: (payload) => payload,
+      );
+
+  /// Writes [data] to the descriptor. Oversize payloads fail with
+  /// [RblueErrorKind.invalidLength] - never truncated, never chunked.
+  ///
+  /// The C ABI method name is `write_descriptor`.
+  Future<void> writeDescriptor(
+    DeviceId device,
+    DescriptorId descriptor,
+    List<int> data,
+  ) => _request(
+    'write_descriptor',
+    params: _descriptorParams(device, descriptor),
+    payload: data,
+    decode: _noPayload,
+  );
+
   /// Subscribes to value changes; values arrive on [notifications].
   Future<void> subscribe(DeviceId device, CharacteristicId characteristic) =>
       _request(
@@ -339,6 +365,11 @@ class RblueClient {
     DeviceId device,
     CharacteristicId characteristic,
   ) => {'device': device.json, 'characteristic': characteristic.toJson()};
+
+  Map<String, Object?> _descriptorParams(
+    DeviceId device,
+    DescriptorId descriptor,
+  ) => {'device': device.json, 'descriptor': descriptor.toJson()};
 
   static void _noPayload(Uint8List payload) {}
 

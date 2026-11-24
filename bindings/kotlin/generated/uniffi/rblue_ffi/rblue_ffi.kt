@@ -736,6 +736,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_read(
     ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_read_descriptor(
+    ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_request_device(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_rssi(
@@ -753,6 +755,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_rblue_ffi_checksum_method_rblue_unsubscribe(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_write(
+    ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_write_descriptor(
     ): Int
     external fun uniffi_rblue_ffi_checksum_constructor_rblue_new(
     ): Int
@@ -813,6 +817,8 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_read(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,
     ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_read_descriptor(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`descriptorJson`: RustBuffer.ByValue,
+    ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_request_device(`ptr`: Long,`optionsJson`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_rssi(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,
@@ -830,6 +836,8 @@ internal object UniffiLib {
     external fun uniffi_rblue_ffi_fn_method_rblue_unsubscribe(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_write(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,`data`: RustBuffer.ByValue,`withResponse`: Byte,
+    ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_write_descriptor(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`descriptorJson`: RustBuffer.ByValue,`data`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_rblue_ffi_fn_init_callback_vtable_eventsink(`vtable`: UniffiVTableCallbackInterfaceEventSink,
     ): Unit
@@ -991,6 +999,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_read() and 0xFFFF) != 60552) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_read_descriptor() and 0xFFFF) != 34732) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_request_device() and 0xFFFF) != 16933) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1016,6 +1027,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_write() and 0xFFFF) != 27008) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_write_descriptor() and 0xFFFF) != 22556) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_constructor_rblue_new() and 0xFFFF) != 53450) {
@@ -1717,6 +1731,19 @@ public interface RblueInterface {
     suspend fun `read`(`deviceJson`: kotlin.String, `characteristicJson`: kotlin.String): kotlin.ByteArray
 
     /**
+     * Reads the current value of the descriptor (`DescriptorId` JSON from
+     * the `discover_services` result).
+     *
+     * # Errors
+     *
+     * [`RblueError::NotConnected`], [`RblueError::NotFound`] or
+     * [`RblueError::Att`] when the descriptor is absent or the procedure
+     * fails, [`RblueError::Unsupported`] when the backend has no
+     * descriptor API.
+     */
+    suspend fun `readDescriptor`(`deviceJson`: kotlin.String, `descriptorJson`: kotlin.String): kotlin.ByteArray
+
+    /**
      * Web-only entry point: shows the browser's device picker. Must be
      * called from a user-gesture handler (the TS binding layer provides the
      * helper for that).
@@ -1829,6 +1856,17 @@ public interface RblueInterface {
      * [`RblueError::Att`].
      */
     suspend fun `write`(`deviceJson`: kotlin.String, `characteristicJson`: kotlin.String, `data`: kotlin.ByteArray, `withResponse`: kotlin.Boolean)
+
+    /**
+     * Writes `data` to the descriptor. Oversize payloads are rejected with
+     * [`RblueError::InvalidLength`] - never truncated, never chunked.
+     *
+     * # Errors
+     *
+     * [`RblueError::InvalidLength`], [`RblueError::NotConnected`],
+     * [`RblueError::NotFound`] or [`RblueError::Att`].
+     */
+    suspend fun `writeDescriptor`(`deviceJson`: kotlin.String, `descriptorJson`: kotlin.String, `data`: kotlin.ByteArray)
 
     companion object
 }
@@ -2334,6 +2372,40 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
 
 
     /**
+     * Reads the current value of the descriptor (`DescriptorId` JSON from
+     * the `discover_services` result).
+     *
+     * # Errors
+     *
+     * [`RblueError::NotConnected`], [`RblueError::NotFound`] or
+     * [`RblueError::Att`] when the descriptor is absent or the procedure
+     * fails, [`RblueError::Unsupported`] when the backend has no
+     * descriptor API.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `readDescriptor`(`deviceJson`: kotlin.String, `descriptorJson`: kotlin.String) : kotlin.ByteArray {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_read_descriptor(
+                uniffiHandle,
+
+        FfiConverterString.lower(`deviceJson`),
+        FfiConverterString.lower(`descriptorJson`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterByteArray.lift(it) },
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
      * Web-only entry point: shows the browser's device picker. Must be
      * called from a user-gesture handler (the TS binding layer provides the
      * helper for that).
@@ -2614,6 +2686,40 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
         FfiConverterString.lower(`characteristicJson`),
         FfiConverterByteArray.lower(`data`),
         FfiConverterBoolean.lower(`withResponse`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_void(future) },
+        // lift function
+        { },
+
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
+     * Writes `data` to the descriptor. Oversize payloads are rejected with
+     * [`RblueError::InvalidLength`] - never truncated, never chunked.
+     *
+     * # Errors
+     *
+     * [`RblueError::InvalidLength`], [`RblueError::NotConnected`],
+     * [`RblueError::NotFound`] or [`RblueError::Att`].
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `writeDescriptor`(`deviceJson`: kotlin.String, `descriptorJson`: kotlin.String, `data`: kotlin.ByteArray) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_write_descriptor(
+                uniffiHandle,
+
+        FfiConverterString.lower(`deviceJson`),
+        FfiConverterString.lower(`descriptorJson`),
+        FfiConverterByteArray.lower(`data`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },

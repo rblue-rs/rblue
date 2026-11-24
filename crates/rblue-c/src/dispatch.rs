@@ -117,6 +117,16 @@ struct CharacteristicParams {
     characteristic: CharacteristicId,
 }
 
+/// Descriptor-addressing parameters
+/// (`{"device": <DeviceId>, "descriptor": <DescriptorId>}`).
+#[derive(serde::Deserialize)]
+struct DescriptorParams {
+    /// The connected device.
+    device: DeviceId,
+    /// The descriptor, from the `discover_services` result.
+    descriptor: DescriptorId,
+}
+
 /// Connection-priority parameters
 /// (`{"device": <DeviceId>, "priority": "low"|"balanced"|"high"}`).
 #[derive(serde::Deserialize)]
@@ -292,6 +302,22 @@ pub(crate) async fn execute(
                 .await?;
             Ok(Vec::new())
         }
+        "read_descriptor" => {
+            let DescriptorParams { device, descriptor } = parse_params(&params)?;
+            Ok(core
+                .peripheral(&device)
+                .await?
+                .read_descriptor(&descriptor)
+                .await?)
+        }
+        "write_descriptor" => {
+            let DescriptorParams { device, descriptor } = parse_params(&params)?;
+            core.peripheral(&device)
+                .await?
+                .write_descriptor(&descriptor, &payload)
+                .await?;
+            Ok(Vec::new())
+        }
         "subscribe" => {
             let CharacteristicParams {
                 device,
@@ -415,7 +441,9 @@ mod tests {
     use futures::StreamExt;
     use rblue_mock::{MockFailure, MockOp};
 
-    use crate::testing::{characteristic_params, device_id, device_params, Fixture};
+    use crate::testing::{
+        characteristic_params, descriptor_params, device_id, device_params, Fixture,
+    };
 
     use super::{Request, *};
 
@@ -574,13 +602,12 @@ mod tests {
             .properties
             .contains(rblue_api::CharacteristicProperties::READ));
         // The discovered id must equal the canonical shape the client uses.
+        assert_eq!(characteristic.uuid, crate::testing::CHAR_UUID);
+        assert_eq!(characteristic.properties, crate::testing::CHAR_PROPERTIES);
+        assert_eq!(characteristic.descriptors.len(), 1);
         assert_eq!(
-            characteristic,
-            &rblue_api::Characteristic {
-                uuid: crate::testing::CHAR_UUID,
-                properties: crate::testing::CHAR_PROPERTIES,
-                descriptors: Vec::new(),
-            }
+            characteristic.descriptors[0].id(),
+            crate::testing::descriptor_id()
         );
 
         let (status, payload) =
@@ -592,6 +619,55 @@ mod tests {
             roundtrip(&mut fixture, 4, "write", &characteristic_params(), b"ping").await;
         assert!(status.is_none());
         assert!(payload.is_empty());
+    }
+
+    #[tokio::test]
+    async fn descriptor_read_write_flow() {
+        let mut fixture = Fixture::new().await;
+        let (status, _) = roundtrip(&mut fixture, 1, "connect", &device_params(), &[]).await;
+        assert!(status.is_none());
+        let (status, payload) = roundtrip(
+            &mut fixture,
+            2,
+            "read_descriptor",
+            &descriptor_params(),
+            &[],
+        )
+        .await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(payload, b"desc");
+        let (status, payload) = roundtrip(
+            &mut fixture,
+            3,
+            "write_descriptor",
+            &descriptor_params(),
+            b"hello",
+        )
+        .await;
+        assert!(status.is_none(), "{status:?}");
+        assert!(payload.is_empty());
+        let (status, payload) = roundtrip(
+            &mut fixture,
+            4,
+            "read_descriptor",
+            &descriptor_params(),
+            &[],
+        )
+        .await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(payload, b"hello");
+        let oversize = vec![0u8; 600];
+        let (status, _) = roundtrip(
+            &mut fixture,
+            5,
+            "write_descriptor",
+            &descriptor_params(),
+            &oversize,
+        )
+        .await;
+        let status = status.expect("oversize descriptor writes must fail");
+        let value: serde_json::Value = serde_json::from_str(&status).expect("status JSON");
+        assert_eq!(value["InvalidLength"]["len"], 600, "{status}");
     }
 
     #[tokio::test]
@@ -607,7 +683,7 @@ mod tests {
         let json = String::from_utf8(payload).expect("payload utf-8");
         assert_eq!(
             json,
-            "{\"services\":[{\"uuid\":\"00000000-0000-0000-0000-00000000180f\",\"primary\":true,\"characteristics\":[{\"uuid\":\"00000000-0000-0000-0000-000000002a19\",\"properties\":\"READ | WRITE_WITHOUT_RESPONSE | WRITE | NOTIFY | INDICATE\",\"descriptors\":[]}]}]}"
+            "{\"services\":[{\"uuid\":\"00000000-0000-0000-0000-00000000180f\",\"primary\":true,\"characteristics\":[{\"uuid\":\"00000000-0000-0000-0000-000000002a19\",\"properties\":\"READ | WRITE_WITHOUT_RESPONSE | WRITE | NOTIFY | INDICATE\",\"descriptors\":[{\"characteristic\":{\"service\":{\"uuid\":\"00000000-0000-0000-0000-00000000180f\",\"instance\":0},\"uuid\":\"00000000-0000-0000-0000-000000002a19\",\"instance\":0},\"uuid\":\"00000000-0000-0000-0000-000000002901\",\"instance\":0}]}]}]}"
         );
     }
 

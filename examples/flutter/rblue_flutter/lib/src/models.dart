@@ -642,6 +642,109 @@ class CharacteristicId {
   int get hashCode => Object.hash(service, uuid, instance);
 }
 
+/// Identity of a descriptor within one connected session
+/// (`rblue_api::DescriptorId`). Valid only for the current connection:
+/// after a reconnect, re-run [RblueClient.discoverServices] and use fresh ids.
+/// Never persist this identifier.
+class DescriptorId {
+  /// The characteristic containing the descriptor.
+  final CharacteristicId characteristic;
+
+  /// Descriptor UUID.
+  final String uuid;
+
+  /// Zero-based index among same-UUID descriptors of that characteristic.
+  final int instance;
+
+  /// Parses the serde form.
+  factory DescriptorId.fromJson(Map<String, Object?> json) => DescriptorId(
+    characteristic: CharacteristicId.fromJson(
+      (json['characteristic']! as Map).cast<String, Object?>(),
+    ),
+    uuid: json['uuid']! as String,
+    instance: json['instance']! as int,
+  );
+
+  const DescriptorId({
+    required this.characteristic,
+    required this.uuid,
+    required this.instance,
+  });
+
+  /// The serde form (the `read_descriptor` / `write_descriptor` parameter).
+  Map<String, Object?> toJson() => {
+    'characteristic': characteristic.toJson(),
+    'uuid': uuid,
+    'instance': instance,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is DescriptorId &&
+      other.characteristic == characteristic &&
+      other.uuid == uuid &&
+      other.instance == instance;
+
+  @override
+  int get hashCode => Object.hash(characteristic, uuid, instance);
+}
+
+/// One GATT descriptor (`rblue_api::Descriptor`).
+///
+/// The embedded [characteristic] makes a discovered descriptor
+/// self-contained for [RblueClient.readDescriptor] /
+/// [RblueClient.writeDescriptor]. Valid only for the current connection
+/// and must never be persisted.
+class Descriptor {
+  /// The characteristic containing this descriptor.
+  final CharacteristicId characteristic;
+
+  /// Descriptor UUID.
+  final String uuid;
+
+  /// Zero-based index among same-UUID descriptors of that characteristic.
+  final int instance;
+
+  /// Parses the serde form.
+  factory Descriptor.fromJson(Map<String, Object?> json) => Descriptor(
+    characteristic: CharacteristicId.fromJson(
+      (json['characteristic']! as Map).cast<String, Object?>(),
+    ),
+    uuid: json['uuid']! as String,
+    instance: json['instance']! as int,
+  );
+
+  const Descriptor({
+    required this.characteristic,
+    required this.uuid,
+    required this.instance,
+  });
+
+  /// Session-scoped identity of this discovered descriptor.
+  DescriptorId get id => DescriptorId(
+    characteristic: characteristic,
+    uuid: uuid,
+    instance: instance,
+  );
+
+  /// The serde form.
+  Map<String, Object?> toJson() => {
+    'characteristic': characteristic.toJson(),
+    'uuid': uuid,
+    'instance': instance,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is Descriptor &&
+      other.characteristic == characteristic &&
+      other.uuid == uuid &&
+      other.instance == instance;
+
+  @override
+  int get hashCode => Object.hash(characteristic, uuid, instance);
+}
+
 /// One GATT characteristic (`rblue_api::Characteristic`).
 class Characteristic {
   /// Characteristic UUID.
@@ -650,8 +753,8 @@ class Characteristic {
   /// Property bits; see [CharacteristicProperties].
   final int properties;
 
-  /// Descriptor UUIDs (enumerated only in 1.0).
-  final List<String> descriptors;
+  /// Discovered descriptors, with session-scoped identities.
+  final List<Descriptor> descriptors;
 
   /// Parses the serde form.
   factory Characteristic.fromJson(Map<String, Object?> json) => Characteristic(
@@ -659,7 +762,12 @@ class Characteristic {
     properties: CharacteristicProperties.fromJson(
       json['properties']! as String,
     ),
-    descriptors: (json['descriptors']! as List<Object?>).cast<String>(),
+    descriptors: (json['descriptors']! as List<Object?>)
+        .map(
+          (value) =>
+              Descriptor.fromJson((value! as Map).cast<String, Object?>()),
+        )
+        .toList(),
   );
 
   const Characteristic({

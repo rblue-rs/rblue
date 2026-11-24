@@ -348,6 +348,11 @@ uint64_t uniffi_rblue_ffi_fn_method_rblue_pair(uint64_t ptr, RustBuffer device_j
 uint64_t uniffi_rblue_ffi_fn_method_rblue_read(uint64_t ptr, RustBuffer device_json, RustBuffer characteristic_json
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_READ_DESCRIPTOR
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_READ_DESCRIPTOR
+uint64_t uniffi_rblue_ffi_fn_method_rblue_read_descriptor(uint64_t ptr, RustBuffer device_json, RustBuffer descriptor_json
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_REQUEST_DEVICE
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_REQUEST_DEVICE
 uint64_t uniffi_rblue_ffi_fn_method_rblue_request_device(uint64_t ptr, RustBuffer options_json
@@ -391,6 +396,11 @@ uint64_t uniffi_rblue_ffi_fn_method_rblue_unsubscribe(uint64_t ptr, RustBuffer d
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_WRITE
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_WRITE
 uint64_t uniffi_rblue_ffi_fn_method_rblue_write(uint64_t ptr, RustBuffer device_json, RustBuffer characteristic_json, RustBuffer data, int8_t with_response
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_WRITE_DESCRIPTOR
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_WRITE_DESCRIPTOR
+uint64_t uniffi_rblue_ffi_fn_method_rblue_write_descriptor(uint64_t ptr, RustBuffer device_json, RustBuffer descriptor_json, RustBuffer data
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_INIT_CALLBACK_VTABLE_EVENTSINK
@@ -736,6 +746,12 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_read(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_READ_DESCRIPTOR
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_READ_DESCRIPTOR
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_read_descriptor(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_REQUEST_DEVICE
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_REQUEST_DEVICE
 uint16_t uniffi_rblue_ffi_checksum_method_rblue_request_device(void
@@ -787,6 +803,12 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_unsubscribe(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_WRITE
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_WRITE
 uint16_t uniffi_rblue_ffi_checksum_method_rblue_write(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_WRITE_DESCRIPTOR
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_WRITE_DESCRIPTOR
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_write_descriptor(void
     
 );
 #endif

@@ -725,6 +725,8 @@ fn command_device(command: &BleDriverCommand) -> Option<DeviceId> {
         | BleDriverCommand::DiscoverServices { device }
         | BleDriverCommand::Read { device, .. }
         | BleDriverCommand::Write { device, .. }
+        | BleDriverCommand::ReadDescriptor { device, .. }
+        | BleDriverCommand::WriteDescriptor { device, .. }
         | BleDriverCommand::Subscribe { device, .. }
         | BleDriverCommand::Unsubscribe { device, .. }
         | BleDriverCommand::ReadRssi { device }

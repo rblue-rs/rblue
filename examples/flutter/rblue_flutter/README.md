@@ -22,8 +22,7 @@ declared by this Flutter package. The Rust project has additional backends, but
 platform support is declared here only after Flutter packaging exists.
 
 Implemented operations include adapter initialization, scan/start/stop,
-peripheral lookup, connect/disconnect, service discovery, characteristic
-read/write, subscribe/unsubscribe, RSSI, MTU query, maximum write length,
+peripheral lookup, connect/disconnect, service discovery, characteristic read/write, descriptor read/write, subscribe/unsubscribe, RSSI, MTU query, maximum write length,
 capabilities, connection state, system-connected peripheral lookup (Apple, Android, and Linux), and connection priority.
 
 ## Installation
@@ -153,8 +152,11 @@ package analysis can recognize them.
   backpressure. Production consumers must define an aggregation/drop policy.
 - GATT characteristic instance IDs are connection-scoped and must be
   rediscovered after reconnecting.
-- Pairing, descriptor read/write, and explicit Android MTU requests are not
-  exposed yet.
+- Pairing and explicit Android MTU requests (`request_mtu`) are exposed by
+  the C ABI and Dart client when the backend supports them; they still return
+  `Unsupported` on platforms without those APIs. Descriptor read/write is
+  available as `readDescriptor` / `writeDescriptor` (wire names
+  `read_descriptor` / `write_descriptor`).
 - Some Android failures are collapsed by the pinned btleplug fork to
   `NotConnected`; raw GATT status is preserved only when the backend supplies it.
 

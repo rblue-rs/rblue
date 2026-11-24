@@ -13,8 +13,8 @@ use futures::stream::StreamExt;
 use rblue_api::device::DeviceId;
 use rblue_api::error::{AttError, Error};
 use rblue_api::gatt::{
-    Characteristic, CharacteristicId, CharacteristicProperties, Notification, Service, ServiceId,
-    ServiceSet, WriteMode,
+    descriptors_from_uuids, Characteristic, CharacteristicId, CharacteristicProperties,
+    Notification, Service, ServiceId, ServiceSet, WriteMode,
 };
 use rblue_api::peripheral::{NotificationStream, Peripheral};
 use tokio::sync::broadcast;
@@ -70,8 +70,8 @@ impl CoreBluetoothPeripheral {
             descriptors: characteristic
                 .descriptors
                 .iter()
-                .map(|uuid| btleplug::api::Descriptor {
-                    uuid: *uuid,
+                .map(|descriptor| btleplug::api::Descriptor {
+                    uuid: descriptor.uuid,
                     service_uuid: id.service.uuid,
                     characteristic_uuid: id.uuid,
                 })
@@ -83,6 +83,44 @@ impl CoreBluetoothPeripheral {
     /// estimate sampled at discovery time.
     fn max_write_len_from(peripheral: &btleplug::platform::Peripheral) -> usize {
         usize::from(peripheral.mtu()).saturating_sub(3)
+    }
+
+    /// Resolves a session-scoped descriptor identity against the discovered
+    /// tree of the current connection and rebuilds the fork's descriptor
+    /// value. The fork addresses descriptors by UUID, so `instance` is
+    /// validated against the discovered tree and cannot be forwarded when
+    /// two same-UUID descriptors are present.
+    fn resolve_descriptor(&self, id: &DescriptorId) -> Result<btleplug::api::Descriptor, Error> {
+        let Some(services) = self.entry.services() else {
+            return Err(att_invalid_handle());
+        };
+        let service = services
+            .services
+            .iter()
+            .filter(|service| service.uuid == id.characteristic.service.uuid)
+            .nth(id.characteristic.service.instance as usize);
+        let characteristic = service.and_then(|service| {
+            service
+                .characteristics
+                .iter()
+                .filter(|characteristic| characteristic.uuid == id.characteristic.uuid)
+                .nth(id.characteristic.instance as usize)
+        });
+        let descriptor = characteristic.and_then(|characteristic| {
+            characteristic
+                .descriptors
+                .iter()
+                .filter(|descriptor| descriptor.uuid == id.uuid)
+                .nth(id.instance as usize)
+        });
+        let Some(descriptor) = descriptor else {
+            return Err(att_invalid_handle());
+        };
+        Ok(btleplug::api::Descriptor {
+            uuid: descriptor.uuid,
+            service_uuid: id.characteristic.service.uuid,
+            characteristic_uuid: id.characteristic.uuid,
+        })
     }
 }
 
@@ -199,6 +237,31 @@ impl Peripheral for CoreBluetoothPeripheral {
         Ok(Self::max_write_len_from(&peripheral))
     }
 
+    async fn read_descriptor(&self, id: &DescriptorId) -> Result<Vec<u8>, Error> {
+        let peripheral = self.entry.connected_handle().await?;
+        let descriptor = self.resolve_descriptor(id)?;
+        peripheral
+            .read_descriptor(&descriptor)
+            .await
+            .map_err(map_btleplug_error)
+    }
+
+    async fn write_descriptor(&self, id: &DescriptorId, data: &[u8]) -> Result<(), Error> {
+        let peripheral = self.entry.connected_handle().await?;
+        let descriptor = self.resolve_descriptor(id)?;
+        let max = Self::max_write_len_from(&peripheral);
+        if data.len() > max {
+            return Err(Error::InvalidLength {
+                len: data.len(),
+                max,
+            });
+        }
+        peripheral
+            .write_descriptor(&descriptor, data)
+            .await
+            .map_err(map_btleplug_error)
+    }
+
     async fn subscribe(&self, ch: &CharacteristicId) -> Result<(), Error> {
         let peripheral = self.entry.connected_handle().await?;
         let characteristic = self.resolve_characteristic(ch)?;
@@ -272,27 +335,47 @@ pub(crate) fn service_set_from_btleplug(
     discovered: &BTreeSet<btleplug::api::Service>,
     filter: &[Uuid],
 ) -> ServiceSet {
-    let services = discovered
+    let mut services = Vec::new();
+    for service in discovered
         .iter()
         .filter(|service| filter.is_empty() || filter.contains(&service.uuid))
-        .map(|service| Service {
+    {
+        let service_id = ServiceId {
             uuid: service.uuid,
-            primary: service.primary,
-            characteristics: service
-                .characteristics
+            instance: services
                 .iter()
-                .map(|characteristic| Characteristic {
-                    uuid: characteristic.uuid,
-                    properties: map_properties(characteristic.properties),
-                    descriptors: characteristic
+                .filter(|listed: &&Service| listed.uuid == service.uuid)
+                .count() as u16,
+        };
+        let mut characteristics = Vec::new();
+        for characteristic in &service.characteristics {
+            let instance = characteristics
+                .iter()
+                .filter(|listed: &&Characteristic| listed.uuid == characteristic.uuid)
+                .count() as u16;
+            let id = CharacteristicId {
+                service: service_id,
+                uuid: characteristic.uuid,
+                instance,
+            };
+            characteristics.push(Characteristic {
+                uuid: characteristic.uuid,
+                properties: map_properties(characteristic.properties),
+                descriptors: descriptors_from_uuids(
+                    id,
+                    characteristic
                         .descriptors
                         .iter()
-                        .map(|descriptor| descriptor.uuid)
-                        .collect(),
-                })
-                .collect(),
-        })
-        .collect();
+                        .map(|descriptor| descriptor.uuid),
+                ),
+            });
+        }
+        services.push(Service {
+            uuid: service.uuid,
+            primary: service.primary,
+            characteristics,
+        });
+    }
     ServiceSet { services }
 }
 

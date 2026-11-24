@@ -24,5 +24,5 @@ silent claims of platform support.
    status values such as 133 are preserved when present, but some connection
    paths in the fork retry and collapse their final failure to `NotConnected`.
 7. **The C ABI is intentionally small.** RSSI, MTU query, capabilities and
-   `max_write_len` are exposed; explicit MTU requests, pairing and descriptor
-   read/write are not yet exposed. Backend capabilities remain platform-specific.
+   `max_write_len`, and descriptor `read_descriptor` / `write_descriptor` are
+   exposed. Explicit MTU requests and pairing remain platform-specific.

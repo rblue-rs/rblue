@@ -304,6 +304,35 @@ impl Rblue {
             .map_err(napi_error)
     }
 
+    /// Reads a descriptor; the value comes back as raw bytes.
+    #[napi]
+    pub async fn read_descriptor(&self, device: String, descriptor: String) -> NapiResult<Buffer> {
+        let descriptor: rblue_api::DescriptorId = parse_json("descriptor id", &descriptor)?;
+        let data = self
+            .with_peripheral(&device)?
+            .read_descriptor(&descriptor)
+            .await
+            .map_err(napi_error)?;
+        Ok(data.into())
+    }
+
+    /// Writes raw bytes to a descriptor. Oversize payloads are rejected
+    /// with `InvalidLength` before dispatch; the payload travels on the
+    /// binary data plane.
+    #[napi]
+    pub async fn write_descriptor(
+        &self,
+        device: String,
+        descriptor: String,
+        data: Buffer,
+    ) -> NapiResult<()> {
+        let descriptor: rblue_api::DescriptorId = parse_json("descriptor id", &descriptor)?;
+        self.with_peripheral(&device)?
+            .write_descriptor(&descriptor, &data)
+            .await
+            .map_err(napi_error)
+    }
+
     /// Subscribes to value changes (notify or indicate per the properties).
     #[napi]
     pub async fn subscribe(&self, device: String, characteristic: String) -> NapiResult<()> {
