@@ -37,6 +37,12 @@
 //!   device as already connected at the OS level so
 //!   `Adapter::system_connected_peripherals` can return it before a local
 //!   `connect()`.
+//! - [Peripheral advertising](rblue_api::Adapter::start_advertising): broadcasts
+//!   a payload that a running scan on the same adapter can observe as
+//!   [`LOCAL_ADVERTISEMENT_ID`].
+//! - [GATT server](rblue_api::Adapter::add_local_service) plus a
+//!   [virtual central](MockAdapter::connect_virtual_central) control plane
+//!   for exercising reads, writes, and subscriptions without hardware.
 //!
 //! [`MockAdapter::with_contract_fixture`] builds the fixture the
 //! `rblue_api::contract` suite requires, and the mock reports every
@@ -96,6 +102,8 @@
 mod adapter;
 mod hub;
 mod peripheral;
+mod server;
 
-pub use crate::adapter::MockAdapter;
+pub use crate::adapter::{MockAdapter, LOCAL_ADVERTISEMENT_ID};
 pub use crate::peripheral::{MockCharacteristic, MockFailure, MockOp, MockPeripheral, MockService};
+pub use crate::server::MockVirtualCentral;

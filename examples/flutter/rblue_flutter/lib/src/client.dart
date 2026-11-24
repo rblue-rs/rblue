@@ -17,8 +17,9 @@ typedef RawResponse = ({String? statusJson, Uint8List payload});
 /// - `request` responses are correlated by a client-chosen monotonic `req_id`
 ///   through one `Completer` each; responses arriving after a timeout (or
 ///   after [dispose]) are dropped.
-/// - Adapter events and GATT notifications arrive on the two broadcast
-///   streams; subscribe before [initialize]/[startScan] so nothing is missed.
+/// - Adapter events, GATT notifications, and GATT server events arrive on
+///   broadcast streams; subscribe before [initialize]/[startScan] so nothing
+///   is missed.
 /// - Errors are the `status_json` values of the C ABI, parsed into
 ///   [RblueException]; raw platform codes (Android GATT status 133) survive
 ///   in [RblueException.platformCode].
@@ -33,6 +34,7 @@ class RblueClient {
   final _events = StreamController<AdapterEvent>.broadcast();
   final _notifications = StreamController<DeviceNotification>.broadcast();
   final _supervisorEvents = StreamController<SupervisorEvent>.broadcast();
+  final _serverEvents = StreamController<GattServerEvent>.broadcast();
   var _nextReqId = 1;
   var _disposed = false;
 
@@ -76,6 +78,10 @@ class RblueClient {
   /// scheduled, breaker open, ...). Distinct from [events] and from the
   /// platform `auto_connect` flag on [connect].
   Stream<SupervisorEvent> get supervisorEvents => _supervisorEvents.stream;
+
+  /// Broadcast stream of local GATT server events (connected centrals,
+  /// writes, subscriptions). Distinct from [events].
+  Stream<GattServerEvent> get serverEvents => _serverEvents.stream;
 
   /// Backend version string, for the platform page and smoke checks.
   Future<String> backendVersion() => _request(
@@ -122,6 +128,9 @@ class RblueClient {
   static int _decodeInt(Uint8List payload) =>
       jsonDecode(utf8.decode(payload)) as int;
 
+  static bool _decodeBool(Uint8List payload) =>
+      jsonDecode(utf8.decode(payload)) as bool;
+
   /// Opens the adapter; on some platforms the permission prompt happens here.
   Future<void> initialize() => _request('initialize', decode: _noPayload);
 
@@ -149,6 +158,77 @@ class RblueClient {
 
   /// Stops the running scan.
   Future<void> stopScan() => _request('stop_scan', decode: _noPayload);
+
+  /// Starts advertising as a peripheral. Calling this while already
+  /// advertising replaces the payload. Check [Capability.advertise] first.
+  ///
+  /// Do not use `startAdvertising` as a C ABI method name; the wire name is
+  /// `start_advertising`.
+  Future<void> startAdvertising({AdvertiseParams? params}) => _request(
+    'start_advertising',
+    params: params?.toJson(),
+    decode: _noPayload,
+  );
+
+  /// Stops an active advertisement.
+  Future<void> stopAdvertising() =>
+      _request('stop_advertising', decode: _noPayload);
+
+  /// Returns whether the adapter is currently advertising.
+  Future<bool> isAdvertising() =>
+      _request('is_advertising', decode: _decodeBool);
+
+  /// Registers a local GATT service. Check [Capability.gattServer] first.
+  Future<LocalServiceId> addLocalService(LocalService service) => _request(
+    'add_local_service',
+    params: service.toJson(),
+    decode: (payload) => LocalServiceId.fromJson(
+      jsonDecode(utf8.decode(payload))! as Map<String, Object?>,
+    ),
+  );
+
+  /// Unregisters a previously added local service.
+  Future<void> removeLocalService(LocalServiceId service) => _request(
+    'remove_local_service',
+    params: {'service': service.toJson()},
+    decode: _noPayload,
+  );
+
+  /// Snapshot of every currently registered local service.
+  Future<List<LocalServiceSnapshot>> localServices() => _request(
+    'local_services',
+    decode: (payload) => (jsonDecode(utf8.decode(payload))! as List<Object?>)
+        .map(
+          (value) => LocalServiceSnapshot.fromJson(
+            (value! as Map).cast<String, Object?>(),
+          ),
+        )
+        .toList(),
+  );
+
+  /// Replaces the stored value of a local characteristic without notifying
+  /// subscribers.
+  Future<void> writeLocalCharacteristic(
+    LocalCharacteristicId characteristic,
+    List<int> value,
+  ) => _request(
+    'write_local_characteristic',
+    params: {'characteristic': characteristic.toJson()},
+    payload: Uint8List.fromList(value),
+    decode: _noPayload,
+  );
+
+  /// Replaces the stored value of a local characteristic and notifies or
+  /// indicates current subscribers. Having no subscribers is not an error.
+  Future<void> notifyLocalCharacteristic(
+    LocalCharacteristicId characteristic,
+    List<int> value,
+  ) => _request(
+    'notify_local_characteristic',
+    params: {'characteristic': characteristic.toJson()},
+    payload: Uint8List.fromList(value),
+    decode: _noPayload,
+  );
 
   /// Snapshot of the devices known to the adapter.
   Future<List<PeripheralInfo>> peripherals() => _peripheralList('peripherals');
@@ -329,6 +409,7 @@ class RblueClient {
     _events.close();
     _notifications.close();
     _supervisorEvents.close();
+    _serverEvents.close();
   }
 
   /// The per-request timeout; generous because real hardware is slow, short
@@ -417,6 +498,8 @@ class RblueClient {
           _notifications.add(DeviceNotification.fromJson(envelope));
         case 'supervisor_event':
           _supervisorEvents.add(SupervisorEvent.fromJson(envelope['event']!));
+        case 'gatt_server_event':
+          _serverEvents.add(GattServerEvent.fromJson(envelope['event']!));
         case _:
           _reportContractError('unknown event type: $eventJson');
       }

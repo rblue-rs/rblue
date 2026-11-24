@@ -44,6 +44,7 @@
 #![warn(missing_docs)]
 
 pub mod adapter;
+pub mod advertise;
 pub mod cache;
 pub mod capability;
 pub mod contract;
@@ -57,6 +58,7 @@ pub mod gatt;
 pub mod peripheral;
 pub mod queue;
 pub mod scan;
+pub mod server;
 pub mod session;
 pub mod supervisor;
 
@@ -68,6 +70,7 @@ pub mod prelude {
     //! ```
 
     pub use crate::adapter::{Adapter, AdapterEventStream};
+    pub use crate::advertise::AdvertiseParams;
     pub use crate::cache::{ServiceCache, ServiceCacheConfig, ValidationEvidence};
     pub use crate::capability::{Capability, CapabilitySet};
     pub use crate::debounce::{DebounceConfig, DebouncedEvent, ScanDebouncer};
@@ -86,6 +89,10 @@ pub mod prelude {
     pub use crate::scan::{
         AdvertisementData, DiscoveredDevice, ManufacturerFilter, RequestDeviceOptions, ScanFilter,
     };
+    pub use crate::server::{
+        GattServerEvent, GattServerEventStream, LocalCharacteristic, LocalCharacteristicId,
+        LocalCharacteristicSnapshot, LocalService, LocalServiceId, LocalServiceSnapshot,
+    };
     pub use crate::session::{
         ReplayPolicy, RestoredSession, SavedSession, SessionRestoreConfig, SessionRestorer,
     };
@@ -95,6 +102,7 @@ pub mod prelude {
 }
 
 pub use crate::adapter::{Adapter, AdapterEventStream};
+pub use crate::advertise::AdvertiseParams;
 pub use crate::cache::{ServiceCache, ServiceCacheConfig, ValidationEvidence};
 pub use crate::capability::{Capability, CapabilitySet};
 pub use crate::contract::{
@@ -115,6 +123,10 @@ pub use crate::peripheral::{
 pub use crate::queue::{GattOpPriority, GattOpQueue, GattOperation, OpHandle, QueueConfig};
 pub use crate::scan::{
     AdvertisementData, DiscoveredDevice, ManufacturerFilter, RequestDeviceOptions, ScanFilter,
+};
+pub use crate::server::{
+    GattServerEvent, GattServerEventStream, LocalCharacteristic, LocalCharacteristicId,
+    LocalCharacteristicSnapshot, LocalService, LocalServiceId, LocalServiceSnapshot,
 };
 pub use crate::session::{
     ReplayPolicy, RestoredSession, SavedSession, SessionRestoreConfig, SessionRestorer,

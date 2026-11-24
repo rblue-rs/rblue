@@ -376,6 +376,61 @@ void main() {
 
     client.dispose();
   });
+
+  test('advertising and local GATT methods use rust names', () async {
+    final bridge = FakeNativeBridge();
+    final client = RblueClient.forBridge(bridge, bridge.create()!);
+
+    final started = client.startAdvertising(
+      params: const AdvertiseParams(localName: 'c-abi', connectable: false),
+    );
+    expect(bridge.sent.single.method, 'start_advertising');
+    expect(bridge.sent.single.params, contains('"local_name":"c-abi"'));
+    expect(bridge.sent.single.params, contains('"connectable":false'));
+    bridge.respondTo(bridge.sent.single.reqId);
+    await started;
+
+    final advertising = client.isAdvertising();
+    expect(bridge.sent.last.method, 'is_advertising');
+    bridge.respondTo(bridge.sent.last.reqId, 'true'.codeUnits);
+    expect(await advertising, isTrue);
+
+    final added = client.addLocalService(
+      const LocalService(
+        uuid: '5b6e1f2a-9c3d-4e8f-a1b2-c3d4e5f600a1',
+        characteristics: [
+          LocalCharacteristic(
+            uuid: '5b6e1f2a-9c3d-4e8f-a1b2-c3d4e5f600a2',
+            properties:
+                CharacteristicProperties.read |
+                CharacteristicProperties.write |
+                CharacteristicProperties.notify,
+            maxLen: 8,
+          ),
+        ],
+      ),
+    );
+    expect(bridge.sent.last.method, 'add_local_service');
+    expect(bridge.sent.last.params, contains('READ | WRITE | NOTIFY'));
+    bridge.respondTo(
+      bridge.sent.last.reqId,
+      '{"uuid":"5b6e1f2a-9c3d-4e8f-a1b2-c3d4e5f600a1","instance":0}'.codeUnits,
+    );
+    expect((await added).instance, 0);
+
+    final events = <GattServerEvent>[];
+    final done = client.serverEvents.take(1).forEach(events.add);
+    bridge.emitEvent(
+      '{"type":"gatt_server_event","event":{"central_connected":'
+      '{"central":{"mac":[[2,0,0,0,0,1],"random_static"]}}}}',
+    );
+    await done;
+    expect(events.single, isA<GattServerCentralConnected>());
+
+    unawaited(quiet(client.stopAdvertising()));
+    expect(bridge.sent.last.method, 'stop_advertising');
+    client.dispose();
+  });
 }
 
 CharacteristicId _characteristic() => CharacteristicId(

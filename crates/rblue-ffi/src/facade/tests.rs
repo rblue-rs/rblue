@@ -48,6 +48,8 @@ impl EventSink for SinkHandle {
             .expect("recording")
             .push(notification_json);
     }
+
+    fn on_gatt_server_event(&self, _event_json: String) {}
 }
 
 /// Waits until `done` holds, polling the pump's delivery from the test task.

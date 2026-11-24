@@ -9,8 +9,10 @@ contributors.
 rblue is a cross-platform async Bluetooth Low Energy (BLE) library: one unified
 Rust API across Windows (WinRT), macOS/iOS (CoreBluetooth), Linux (BlueZ),
 Android (JNI), Web (Web Bluetooth via web-sys), and HarmonyOS (ArkTS driver
-bridged over Node-API). Scope is BLE Central (GATT client) first; GATT server
-and advertising are Phase 2.
+bridged over Node-API). Scope is BLE Central (GATT client) first. GATT server
+and advertising are on the `rblue-api` trait surface (issue #49); the mock
+backend implements them, and native backends return `Unsupported` until
+platform wiring lands.
 
 The detailed architecture and implementation plan live one directory above this
 repository (`rblue-implementation-plan.md`). Consult it before making

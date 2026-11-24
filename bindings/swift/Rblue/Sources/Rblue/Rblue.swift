@@ -656,6 +656,12 @@ public protocol RblueProtocol: AnyObject, Sendable {
     func adapterId()  -> String
     
     /**
+     * Registers a local GATT service. `service_json` is a `LocalService`
+     * object; the returned string is a `LocalServiceId`.
+     */
+    func addLocalService(serviceJson: String) async throws  -> String
+    
+    /**
      * The version string of the selected backend, for diagnostics and
      * backend-swap probes.
      */
@@ -726,6 +732,11 @@ public protocol RblueProtocol: AnyObject, Sendable {
     func initialize() async throws 
     
     /**
+     * Returns whether the adapter is currently advertising.
+     */
+    func isAdvertising() async throws  -> Bool
+    
+    /**
      * Connection state of the device.
      *
      * # Errors
@@ -733,6 +744,12 @@ public protocol RblueProtocol: AnyObject, Sendable {
      * Platform failures as [`RblueError::Platform`].
      */
     func isConnected(deviceJson: String) async throws  -> Bool
+    
+    /**
+     * Snapshot of registered local services as a JSON array of
+     * `LocalServiceSnapshot`.
+     */
+    func localServices() async throws  -> String
     
     /**
      * Maximum payload `write` accepts for this characteristic and mode, in
@@ -762,6 +779,11 @@ public protocol RblueProtocol: AnyObject, Sendable {
     func name(deviceJson: String) async  -> String?
     
     /**
+     * Updates a local characteristic value and notifies current subscribers.
+     */
+    func notifyLocalCharacteristic(characteristicJson: String, value: Data) async throws 
+    
+    /**
      * Actively initiates pairing/bonding where the platform has an API.
      *
      * # Errors
@@ -781,6 +803,11 @@ public protocol RblueProtocol: AnyObject, Sendable {
      * fails.
      */
     func read(deviceJson: String, characteristicJson: String) async throws  -> Data
+    
+    /**
+     * Unregisters a local GATT service. `service_json` is a `LocalServiceId`.
+     */
+    func removeLocalService(serviceJson: String) async throws 
     
     /**
      * Web-only entry point: shows the browser's device picker. Must be
@@ -821,6 +848,13 @@ public protocol RblueProtocol: AnyObject, Sendable {
     func setEventSink(sink: EventSink) 
     
     /**
+     * Starts advertising as a peripheral. `params_json` is an
+     * `AdvertiseParams` object; `{}` uses the documented defaults
+     * (connectable, include name).
+     */
+    func startAdvertising(paramsJson: String) async throws 
+    
+    /**
      * Starts a scan with the given filter (`ScanFilter` JSON; `{}` accepts
      * the defaults of every field, i.e. no filtering). Discoveries arrive
      * through [`EventSink::on_event`] as `device_discovered` /
@@ -834,6 +868,11 @@ public protocol RblueProtocol: AnyObject, Sendable {
      * scanning (use `request_device` there).
      */
     func startScan(filterJson: String) async throws 
+    
+    /**
+     * Stops an active advertisement.
+     */
+    func stopAdvertising() async throws 
     
     /**
      * Stops the running scan. Idempotent.
@@ -895,6 +934,13 @@ public protocol RblueProtocol: AnyObject, Sendable {
      * [`RblueError::Att`].
      */
     func write(deviceJson: String, characteristicJson: String, data: Data, withResponse: Bool) async throws 
+    
+    /**
+     * Updates a local characteristic value without notifying subscribers.
+     * `characteristic_json` is a `LocalCharacteristicId`; `value` is the
+     * new stored payload.
+     */
+    func writeLocalCharacteristic(characteristicJson: String, value: Data) async throws 
     
 }
 /**
@@ -987,6 +1033,26 @@ open func adapterId() -> String  {
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
+}
+    
+    /**
+     * Registers a local GATT service. `service_json` is a `LocalService`
+     * object; the returned string is a `LocalServiceId`.
+     */
+open func addLocalService(serviceJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_add_local_service(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(serviceJson)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_rblue_ffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
 }
     
     /**
@@ -1130,6 +1196,25 @@ open func initialize()async throws   {
 }
     
     /**
+     * Returns whether the adapter is currently advertising.
+     */
+open func isAdvertising()async throws  -> Bool  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_is_advertising(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_i8,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_i8,
+            freeFunc: ffi_rblue_ffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
      * Connection state of the device.
      *
      * # Errors
@@ -1148,6 +1233,26 @@ open func isConnected(deviceJson: String)async throws  -> Bool  {
             completeFunc: ffi_rblue_ffi_rust_future_complete_i8,
             freeFunc: ffi_rblue_ffi_rust_future_free_i8,
             liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
+     * Snapshot of registered local services as a JSON array of
+     * `LocalServiceSnapshot`.
+     */
+open func localServices()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_local_services(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_rblue_ffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeRblueError_lift
         )
 }
@@ -1223,6 +1328,25 @@ open func name(deviceJson: String)async  -> String?  {
 }
     
     /**
+     * Updates a local characteristic value and notifies current subscribers.
+     */
+open func notifyLocalCharacteristic(characteristicJson: String, value: Data)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_notify_local_characteristic(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(characteristicJson),FfiConverterData.lower(value)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_void,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_void,
+            freeFunc: ffi_rblue_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
      * Actively initiates pairing/bonding where the platform has an API.
      *
      * # Errors
@@ -1267,6 +1391,25 @@ open func read(deviceJson: String, characteristicJson: String)async throws  -> D
             completeFunc: ffi_rblue_ffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_rblue_ffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterData.lift,
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
+     * Unregisters a local GATT service. `service_json` is a `LocalServiceId`.
+     */
+open func removeLocalService(serviceJson: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_remove_local_service(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(serviceJson)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_void,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_void,
+            freeFunc: ffi_rblue_ffi_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeRblueError_lift
         )
 }
@@ -1345,6 +1488,27 @@ open func setEventSink(sink: EventSink)  {try! rustCall() {
 }
     
     /**
+     * Starts advertising as a peripheral. `params_json` is an
+     * `AdvertiseParams` object; `{}` uses the documented defaults
+     * (connectable, include name).
+     */
+open func startAdvertising(paramsJson: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_start_advertising(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(paramsJson)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_void,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_void,
+            freeFunc: ffi_rblue_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
      * Starts a scan with the given filter (`ScanFilter` JSON; `{}` accepts
      * the defaults of every field, i.e. no filtering). Discoveries arrive
      * through [`EventSink::on_event`] as `device_discovered` /
@@ -1363,6 +1527,25 @@ open func startScan(filterJson: String)async throws   {
             rustFutureFunc: {
                 uniffi_rblue_ffi_fn_method_rblue_start_scan(
                         self.uniffiCloneHandle(),FfiConverterString.lower(filterJson)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_void,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_void,
+            freeFunc: ffi_rblue_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
+     * Stops an active advertisement.
+     */
+open func stopAdvertising()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_stop_advertising(
+                        self.uniffiCloneHandle()
                 )
             },
             pollFunc: ffi_rblue_ffi_rust_future_poll_void,
@@ -1494,6 +1677,27 @@ open func write(deviceJson: String, characteristicJson: String, data: Data, with
             rustFutureFunc: {
                 uniffi_rblue_ffi_fn_method_rblue_write(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceJson),FfiConverterString.lower(characteristicJson),FfiConverterData.lower(data),FfiConverterBool.lower(withResponse)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_void,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_void,
+            freeFunc: ffi_rblue_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
+     * Updates a local characteristic value without notifying subscribers.
+     * `characteristic_json` is a `LocalCharacteristicId`; `value` is the
+     * new stored payload.
+     */
+open func writeLocalCharacteristic(characteristicJson: String, value: Data)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_write_local_characteristic(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(characteristicJson),FfiConverterData.lower(value)
                 )
             },
             pollFunc: ffi_rblue_ffi_rust_future_poll_void,
@@ -2098,6 +2302,12 @@ public protocol EventSink: AnyObject, Sendable {
      */
     func onNotification(notificationJson: String) 
     
+    /**
+     * One local GATT server event (a serialized
+     * `rblue_api::GattServerEvent`).
+     */
+    func onGattServerEvent(eventJson: String) 
+    
 }
 
 
@@ -2160,6 +2370,30 @@ fileprivate struct UniffiCallbackInterfaceEventSink {
                 }
                 return uniffiObj.onNotification(
                      notificationJson: try FfiConverterString.lift(notificationJson)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onGattServerEvent: { (
+            uniffiHandle: UInt64,
+            eventJson: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceEventSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onGattServerEvent(
+                     eventJson: try FfiConverterString.lift(eventJson)
                 )
             }
 
@@ -2413,6 +2647,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_rblue_ffi_checksum_method_rblue_adapter_id() != 37679) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_rblue_ffi_checksum_method_rblue_add_local_service() != 58440) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rblue_ffi_checksum_method_rblue_backend_version() != 55556) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2431,7 +2668,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_rblue_ffi_checksum_method_rblue_initialize() != 2458) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_rblue_ffi_checksum_method_rblue_is_advertising() != 16814) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rblue_ffi_checksum_method_rblue_is_connected() != 21439) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rblue_ffi_checksum_method_rblue_local_services() != 56348) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_method_rblue_max_write_len() != 1567) {
@@ -2443,10 +2686,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_rblue_ffi_checksum_method_rblue_name() != 11161) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_rblue_ffi_checksum_method_rblue_notify_local_characteristic() != 4331) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rblue_ffi_checksum_method_rblue_pair() != 10035) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_method_rblue_read() != 60552) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rblue_ffi_checksum_method_rblue_remove_local_service() != 40008) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_method_rblue_request_device() != 16933) {
@@ -2458,7 +2707,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_rblue_ffi_checksum_method_rblue_set_event_sink() != 2020) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_rblue_ffi_checksum_method_rblue_start_advertising() != 40024) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rblue_ffi_checksum_method_rblue_start_scan() != 27310) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rblue_ffi_checksum_method_rblue_stop_advertising() != 53888) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_method_rblue_stop_scan() != 55029) {
@@ -2476,6 +2731,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_rblue_ffi_checksum_method_rblue_write() != 27008) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_rblue_ffi_checksum_method_rblue_write_local_characteristic() != 30102) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rblue_ffi_checksum_constructor_rblue_new() != 53450) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2483,6 +2741,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_method_eventsink_on_notification() != 11055) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rblue_ffi_checksum_method_eventsink_on_gatt_server_event() != 34169) {
         return InitializationResult.apiChecksumMismatch
     }
 

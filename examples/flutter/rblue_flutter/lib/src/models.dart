@@ -565,6 +565,26 @@ class CharacteristicProperties {
     }
     return bits;
   }
+
+  /// The "|"-separated flag-name string `rblue-api` serde uses.
+  static String toJson(int bits) {
+    const flags = <(int, String)>[
+      (0x0001, 'BROADCAST'),
+      (read, 'READ'),
+      (writeWithoutResponse, 'WRITE_WITHOUT_RESPONSE'),
+      (write, 'WRITE'),
+      (notify, 'NOTIFY'),
+      (indicate, 'INDICATE'),
+      (0x0040, 'AUTHENTICATED_SIGNED_WRITES'),
+      (0x0080, 'EXTENDED_PROPERTIES'),
+      (0x0100, 'RELIABLE_WRITE'),
+      (0x0200, 'WRITABLE_AUXILIARIES'),
+    ];
+    return [
+      for (final (bit, name) in flags)
+        if (bits & bit != 0) name,
+    ].join(' | ');
+  }
 }
 
 /// Identity of a service within a connection
@@ -1175,4 +1195,383 @@ class SupervisorGaveUp extends SupervisorEvent {
 
   /// Builds the event.
   const SupervisorGaveUp(this.id, this.consecutiveFailures);
+}
+
+/// Parameters for [RblueClient.startAdvertising]
+/// (`rblue_api::AdvertiseParams`). Serialized with `timeout_ms`.
+class AdvertiseParams {
+  /// Local name to advertise when [includeName] is true.
+  final String? localName;
+
+  /// Service UUIDs to include in the advertisement.
+  final List<String> services;
+
+  /// Service data entries: service UUID and its data.
+  final List<(String, List<int>)> serviceData;
+
+  /// Manufacturer-specific data: company ID and data.
+  final (int, List<int>)? manufacturerData;
+
+  /// Whether the advertisement is connectable. Defaults to `true`.
+  final bool connectable;
+
+  /// When true, include a transmit-power field if the platform allows it.
+  final bool includeTxPower;
+
+  /// When true (the default) and [localName] is set, include the name.
+  final bool includeName;
+
+  /// How long to advertise; `null` means until [RblueClient.stopAdvertising].
+  final Duration? timeout;
+
+  /// Builds advertising parameters. Omitted fields keep the Rust defaults
+  /// when [toJson] leaves them off the wire (`timeout` only).
+  const AdvertiseParams({
+    this.localName,
+    this.services = const [],
+    this.serviceData = const [],
+    this.manufacturerData,
+    this.connectable = true,
+    this.includeTxPower = false,
+    this.includeName = true,
+    this.timeout,
+  });
+
+  /// The serde object sent as `start_advertising`'s params.
+  Map<String, Object?> toJson() => {
+    'local_name': localName,
+    'services': services,
+    'service_data': [
+      for (final entry in serviceData) [entry.$1, entry.$2],
+    ],
+    'manufacturer_data': manufacturerData == null
+        ? null
+        : [manufacturerData!.$1, manufacturerData!.$2],
+    'connectable': connectable,
+    'include_tx_power': includeTxPower,
+    'include_name': includeName,
+    'timeout_ms': ?timeout?.inMilliseconds,
+  };
+}
+
+/// Declaration of a local GATT service (`rblue_api::LocalService`).
+class LocalService {
+  /// Service UUID.
+  final String uuid;
+
+  /// `true` for a primary service (the default).
+  final bool primary;
+
+  /// Characteristics contained in this service.
+  final List<LocalCharacteristic> characteristics;
+
+  /// A primary service with the given UUID.
+  const LocalService({
+    required this.uuid,
+    this.primary = true,
+    this.characteristics = const [],
+  });
+
+  /// The serde object sent as `add_local_service`'s params.
+  Map<String, Object?> toJson() => {
+    'uuid': uuid,
+    'primary': primary,
+    'characteristics': [
+      for (final characteristic in characteristics) characteristic.toJson(),
+    ],
+  };
+}
+
+/// Declaration of a local characteristic (`rblue_api::LocalCharacteristic`).
+class LocalCharacteristic {
+  /// Characteristic UUID.
+  final String uuid;
+
+  /// Property bits ([CharacteristicProperties]).
+  final int properties;
+
+  /// Initial stored value.
+  final List<int> value;
+
+  /// Maximum stored value length; `null` lets the backend choose a default.
+  final int? maxLen;
+
+  /// Builds a local characteristic declaration.
+  const LocalCharacteristic({
+    required this.uuid,
+    required this.properties,
+    this.value = const [],
+    this.maxLen,
+  });
+
+  /// The serde object nested inside [LocalService.toJson].
+  Map<String, Object?> toJson() => {
+    'uuid': uuid,
+    'properties': CharacteristicProperties.toJson(properties),
+    'value': value,
+    'max_len': maxLen,
+  };
+}
+
+/// Identity of a registered local service (`rblue_api::LocalServiceId`).
+/// Valid until the service is removed; must not be persisted.
+class LocalServiceId {
+  /// Service UUID.
+  final String uuid;
+
+  /// Zero-based index among same-UUID local services at registration.
+  final int instance;
+
+  /// Builds the identifier.
+  const LocalServiceId({required this.uuid, this.instance = 0});
+
+  /// Parses the serde form.
+  factory LocalServiceId.fromJson(Map<String, Object?> json) => LocalServiceId(
+    uuid: json['uuid']! as String,
+    instance: json['instance']! as int,
+  );
+
+  /// The serde form.
+  Map<String, Object?> toJson() => {'uuid': uuid, 'instance': instance};
+}
+
+/// Identity of a registered local characteristic
+/// (`rblue_api::LocalCharacteristicId`). Valid until the service is removed;
+/// must not be persisted or mixed with [CharacteristicId].
+class LocalCharacteristicId {
+  /// The local service containing the characteristic.
+  final LocalServiceId service;
+
+  /// Characteristic UUID.
+  final String uuid;
+
+  /// Zero-based index among same-UUID characteristics in the service.
+  final int instance;
+
+  /// Builds the identifier.
+  const LocalCharacteristicId({
+    required this.service,
+    required this.uuid,
+    this.instance = 0,
+  });
+
+  /// Parses the serde form.
+  factory LocalCharacteristicId.fromJson(Map<String, Object?> json) =>
+      LocalCharacteristicId(
+        service: LocalServiceId.fromJson(
+          (json['service']! as Map).cast<String, Object?>(),
+        ),
+        uuid: json['uuid']! as String,
+        instance: json['instance']! as int,
+      );
+
+  /// The serde form.
+  Map<String, Object?> toJson() => {
+    'service': service.toJson(),
+    'uuid': uuid,
+    'instance': instance,
+  };
+}
+
+/// Snapshot of a registered local service (`rblue_api::LocalServiceSnapshot`).
+class LocalServiceSnapshot {
+  /// Registration identity of this service.
+  final LocalServiceId id;
+
+  /// `true` for a primary service.
+  final bool primary;
+
+  /// Characteristics in registration order, with current stored values.
+  final List<LocalCharacteristicSnapshot> characteristics;
+
+  /// Builds the snapshot.
+  const LocalServiceSnapshot({
+    required this.id,
+    required this.primary,
+    required this.characteristics,
+  });
+
+  /// Parses the serde form.
+  factory LocalServiceSnapshot.fromJson(Map<String, Object?> json) =>
+      LocalServiceSnapshot(
+        id: LocalServiceId.fromJson(
+          (json['id']! as Map).cast<String, Object?>(),
+        ),
+        primary: json['primary']! as bool,
+        characteristics: ((json['characteristics']! as List<Object?>)
+            .map(
+              (value) => LocalCharacteristicSnapshot.fromJson(
+                (value! as Map).cast<String, Object?>(),
+              ),
+            )
+            .toList()),
+      );
+}
+
+/// Snapshot of a registered local characteristic
+/// (`rblue_api::LocalCharacteristicSnapshot`).
+class LocalCharacteristicSnapshot {
+  /// Registration identity of this characteristic.
+  final LocalCharacteristicId id;
+
+  /// Property bits ([CharacteristicProperties]).
+  final int properties;
+
+  /// Current stored value.
+  final Uint8List value;
+
+  /// Maximum stored value length, in bytes.
+  final int maxLen;
+
+  /// Builds the snapshot.
+  const LocalCharacteristicSnapshot({
+    required this.id,
+    required this.properties,
+    required this.value,
+    required this.maxLen,
+  });
+
+  /// Parses the serde form.
+  factory LocalCharacteristicSnapshot.fromJson(Map<String, Object?> json) =>
+      LocalCharacteristicSnapshot(
+        id: LocalCharacteristicId.fromJson(
+          (json['id']! as Map).cast<String, Object?>(),
+        ),
+        properties: CharacteristicProperties.fromJson(
+          json['properties']! as String,
+        ),
+        value: Uint8List.fromList(
+          (json['value']! as List<Object?>).cast<int>(),
+        ),
+        maxLen: json['max_len']! as int,
+      );
+}
+
+/// One local GATT server event (`rblue_api::GattServerEvent`).
+sealed class GattServerEvent {
+  /// Shared constructor for subclasses.
+  const GattServerEvent();
+
+  /// Parses one `GattServerEvent` object (the envelope's `event` field).
+  factory GattServerEvent.fromJson(Object json) {
+    final map = json as Map<String, Object?>;
+    final tag = map.keys.single;
+    final payload = (map[tag]! as Map).cast<String, Object?>();
+    switch (tag) {
+      case 'central_connected':
+        return GattServerCentralConnected(
+          DeviceId.fromJson(payload['central']!),
+        );
+      case 'central_disconnected':
+        return GattServerCentralDisconnected(
+          DeviceId.fromJson(payload['central']!),
+          payload['reason'] == null
+              ? null
+              : DisconnectReason(payload['reason']!),
+        );
+      case 'characteristic_read':
+        return GattServerCharacteristicRead(
+          DeviceId.fromJson(payload['central']!),
+          LocalCharacteristicId.fromJson(
+            (payload['characteristic']! as Map).cast<String, Object?>(),
+          ),
+        );
+      case 'characteristic_write':
+        return GattServerCharacteristicWrite(
+          DeviceId.fromJson(payload['central']!),
+          LocalCharacteristicId.fromJson(
+            (payload['characteristic']! as Map).cast<String, Object?>(),
+          ),
+          Uint8List.fromList((payload['value']! as List<Object?>).cast<int>()),
+          WriteMode.values.firstWhere(
+            (mode) => mode.wire == payload['mode']! as String,
+          ),
+        );
+      case 'subscription_changed':
+        return GattServerSubscriptionChanged(
+          DeviceId.fromJson(payload['central']!),
+          LocalCharacteristicId.fromJson(
+            (payload['characteristic']! as Map).cast<String, Object?>(),
+          ),
+          payload['subscribed']! as bool,
+        );
+      default:
+        throw RblueContractError('unknown GattServerEvent tag: $tag');
+    }
+  }
+}
+
+/// A remote central connected to this peripheral.
+class GattServerCentralConnected extends GattServerEvent {
+  /// Identity of the connecting central; valid only for this connection.
+  final DeviceId central;
+
+  /// Builds the event.
+  const GattServerCentralConnected(this.central);
+}
+
+/// A remote central disconnected.
+class GattServerCentralDisconnected extends GattServerEvent {
+  /// Identity of the disconnected central.
+  final DeviceId central;
+
+  /// Why the connection dropped, when known.
+  final DisconnectReason? reason;
+
+  /// Builds the event.
+  const GattServerCentralDisconnected(this.central, this.reason);
+}
+
+/// A remote central read a local characteristic (observational).
+class GattServerCharacteristicRead extends GattServerEvent {
+  /// The central that issued the read.
+  final DeviceId central;
+
+  /// The characteristic that was read.
+  final LocalCharacteristicId characteristic;
+
+  /// Builds the event.
+  const GattServerCharacteristicRead(this.central, this.characteristic);
+}
+
+/// A remote central wrote a local characteristic.
+class GattServerCharacteristicWrite extends GattServerEvent {
+  /// The central that issued the write.
+  final DeviceId central;
+
+  /// The characteristic that was written.
+  final LocalCharacteristicId characteristic;
+
+  /// The value that was written.
+  final Uint8List value;
+
+  /// Whether the write was acknowledged.
+  final WriteMode mode;
+
+  /// Builds the event.
+  const GattServerCharacteristicWrite(
+    this.central,
+    this.characteristic,
+    this.value,
+    this.mode,
+  );
+}
+
+/// A remote central subscribed or unsubscribed (implicit CCCD).
+class GattServerSubscriptionChanged extends GattServerEvent {
+  /// The central that changed its subscription.
+  final DeviceId central;
+
+  /// The characteristic whose subscription changed.
+  final LocalCharacteristicId characteristic;
+
+  /// `true` when the central is now subscribed.
+  final bool subscribed;
+
+  /// Builds the event.
+  const GattServerSubscriptionChanged(
+    this.central,
+    this.characteristic,
+    this.subscribed,
+  );
 }

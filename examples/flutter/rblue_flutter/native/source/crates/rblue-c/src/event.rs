@@ -5,7 +5,7 @@
 //! The inner payloads are the serde forms of the `rblue-api` types
 //! (`AdapterEvent` external tagging, `Notification` as an object).
 
-use rblue_api::{AdapterEvent, DeviceId, Notification, SupervisorEvent};
+use rblue_api::{AdapterEvent, DeviceId, GattServerEvent, Notification, SupervisorEvent};
 
 /// One message of the event stream: an adapter event or a notification of one
 /// connected device.
@@ -34,6 +34,12 @@ pub(crate) enum EventEnvelope<'a> {
     SupervisorEvent {
         /// The supervisor event.
         event: &'a SupervisorEvent,
+    },
+    /// Local GATT server event (connected centrals, writes, subscriptions).
+    /// Not an [`AdapterEvent`] variant.
+    GattServerEvent {
+        /// The GATT server event.
+        event: &'a GattServerEvent,
     },
 }
 
@@ -87,6 +93,18 @@ mod tests {
         assert_eq!(
             envelope.to_json(),
             r#"{"type":"notification","device":{"mac":[[2,0,0,0,0,1],"random_static"]},"notification":{"id":{"service":{"uuid":"00000000-0000-0000-0000-00000000180f","instance":0},"uuid":"00000000-0000-0000-0000-000000002a19","instance":0},"data":[1,2,3]}}"#
+        );
+    }
+
+    #[test]
+    fn gatt_server_event_envelope_is_tagged() {
+        let event = GattServerEvent::CentralConnected {
+            central: DeviceId::Mac([2, 0, 0, 0, 0, 1], AddressType::RandomStatic),
+        };
+        let envelope = EventEnvelope::GattServerEvent { event: &event };
+        assert_eq!(
+            envelope.to_json(),
+            r#"{"type":"gatt_server_event","event":{"central_connected":{"central":{"mac":[[2,0,0,0,0,1],"random_static"]}}}}"#
         );
     }
 }

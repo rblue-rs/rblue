@@ -23,9 +23,9 @@ pub enum Capability {
     ScanResponse,
     /// Central role: connect to peripherals and use GATT client procedures.
     GattClient,
-    /// Peripheral role: expose a GATT server (Phase 2).
+    /// Peripheral role: expose a GATT server.
     GattServer,
-    /// Send advertisements as a peripheral (Phase 2).
+    /// Send advertisements as a peripheral.
     Advertise,
     /// Reading RSSI for an already-connected peripheral.
     RssiDuringConnection,

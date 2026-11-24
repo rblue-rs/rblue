@@ -54,7 +54,7 @@ writes the BlueZ `Powered` property and this backend advertises
 | BackgroundScan | yes | Scanning is a daemon-side activity; a background process keeps receiving sightings as long as the D-Bus connection and the discovery request live (subject to the discovery refcount below and to power management such as `rfkill`/suspend) |
 | PassiveScan | no | The fork always uses `Transport::Auto` |
 | ScanResponse | no | BlueZ merges scan-response payloads into the cumulative device properties; payloads are not delivered separately |
-| GattServer / Advertise | no | Phase 2 (this is exactly what the `bluer` migration unlocks) |
+| GattServer / Advertise | no | API defined (issue #49). Native support stays behind the `bluer` migration; the methods return `Error::Unsupported` and these bits are not reported |
 | WatchAdvertisements | no | Web-only concept |
 | ConnectionPriority | no | The fork does not expose a stable BlueZ connection-parameter request; `set_connection_priority` returns `Error::Unsupported` |
 | AdapterPowerControl | yes | BlueZ `org.bluez.Adapter1.Powered`, written through bluez-async `set_powered` |

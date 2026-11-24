@@ -20,7 +20,7 @@ editing fork internals; adapt in the shell.
 | Pairing | no | Implicit pairing on encrypted-characteristic access; `pair()` / `unpair()` return `Error::Unsupported` with feature `pair` / `unpair` |
 | BackgroundScan | no (conservative) | Possible with the `bluetooth-central` background mode on iOS, but iOS then silently yields nothing without a service-UUID filter (see below). 1.0 reports `false` so callers do not rely on it |
 | PassiveScan | no | CoreBluetooth has no passive scanning |
-| GattServer / Advertise | no | Phase 2 |
+| GattServer / Advertise | no | API defined (issue #49); native wiring is not landed. The methods return `Error::Unsupported`. CoreBluetooth can host a peripheral via `CBPeripheralManager`, but this shell stays on the btleplug central stack |
 | ScanResponse | no | iOS delivers consolidated advertisement data, not separate scan responses |
 | ConnectionPriority | no | CoreBluetooth has no public connection-priority / interval request API; `set_connection_priority` returns `Error::Unsupported` |
 | AdapterPowerControl | no | iOS cannot programmatically switch Bluetooth; macOS apps likewise have no supported CoreBluetooth API. `set_powered` returns `Error::Unsupported` |

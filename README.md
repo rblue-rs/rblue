@@ -18,7 +18,10 @@ Source lives at [`rblue-rs/rblue`](https://github.com/rblue-rs/rblue)
 GitHub does not release).
 
 Not yet landed: signed store-distribution packages, real-hardware test runs,
-HarmonyOS HAR/npm publication, and GATT server / advertising (Phase 2).
+HarmonyOS HAR/npm publication, and native (non-mock) GATT server / advertising
+backends. The peripheral-role API and the mock backend landed in issue #49;
+native shells still return `Unsupported` until platform wiring (and the BlueZ
+`bluer` migration) lands.
 
 ## Workspace
 
@@ -55,7 +58,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 | Bindings | Kotlin (UniFFI) · Swift (UniFFI) · TypeScript (wasm-bindgen) · ArkTS (ohos-rs) |
 
 Rust-first core; every platform speaks the same traits. Central (GATT client)
-first; GATT server and advertising planned.
+first; GATT server and advertising are on the trait surface (mock implements
+them; native backends return `Unsupported` until platform wiring lands).
 
 ## License
 
