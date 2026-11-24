@@ -8,10 +8,10 @@
 //! this suite.
 //!
 //! Capability-gated methods that exist on the trait surface (`pair`, `rssi`,
-//! `mtu`, `request_device`, and `system_connected_peripherals`) must return
-//! [`Error::Unsupported`] with a non-empty `feature` name when the backend
-//! does not advertise the corresponding [`Capability`]. Silent `Ok` no-ops
-//! are forbidden.
+//! `mtu`, `request_device`, `system_connected_peripherals`, advertising, and
+//! GATT server methods) must return [`Error::Unsupported`] with a non-empty
+//! `feature` name when the backend does not advertise the corresponding
+//! [`Capability`]. Silent `Ok` no-ops are forbidden.
 //!
 //! # Fixture contract
 //!
@@ -37,9 +37,10 @@ use futures_timer::Delay;
 
 use crate::adapter::AdapterEventStream;
 use crate::{
-    Adapter, AdapterEvent, AdapterState, Capability, CharacteristicId, CharacteristicProperties,
-    ConnectOptions, ConnectionPriority, DeviceId, Error, RequestDeviceOptions, ScanFilter,
-    ServiceId, WriteMode, WriteOptions,
+    Adapter, AdapterEvent, AdapterState, AdvertiseParams, Capability, CharacteristicId,
+    CharacteristicProperties, ConnectOptions, ConnectionPriority, DeviceId, Error,
+    LocalCharacteristic, LocalCharacteristicId, LocalService, LocalServiceId, RequestDeviceOptions,
+    ScanFilter, ServiceId, WriteMode, WriteOptions,
 };
 
 /// Service UUID every contract fixture must advertise.
@@ -52,6 +53,15 @@ pub const CONTRACT_SERVICE_UUID: uuid::Uuid =
 /// contract fixture must expose inside [`CONTRACT_SERVICE_UUID`].
 pub const CONTRACT_CHARACTERISTIC_UUID: uuid::Uuid =
     uuid::Uuid::from_u128(0x5b6e_1f2a_9c3d_4e8f_a1b2_c3d4_e5f6_0002);
+
+/// Service UUID used by the contract suite when exercising the local GATT
+/// server (distinct from the fixture's client-discovered service).
+const CONTRACT_LOCAL_SERVICE_UUID: uuid::Uuid =
+    uuid::Uuid::from_u128(0x5b6e_1f2a_9c3d_4e8f_a1b2_c3d4_e5f6_0003);
+
+/// Characteristic UUID registered inside [`CONTRACT_LOCAL_SERVICE_UUID`].
+const CONTRACT_LOCAL_CHARACTERISTIC_UUID: uuid::Uuid =
+    uuid::Uuid::from_u128(0x5b6e_1f2a_9c3d_4e8f_a1b2_c3d4_e5f6_0004);
 
 /// Largest ATT_MTU allowed by the Bluetooth spec (517); sanity bound for
 /// reported `max_write_len` values.
@@ -595,6 +605,190 @@ where
         wait_disconnected(&mut events, &device_id),
     )
     .await;
+
+    // -- peripheral advertising and GATT server ------------------------------
+    // Run after the central-role fixture flow so loopback advertisements
+    // cannot be mistaken for the contract peripheral during scan.
+    if caps.has(Capability::Advertise) {
+        let advertising =
+            require_supported("is_advertising (idle)", adapter.is_advertising().await);
+        assert!(
+            !advertising,
+            "contract violation: is_advertising must be false before start_advertising"
+        );
+        let params = AdvertiseParams {
+            local_name: Some("rblue-contract-adv".to_owned()),
+            services: vec![CONTRACT_LOCAL_SERVICE_UUID],
+            connectable: false,
+            ..AdvertiseParams::default()
+        };
+        require_supported(
+            "start_advertising",
+            adapter.start_advertising(&params).await,
+        );
+        let advertising =
+            require_supported("is_advertising (active)", adapter.is_advertising().await);
+        assert!(
+            advertising,
+            "contract violation: is_advertising must be true after start_advertising"
+        );
+        let replaced = AdvertiseParams {
+            local_name: Some("rblue-contract-adv-2".to_owned()),
+            services: vec![CONTRACT_LOCAL_SERVICE_UUID],
+            connectable: false,
+            ..AdvertiseParams::default()
+        };
+        require_supported(
+            "start_advertising (replace)",
+            adapter.start_advertising(&replaced).await,
+        );
+        require_supported("stop_advertising", adapter.stop_advertising().await);
+        let advertising =
+            require_supported("is_advertising (stopped)", adapter.is_advertising().await);
+        assert!(
+            !advertising,
+            "contract violation: is_advertising must be false after stop_advertising"
+        );
+        match adapter.stop_advertising().await {
+            Err(Error::InvalidState(_)) => {}
+            other => panic!(
+                "contract violation at `stop_advertising` when idle: expected Err(InvalidState), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+    } else {
+        require_unsupported(
+            "start_advertising",
+            adapter.start_advertising(&AdvertiseParams::default()).await,
+        );
+        require_unsupported("stop_advertising", adapter.stop_advertising().await);
+        require_unsupported("is_advertising", adapter.is_advertising().await);
+    }
+
+    if caps.has(Capability::GattServer) {
+        let service = LocalService {
+            uuid: CONTRACT_LOCAL_SERVICE_UUID,
+            primary: true,
+            characteristics: vec![LocalCharacteristic {
+                uuid: CONTRACT_LOCAL_CHARACTERISTIC_UUID,
+                properties: CharacteristicProperties::READ
+                    | CharacteristicProperties::WRITE
+                    | CharacteristicProperties::NOTIFY,
+                value: b"contract-local".to_vec(),
+                max_len: Some(20),
+            }],
+        };
+        let service_id = require_supported(
+            "add_local_service",
+            adapter.add_local_service(&service).await,
+        );
+        assert_eq!(service_id.uuid, CONTRACT_LOCAL_SERVICE_UUID);
+        let snapshot = require_supported("local_services", adapter.local_services().await);
+        let registered = snapshot
+            .iter()
+            .find(|entry| entry.id == service_id)
+            .expect("contract violation: local_services must include the service just added");
+        assert_eq!(registered.characteristics.len(), 1);
+        let char_id = registered.characteristics[0].id;
+        assert_eq!(char_id.uuid, CONTRACT_LOCAL_CHARACTERISTIC_UUID);
+        require_supported(
+            "write_local_characteristic",
+            adapter
+                .write_local_characteristic(&char_id, b"updated")
+                .await,
+        );
+        let after_write =
+            require_supported("local_services after write", adapter.local_services().await);
+        let written = after_write
+            .iter()
+            .find(|entry| entry.id == service_id)
+            .expect("service remains")
+            .characteristics[0]
+            .value
+            .as_slice();
+        assert_eq!(
+            written, b"updated",
+            "contract violation: write_local_characteristic must update the stored value"
+        );
+        require_supported(
+            "notify_local_characteristic (no subscribers)",
+            adapter.notify_local_characteristic(&char_id, b"ping").await,
+        );
+        match adapter
+            .write_local_characteristic(&char_id, &[0u8; 21])
+            .await
+        {
+            Err(Error::InvalidLength { len, max }) => {
+                assert_eq!(len, 21);
+                assert_eq!(max, 20);
+            }
+            other => panic!(
+                "contract violation at `write_local_characteristic oversize`: expected Err(InvalidLength), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+        let unknown = LocalCharacteristicId {
+            service: LocalServiceId {
+                uuid: CONTRACT_LOCAL_SERVICE_UUID,
+                instance: 99,
+            },
+            uuid: CONTRACT_LOCAL_CHARACTERISTIC_UUID,
+            instance: 0,
+        };
+        match adapter.write_local_characteristic(&unknown, b"x").await {
+            Err(Error::InvalidState(_)) => {}
+            other => panic!(
+                "contract violation at `write_local_characteristic` unknown id: expected Err(InvalidState), got {:?}",
+                other.as_ref().map(|_| ())
+            ),
+        }
+        let _stream = require_supported("server_events", adapter.server_events());
+        require_supported(
+            "remove_local_service",
+            adapter.remove_local_service(&service_id).await,
+        );
+        let leftover = require_supported(
+            "local_services after remove",
+            adapter.local_services().await,
+        );
+        assert!(
+            leftover.iter().all(|entry| entry.id != service_id),
+            "contract violation: remove_local_service must drop the service from local_services"
+        );
+    } else {
+        let service = LocalService::new(CONTRACT_LOCAL_SERVICE_UUID);
+        require_unsupported(
+            "add_local_service",
+            adapter.add_local_service(&service).await,
+        );
+        require_unsupported(
+            "remove_local_service",
+            adapter
+                .remove_local_service(&LocalServiceId {
+                    uuid: CONTRACT_LOCAL_SERVICE_UUID,
+                    instance: 0,
+                })
+                .await,
+        );
+        require_unsupported("local_services", adapter.local_services().await);
+        let char_id = LocalCharacteristicId {
+            service: LocalServiceId {
+                uuid: CONTRACT_LOCAL_SERVICE_UUID,
+                instance: 0,
+            },
+            uuid: CONTRACT_LOCAL_CHARACTERISTIC_UUID,
+            instance: 0,
+        };
+        require_unsupported(
+            "write_local_characteristic",
+            adapter.write_local_characteristic(&char_id, b"x").await,
+        );
+        require_unsupported(
+            "notify_local_characteristic",
+            adapter.notify_local_characteristic(&char_id, b"x").await,
+        );
+        require_unsupported("server_events", adapter.server_events());
+    }
 
     Ok(())
 }

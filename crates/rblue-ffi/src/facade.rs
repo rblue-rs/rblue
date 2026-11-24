@@ -10,7 +10,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use futures::StreamExt;
 use rblue::prelude::{
-    Adapter, AdapterEvent, CapabilitySet, CharacteristicId, DeviceId, Notification, Peripheral,
+    Adapter, AdapterEvent, AdvertiseParams, CapabilitySet, CharacteristicId, DeviceId,
+    GattServerEvent, LocalCharacteristicId, LocalService, LocalServiceId, Notification, Peripheral,
     RequestDeviceOptions, ScanFilter, ServiceSet, WriteMode,
 };
 use serde::de::DeserializeOwned;
@@ -38,6 +39,10 @@ pub trait EventSink: Send + Sync {
     /// `rblue_api::Notification`), delivered only for subscribed
     /// characteristics.
     fn on_notification(&self, notification_json: String);
+
+    /// One local GATT server event (a serialized
+    /// `rblue_api::GattServerEvent`).
+    fn on_gatt_server_event(&self, event_json: String);
 }
 
 /// Messages multiplexed into the pump: adapter events from the single event
@@ -45,6 +50,7 @@ pub trait EventSink: Send + Sync {
 enum PumpMessage {
     Event(AdapterEvent),
     Notification(Notification),
+    GattServer(GattServerEvent),
 }
 
 /// The notification-forwarding machinery.
@@ -183,6 +189,10 @@ fn event_json(event: &AdapterEvent) -> String {
     serde_json::to_string(event).expect("adapter event JSON serialization cannot fail")
 }
 
+fn gatt_server_event_json(event: &GattServerEvent) -> String {
+    serde_json::to_string(event).expect("gatt server event JSON serialization cannot fail")
+}
+
 /// See [`event_json`].
 fn notification_json(notification: &Notification) -> String {
     serde_json::to_string(notification).expect("notification JSON serialization cannot fail")
@@ -203,6 +213,9 @@ fn deliver(sink_slot: &Mutex<Option<Box<dyn EventSink>>>, message: PumpMessage) 
         PumpMessage::Event(event) => sink.on_event(event_json(&event)),
         PumpMessage::Notification(notification) => {
             sink.on_notification(notification_json(&notification));
+        }
+        PumpMessage::GattServer(event) => {
+            sink.on_gatt_server_event(gatt_server_event_json(&event));
         }
     }
 }
@@ -627,6 +640,83 @@ impl Rblue {
         Ok(canonical_json(device.id()))
     }
 
+    /// Starts advertising as a peripheral. `params_json` is an
+    /// `AdvertiseParams` object; `{}` uses the documented defaults
+    /// (connectable, include name).
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn start_advertising(&self, params_json: String) -> Result<(), RblueError> {
+        let params: AdvertiseParams = parse_with_defaults(&params_json, "AdvertiseParams JSON")?;
+        Ok(self.adapter.start_advertising(&params).await?)
+    }
+
+    /// Stops an active advertisement.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn stop_advertising(&self) -> Result<(), RblueError> {
+        Ok(self.adapter.stop_advertising().await?)
+    }
+
+    /// Returns whether the adapter is currently advertising.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn is_advertising(&self) -> Result<bool, RblueError> {
+        Ok(self.adapter.is_advertising().await?)
+    }
+
+    /// Registers a local GATT service. `service_json` is a `LocalService`
+    /// object; the returned string is a `LocalServiceId`.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn add_local_service(&self, service_json: String) -> Result<String, RblueError> {
+        let service: LocalService = parse_json(&service_json, "LocalService JSON")?;
+        Ok(canonical_json(
+            &self.adapter.add_local_service(&service).await?,
+        ))
+    }
+
+    /// Unregisters a local GATT service. `service_json` is a `LocalServiceId`.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn remove_local_service(&self, service_json: String) -> Result<(), RblueError> {
+        let service: LocalServiceId = parse_json(&service_json, "LocalServiceId JSON")?;
+        Ok(self.adapter.remove_local_service(&service).await?)
+    }
+
+    /// Snapshot of registered local services as a JSON array of
+    /// `LocalServiceSnapshot`.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn local_services(&self) -> Result<String, RblueError> {
+        Ok(canonical_json(&self.adapter.local_services().await?))
+    }
+
+    /// Updates a local characteristic value without notifying subscribers.
+    /// `characteristic_json` is a `LocalCharacteristicId`; `value` is the
+    /// new stored payload.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn write_local_characteristic(
+        &self,
+        characteristic_json: String,
+        value: Vec<u8>,
+    ) -> Result<(), RblueError> {
+        let characteristic: LocalCharacteristicId =
+            parse_json(&characteristic_json, "LocalCharacteristicId JSON")?;
+        Ok(self
+            .adapter
+            .write_local_characteristic(&characteristic, &value)
+            .await?)
+    }
+
+    /// Updates a local characteristic value and notifies current subscribers.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn notify_local_characteristic(
+        &self,
+        characteristic_json: String,
+        value: Vec<u8>,
+    ) -> Result<(), RblueError> {
+        let characteristic: LocalCharacteristicId =
+            parse_json(&characteristic_json, "LocalCharacteristicId JSON")?;
+        Ok(self
+            .adapter
+            .notify_local_characteristic(&characteristic, &value)
+            .await?)
+    }
+
     /// Installs the event sink (replacing any previous one) and starts the
     /// pump on first install. See the crate documentation for the delivery
     /// and backpressure contract, and for the no-blocking/no-throw rules
@@ -651,12 +741,22 @@ impl Rblue {
             let sink_slot = Arc::clone(&self.sink);
             pump.central = Some(pump_runtime().spawn(async move {
                 let mut events = adapter.events();
+                let mut server_events = match adapter.server_events() {
+                    Ok(stream) => stream,
+                    Err(_) => futures::stream::pending().boxed(),
+                };
                 let mut rx = rx;
                 loop {
                     tokio::select! {
                         event = events.next() => match event {
                             Some(event) => deliver(&sink_slot, PumpMessage::Event(event)),
                             None => break,
+                        },
+                        event = server_events.next() => match event {
+                            Some(event) => deliver(&sink_slot, PumpMessage::GattServer(event)),
+                            None => {
+                                server_events = futures::stream::pending().boxed();
+                            }
                         },
                         message = rx.recv() => match message {
                             Some(message) => deliver(&sink_slot, message),

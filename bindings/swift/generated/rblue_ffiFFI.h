@@ -257,6 +257,13 @@ typedef void (*UniffiCallbackInterfaceEventSinkMethod1)(uint64_t, RustBuffer, vo
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EVENT_SINK_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EVENT_SINK_METHOD2
+typedef void (*UniffiCallbackInterfaceEventSinkMethod2)(uint64_t, RustBuffer, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_EVENT_SINK
 #define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_EVENT_SINK
 typedef struct UniffiVTableCallbackInterfaceEventSink {
@@ -264,6 +271,7 @@ typedef struct UniffiVTableCallbackInterfaceEventSink {
     UniffiCallbackInterfaceClone _Nonnull uniffiClone;
     UniffiCallbackInterfaceEventSinkMethod0 _Nonnull onEvent;
     UniffiCallbackInterfaceEventSinkMethod1 _Nonnull onNotification;
+    UniffiCallbackInterfaceEventSinkMethod2 _Nonnull onGattServerEvent;
 } UniffiVTableCallbackInterfaceEventSink;
 
 #endif
@@ -286,6 +294,11 @@ uint64_t uniffi_rblue_ffi_fn_constructor_rblue_new(RustCallStatus *_Nonnull out_
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_ADAPTER_ID
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_ADAPTER_ID
 RustBuffer uniffi_rblue_ffi_fn_method_rblue_adapter_id(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_ADD_LOCAL_SERVICE
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_ADD_LOCAL_SERVICE
+uint64_t uniffi_rblue_ffi_fn_method_rblue_add_local_service(uint64_t ptr, RustBuffer service_json
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_BACKEND_VERSION
@@ -318,9 +331,19 @@ uint64_t uniffi_rblue_ffi_fn_method_rblue_discover_services(uint64_t ptr, RustBu
 uint64_t uniffi_rblue_ffi_fn_method_rblue_initialize(uint64_t ptr
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_IS_ADVERTISING
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_IS_ADVERTISING
+uint64_t uniffi_rblue_ffi_fn_method_rblue_is_advertising(uint64_t ptr
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_IS_CONNECTED
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_IS_CONNECTED
 uint64_t uniffi_rblue_ffi_fn_method_rblue_is_connected(uint64_t ptr, RustBuffer device_json
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_LOCAL_SERVICES
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_LOCAL_SERVICES
+uint64_t uniffi_rblue_ffi_fn_method_rblue_local_services(uint64_t ptr
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_MAX_WRITE_LEN
@@ -338,6 +361,11 @@ uint64_t uniffi_rblue_ffi_fn_method_rblue_mtu(uint64_t ptr, RustBuffer device_js
 uint64_t uniffi_rblue_ffi_fn_method_rblue_name(uint64_t ptr, RustBuffer device_json
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_NOTIFY_LOCAL_CHARACTERISTIC
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_NOTIFY_LOCAL_CHARACTERISTIC
+uint64_t uniffi_rblue_ffi_fn_method_rblue_notify_local_characteristic(uint64_t ptr, RustBuffer characteristic_json, RustBuffer value
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_PAIR
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_PAIR
 uint64_t uniffi_rblue_ffi_fn_method_rblue_pair(uint64_t ptr, RustBuffer device_json
@@ -346,6 +374,11 @@ uint64_t uniffi_rblue_ffi_fn_method_rblue_pair(uint64_t ptr, RustBuffer device_j
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_READ
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_READ
 uint64_t uniffi_rblue_ffi_fn_method_rblue_read(uint64_t ptr, RustBuffer device_json, RustBuffer characteristic_json
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_REMOVE_LOCAL_SERVICE
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_REMOVE_LOCAL_SERVICE
+uint64_t uniffi_rblue_ffi_fn_method_rblue_remove_local_service(uint64_t ptr, RustBuffer service_json
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_REQUEST_DEVICE
@@ -363,9 +396,19 @@ uint64_t uniffi_rblue_ffi_fn_method_rblue_rssi(uint64_t ptr, RustBuffer device_j
 void uniffi_rblue_ffi_fn_method_rblue_set_event_sink(uint64_t ptr, uint64_t sink, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_START_ADVERTISING
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_START_ADVERTISING
+uint64_t uniffi_rblue_ffi_fn_method_rblue_start_advertising(uint64_t ptr, RustBuffer params_json
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_START_SCAN
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_START_SCAN
 uint64_t uniffi_rblue_ffi_fn_method_rblue_start_scan(uint64_t ptr, RustBuffer filter_json
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_STOP_ADVERTISING
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_STOP_ADVERTISING
+uint64_t uniffi_rblue_ffi_fn_method_rblue_stop_advertising(uint64_t ptr
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_STOP_SCAN
@@ -391,6 +434,11 @@ uint64_t uniffi_rblue_ffi_fn_method_rblue_unsubscribe(uint64_t ptr, RustBuffer d
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_WRITE
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_WRITE
 uint64_t uniffi_rblue_ffi_fn_method_rblue_write(uint64_t ptr, RustBuffer device_json, RustBuffer characteristic_json, RustBuffer data, int8_t with_response
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_WRITE_LOCAL_CHARACTERISTIC
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_METHOD_RBLUE_WRITE_LOCAL_CHARACTERISTIC
+uint64_t uniffi_rblue_ffi_fn_method_rblue_write_local_characteristic(uint64_t ptr, RustBuffer characteristic_json, RustBuffer value
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_FN_INIT_CALLBACK_VTABLE_EVENTSINK
@@ -664,6 +712,12 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_adapter_id(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_ADD_LOCAL_SERVICE
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_ADD_LOCAL_SERVICE
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_add_local_service(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_BACKEND_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_BACKEND_VERSION
 uint16_t uniffi_rblue_ffi_checksum_method_rblue_backend_version(void
@@ -700,9 +754,21 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_initialize(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_IS_ADVERTISING
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_IS_ADVERTISING
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_is_advertising(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_IS_CONNECTED
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_IS_CONNECTED
 uint16_t uniffi_rblue_ffi_checksum_method_rblue_is_connected(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_LOCAL_SERVICES
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_LOCAL_SERVICES
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_local_services(void
     
 );
 #endif
@@ -724,6 +790,12 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_name(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_NOTIFY_LOCAL_CHARACTERISTIC
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_NOTIFY_LOCAL_CHARACTERISTIC
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_notify_local_characteristic(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_PAIR
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_PAIR
 uint16_t uniffi_rblue_ffi_checksum_method_rblue_pair(void
@@ -733,6 +805,12 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_pair(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_READ
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_READ
 uint16_t uniffi_rblue_ffi_checksum_method_rblue_read(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_REMOVE_LOCAL_SERVICE
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_REMOVE_LOCAL_SERVICE
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_remove_local_service(void
     
 );
 #endif
@@ -754,9 +832,21 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_set_event_sink(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_START_ADVERTISING
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_START_ADVERTISING
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_start_advertising(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_START_SCAN
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_START_SCAN
 uint16_t uniffi_rblue_ffi_checksum_method_rblue_start_scan(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_STOP_ADVERTISING
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_STOP_ADVERTISING
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_stop_advertising(void
     
 );
 #endif
@@ -790,6 +880,12 @@ uint16_t uniffi_rblue_ffi_checksum_method_rblue_write(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_WRITE_LOCAL_CHARACTERISTIC
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_RBLUE_WRITE_LOCAL_CHARACTERISTIC
+uint16_t uniffi_rblue_ffi_checksum_method_rblue_write_local_characteristic(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_CONSTRUCTOR_RBLUE_NEW
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_CONSTRUCTOR_RBLUE_NEW
 uint16_t uniffi_rblue_ffi_checksum_constructor_rblue_new(void
@@ -805,6 +901,12 @@ uint16_t uniffi_rblue_ffi_checksum_method_eventsink_on_event(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_EVENTSINK_ON_NOTIFICATION
 #define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_EVENTSINK_ON_NOTIFICATION
 uint16_t uniffi_rblue_ffi_checksum_method_eventsink_on_notification(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_EVENTSINK_ON_GATT_SERVER_EVENT
+#define UNIFFI_FFIDEF_UNIFFI_RBLUE_FFI_CHECKSUM_METHOD_EVENTSINK_ON_GATT_SERVER_EVENT
+uint16_t uniffi_rblue_ffi_checksum_method_eventsink_on_gatt_server_event(void
     
 );
 #endif

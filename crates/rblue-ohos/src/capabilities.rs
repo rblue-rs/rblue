@@ -20,7 +20,7 @@ use rblue_api::CapabilitySet;
 /// | `BackgroundScan` | no | Restricted: needs additional (location-class) approval; see `docs/platform-notes.md`. |
 /// | `PassiveScan` | no | The scan-duty options do not expose a passive duty. |
 /// | `ScanResponse` | no | OHOS merges scan responses into the reported advertisement. |
-/// | `GattServer` / `Advertise` | no | Phase 2 scope. |
+/// | `GattServer` / `Advertise` | no | API defined (issue #49); needs a BleDriver protocol extension. Methods return `Error::Unsupported`. |
 /// | `WatchAdvertisements` | no | Web-only capability. |
 /// | `ConnectionPriority` | no | No equivalent connection-priority request; the method returns `Error::Unsupported`. |
 /// | `SystemConnectedPeripherals` | no | No equivalent system-connected lookup; the method returns `Error::Unsupported`. |

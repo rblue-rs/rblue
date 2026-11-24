@@ -144,6 +144,22 @@ struct WriteParams {
     allow_long_write: bool,
 }
 
+/// Parameters addressing a local characteristic
+/// (`{"characteristic": <LocalCharacteristicId>}`).
+#[derive(serde::Deserialize)]
+struct LocalCharacteristicParams {
+    /// The registered local characteristic.
+    characteristic: LocalCharacteristicId,
+}
+
+/// Parameters addressing a local service
+/// (`{"service": <LocalServiceId>}`).
+#[derive(serde::Deserialize)]
+struct LocalServiceParams {
+    /// The registered local service.
+    service: LocalServiceId,
+}
+
 /// Summary of one known device, the result shape of the `peripherals` method.
 #[derive(serde::Serialize)]
 struct PeripheralInfo {
@@ -357,6 +373,42 @@ pub(crate) async fn execute(
                 .await?;
             Ok(Vec::new())
         }
+        "start_advertising" => {
+            let params: AdvertiseParams = parse_with_defaults(&params, "AdvertiseParams")?;
+            core.adapter().start_advertising(&params).await?;
+            Ok(Vec::new())
+        }
+        "stop_advertising" => {
+            core.adapter().stop_advertising().await?;
+            Ok(Vec::new())
+        }
+        "is_advertising" => Ok(json_payload(&core.adapter().is_advertising().await?)),
+        "add_local_service" => {
+            let service: LocalService = parse_params(&params)?;
+            Ok(json_payload(
+                &core.adapter().add_local_service(&service).await?,
+            ))
+        }
+        "remove_local_service" => {
+            let LocalServiceParams { service } = parse_params(&params)?;
+            core.adapter().remove_local_service(&service).await?;
+            Ok(Vec::new())
+        }
+        "local_services" => Ok(json_payload(&core.adapter().local_services().await?)),
+        "write_local_characteristic" => {
+            let LocalCharacteristicParams { characteristic } = parse_params(&params)?;
+            core.adapter()
+                .write_local_characteristic(&characteristic, &payload)
+                .await?;
+            Ok(Vec::new())
+        }
+        "notify_local_characteristic" => {
+            let LocalCharacteristicParams { characteristic } = parse_params(&params)?;
+            core.adapter()
+                .notify_local_characteristic(&characteristic, &payload)
+                .await?;
+            Ok(Vec::new())
+        }
         unknown => Err(RequestFailure::InvalidArgument(format!(
             "unknown method {unknown:?}"
         ))),
@@ -431,6 +483,87 @@ mod tests {
         let (got_id, status, payload) = fixture.recorder.next_response().await;
         assert_eq!(got_id, req_id, "response must carry the request id");
         (status, payload)
+    }
+
+    #[tokio::test]
+    async fn advertising_and_local_gatt_roundtrip_on_the_mock() {
+        let mut fixture = Fixture::new().await;
+        let (status, _) = roundtrip(&mut fixture, 1, "initialize", "{}", &[]).await;
+        assert!(status.is_none(), "initialize: {status:?}");
+
+        let (status, payload) = roundtrip(&mut fixture, 2, "is_advertising", "{}", &[]).await;
+        assert!(status.is_none(), "is_advertising: {status:?}");
+        assert_eq!(payload, b"false");
+
+        let (status, _) = roundtrip(
+            &mut fixture,
+            3,
+            "start_advertising",
+            r#"{"local_name":"c-abi","connectable":false}"#,
+            &[],
+        )
+        .await;
+        assert!(status.is_none(), "start_advertising: {status:?}");
+        let (status, payload) = roundtrip(&mut fixture, 4, "is_advertising", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        assert_eq!(payload, b"true");
+        let (status, _) = roundtrip(&mut fixture, 5, "stop_advertising", "{}", &[]).await;
+        assert!(status.is_none(), "stop_advertising: {status:?}");
+        let (status, _) = roundtrip(&mut fixture, 6, "stop_advertising", "{}", &[]).await;
+        let status = status.expect("second stop must fail");
+        assert!(status.contains("InvalidState"), "{status}");
+
+        let service = r#"{"uuid":"5b6e1f2a-9c3d-4e8f-a1b2-c3d4e5f600a1","primary":true,"characteristics":[{"uuid":"5b6e1f2a-9c3d-4e8f-a1b2-c3d4e5f600a2","properties":"READ | WRITE | NOTIFY","value":[1,2,3],"max_len":8}]}"#;
+        let (status, payload) = roundtrip(&mut fixture, 7, "add_local_service", service, &[]).await;
+        assert!(status.is_none(), "add_local_service: {status:?}");
+        let service_id: rblue_api::LocalServiceId =
+            serde_json::from_slice(&payload).expect("service id");
+        assert_eq!(service_id.instance, 0);
+
+        let (status, payload) = roundtrip(&mut fixture, 8, "local_services", "{}", &[]).await;
+        assert!(status.is_none(), "local_services: {status:?}");
+        let services: Vec<rblue_api::LocalServiceSnapshot> =
+            serde_json::from_slice(&payload).expect("snapshot");
+        assert_eq!(services.len(), 1);
+        let char_id = services[0].characteristics[0].id;
+        let params = serde_json::json!({ "characteristic": char_id }).to_string();
+        let (status, _) = roundtrip(
+            &mut fixture,
+            9,
+            "write_local_characteristic",
+            &params,
+            b"abcd",
+        )
+        .await;
+        assert!(status.is_none(), "write_local: {status:?}");
+        let (status, _) = roundtrip(
+            &mut fixture,
+            10,
+            "notify_local_characteristic",
+            &params,
+            b"ab",
+        )
+        .await;
+        assert!(status.is_none(), "notify_local: {status:?}");
+        let (status, _) = roundtrip(
+            &mut fixture,
+            11,
+            "write_local_characteristic",
+            &params,
+            &[0u8; 9],
+        )
+        .await;
+        let status = status.expect("oversize write must fail");
+        assert!(status.contains("InvalidLength"), "{status}");
+
+        let remove = serde_json::json!({ "service": service_id }).to_string();
+        let (status, _) = roundtrip(&mut fixture, 12, "remove_local_service", &remove, &[]).await;
+        assert!(status.is_none(), "remove_local_service: {status:?}");
+        let (status, payload) = roundtrip(&mut fixture, 13, "local_services", "{}", &[]).await;
+        assert!(status.is_none(), "{status:?}");
+        let services: Vec<rblue_api::LocalServiceSnapshot> =
+            serde_json::from_slice(&payload).expect("empty snapshot");
+        assert!(services.is_empty());
     }
 
     #[tokio::test]

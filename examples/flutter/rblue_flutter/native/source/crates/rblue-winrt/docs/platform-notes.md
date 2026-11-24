@@ -42,7 +42,7 @@ not advertise `Capability::AdapterPowerControl`.
 | BackgroundScan | yes | The watcher keeps running in the background subject to platform restrictions: a suspended desktop app needs a `BluetoothLEAdvertisementWatcherTrigger` background task to keep receiving. 1.0 does not register such triggers; foreground apps scan normally |
 | PassiveScan | no | The fork always requests active scanning |
 | ScanResponse | no | The fork consolidates advertisement + scan response into cumulative peripheral properties; payloads are not delivered separately |
-| GattServer / Advertise | no | Phase 2 |
+| GattServer / Advertise | no | API defined (issue #49); native wiring is not landed. The methods return `Error::Unsupported`. The OS can host a peripheral, but this shell stays on the btleplug central stack |
 | WatchAdvertisements | no | Web-only concept |
 | ConnectionPriority | yes | WinRT `RequestPreferredConnectionParameters` via the fork: `Low` → `PowerOptimized`, `Balanced` → `Balanced`, `High` → `ThroughputOptimized`. Requires an established local connection |
 | AdapterPowerControl | no | WinRT `Radio.SetStateAsync` is not exposed by the fork and is not offered here; `set_powered` returns `Error::Unsupported` |

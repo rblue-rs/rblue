@@ -663,25 +663,31 @@ internal interface UniffiCallbackInterfaceEventSinkMethod0 : com.sun.jna.Callbac
 internal interface UniffiCallbackInterfaceEventSinkMethod1 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`notificationJson`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
-@Structure.FieldOrder("uniffiFree", "uniffiClone", "onEvent", "onNotification")
+internal interface UniffiCallbackInterfaceEventSinkMethod2 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`eventJson`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
+}
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "onEvent", "onNotification", "onGattServerEvent")
 internal open class UniffiVTableCallbackInterfaceEventSink(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
     @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
     @JvmField internal var `onEvent`: UniffiCallbackInterfaceEventSinkMethod0? = null,
     @JvmField internal var `onNotification`: UniffiCallbackInterfaceEventSinkMethod1? = null,
+    @JvmField internal var `onGattServerEvent`: UniffiCallbackInterfaceEventSinkMethod2? = null,
 ) : Structure() {
     class UniffiByValue(
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
         `uniffiClone`: UniffiCallbackInterfaceClone? = null,
         `onEvent`: UniffiCallbackInterfaceEventSinkMethod0? = null,
         `onNotification`: UniffiCallbackInterfaceEventSinkMethod1? = null,
-    ): UniffiVTableCallbackInterfaceEventSink(`uniffiFree`,`uniffiClone`,`onEvent`,`onNotification`,), Structure.ByValue
+        `onGattServerEvent`: UniffiCallbackInterfaceEventSinkMethod2? = null,
+    ): UniffiVTableCallbackInterfaceEventSink(`uniffiFree`,`uniffiClone`,`onEvent`,`onNotification`,`onGattServerEvent`,), Structure.ByValue
 
    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceEventSink) {
         `uniffiFree` = other.`uniffiFree`
         `uniffiClone` = other.`uniffiClone`
         `onEvent` = other.`onEvent`
         `onNotification` = other.`onNotification`
+        `onGattServerEvent` = other.`onGattServerEvent`
     }
 
 }
@@ -712,6 +718,8 @@ internal object IntegrityCheckingUniffiLib {
     internal fun ensureInitialized() = Unit
     external fun uniffi_rblue_ffi_checksum_method_rblue_adapter_id(
     ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_add_local_service(
+    ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_backend_version(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_capabilities(
@@ -724,7 +732,11 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_initialize(
     ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_is_advertising(
+    ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_is_connected(
+    ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_local_services(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_max_write_len(
     ): Int
@@ -732,9 +744,13 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_name(
     ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_notify_local_characteristic(
+    ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_pair(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_read(
+    ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_remove_local_service(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_request_device(
     ): Int
@@ -742,7 +758,11 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_set_event_sink(
     ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_start_advertising(
+    ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_start_scan(
+    ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_stop_advertising(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_stop_scan(
     ): Int
@@ -754,11 +774,15 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_rblue_write(
     ): Int
+    external fun uniffi_rblue_ffi_checksum_method_rblue_write_local_characteristic(
+    ): Int
     external fun uniffi_rblue_ffi_checksum_constructor_rblue_new(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_eventsink_on_event(
     ): Int
     external fun uniffi_rblue_ffi_checksum_method_eventsink_on_notification(
+    ): Int
+    external fun uniffi_rblue_ffi_checksum_method_eventsink_on_gatt_server_event(
     ): Int
     external fun ffi_rblue_ffi_uniffi_contract_version(
     ): Int
@@ -789,6 +813,8 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_adapter_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+    external fun uniffi_rblue_ffi_fn_method_rblue_add_local_service(`ptr`: Long,`serviceJson`: RustBuffer.ByValue,
+    ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_backend_version(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
     external fun uniffi_rblue_ffi_fn_method_rblue_capabilities(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
@@ -801,7 +827,11 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_initialize(`ptr`: Long,
     ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_is_advertising(`ptr`: Long,
+    ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_is_connected(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,
+    ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_local_services(`ptr`: Long,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_max_write_len(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,`withResponse`: Byte,
     ): Long
@@ -809,9 +839,13 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_name(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,
     ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_notify_local_characteristic(`ptr`: Long,`characteristicJson`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,
+    ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_pair(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_read(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,
+    ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_remove_local_service(`ptr`: Long,`serviceJson`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_request_device(`ptr`: Long,`optionsJson`: RustBuffer.ByValue,
     ): Long
@@ -819,7 +853,11 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_set_event_sink(`ptr`: Long,`sink`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
+    external fun uniffi_rblue_ffi_fn_method_rblue_start_advertising(`ptr`: Long,`paramsJson`: RustBuffer.ByValue,
+    ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_start_scan(`ptr`: Long,`filterJson`: RustBuffer.ByValue,
+    ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_stop_advertising(`ptr`: Long,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_stop_scan(`ptr`: Long,
     ): Long
@@ -830,6 +868,8 @@ internal object UniffiLib {
     external fun uniffi_rblue_ffi_fn_method_rblue_unsubscribe(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_rblue_ffi_fn_method_rblue_write(`ptr`: Long,`deviceJson`: RustBuffer.ByValue,`characteristicJson`: RustBuffer.ByValue,`data`: RustBuffer.ByValue,`withResponse`: Byte,
+    ): Long
+    external fun uniffi_rblue_ffi_fn_method_rblue_write_local_characteristic(`ptr`: Long,`characteristicJson`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_rblue_ffi_fn_init_callback_vtable_eventsink(`vtable`: UniffiVTableCallbackInterfaceEventSink,
     ): Unit
@@ -955,6 +995,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_adapter_id() and 0xFFFF) != 37679) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_add_local_service() and 0xFFFF) != 58440) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_backend_version() and 0xFFFF) != 55556) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -973,7 +1016,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_initialize() and 0xFFFF) != 2458) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_is_advertising() and 0xFFFF) != 16814) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_is_connected() and 0xFFFF) != 21439) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_local_services() and 0xFFFF) != 56348) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_max_write_len() and 0xFFFF) != 1567) {
@@ -985,10 +1034,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_name() and 0xFFFF) != 11161) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_notify_local_characteristic() and 0xFFFF) != 4331) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_pair() and 0xFFFF) != 10035) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_read() and 0xFFFF) != 60552) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_remove_local_service() and 0xFFFF) != 40008) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_request_device() and 0xFFFF) != 16933) {
@@ -1000,7 +1055,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_set_event_sink() and 0xFFFF) != 2020) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_start_advertising() and 0xFFFF) != 40024) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_start_scan() and 0xFFFF) != 27310) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_stop_advertising() and 0xFFFF) != 53888) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_stop_scan() and 0xFFFF) != 55029) {
@@ -1018,6 +1079,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_rblue_ffi_checksum_method_rblue_write() and 0xFFFF) != 27008) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_rblue_ffi_checksum_method_rblue_write_local_characteristic() and 0xFFFF) != 30102) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_rblue_ffi_checksum_constructor_rblue_new() and 0xFFFF) != 53450) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1025,6 +1089,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rblue_ffi_checksum_method_eventsink_on_notification() and 0xFFFF) != 11055) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rblue_ffi_checksum_method_eventsink_on_gatt_server_event() and 0xFFFF) != 34169) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1590,6 +1657,12 @@ public interface RblueInterface {
     fun `adapterId`(): kotlin.String
 
     /**
+     * Registers a local GATT service. `service_json` is a `LocalService`
+     * object; the returned string is a `LocalServiceId`.
+     */
+    suspend fun `addLocalService`(`serviceJson`: kotlin.String): kotlin.String
+
+    /**
      * The version string of the selected backend, for diagnostics and
      * backend-swap probes.
      */
@@ -1660,6 +1733,11 @@ public interface RblueInterface {
     suspend fun `initialize`()
 
     /**
+     * Returns whether the adapter is currently advertising.
+     */
+    suspend fun `isAdvertising`(): kotlin.Boolean
+
+    /**
      * Connection state of the device.
      *
      * # Errors
@@ -1667,6 +1745,12 @@ public interface RblueInterface {
      * Platform failures as [`RblueError::Platform`].
      */
     suspend fun `isConnected`(`deviceJson`: kotlin.String): kotlin.Boolean
+
+    /**
+     * Snapshot of registered local services as a JSON array of
+     * `LocalServiceSnapshot`.
+     */
+    suspend fun `localServices`(): kotlin.String
 
     /**
      * Maximum payload `write` accepts for this characteristic and mode, in
@@ -1696,6 +1780,11 @@ public interface RblueInterface {
     suspend fun `name`(`deviceJson`: kotlin.String): kotlin.String?
 
     /**
+     * Updates a local characteristic value and notifies current subscribers.
+     */
+    suspend fun `notifyLocalCharacteristic`(`characteristicJson`: kotlin.String, `value`: kotlin.ByteArray)
+
+    /**
      * Actively initiates pairing/bonding where the platform has an API.
      *
      * # Errors
@@ -1715,6 +1804,11 @@ public interface RblueInterface {
      * fails.
      */
     suspend fun `read`(`deviceJson`: kotlin.String, `characteristicJson`: kotlin.String): kotlin.ByteArray
+
+    /**
+     * Unregisters a local GATT service. `service_json` is a `LocalServiceId`.
+     */
+    suspend fun `removeLocalService`(`serviceJson`: kotlin.String)
 
     /**
      * Web-only entry point: shows the browser's device picker. Must be
@@ -1755,6 +1849,13 @@ public interface RblueInterface {
     fun `setEventSink`(`sink`: EventSink)
 
     /**
+     * Starts advertising as a peripheral. `params_json` is an
+     * `AdvertiseParams` object; `{}` uses the documented defaults
+     * (connectable, include name).
+     */
+    suspend fun `startAdvertising`(`paramsJson`: kotlin.String)
+
+    /**
      * Starts a scan with the given filter (`ScanFilter` JSON; `{}` accepts
      * the defaults of every field, i.e. no filtering). Discoveries arrive
      * through [`EventSink::on_event`] as `device_discovered` /
@@ -1768,6 +1869,11 @@ public interface RblueInterface {
      * scanning (use `request_device` there).
      */
     suspend fun `startScan`(`filterJson`: kotlin.String)
+
+    /**
+     * Stops an active advertisement.
+     */
+    suspend fun `stopAdvertising`()
 
     /**
      * Stops the running scan. Idempotent.
@@ -1829,6 +1935,13 @@ public interface RblueInterface {
      * [`RblueError::Att`].
      */
     suspend fun `write`(`deviceJson`: kotlin.String, `characteristicJson`: kotlin.String, `data`: kotlin.ByteArray, `withResponse`: kotlin.Boolean)
+
+    /**
+     * Updates a local characteristic value without notifying subscribers.
+     * `characteristic_json` is a `LocalCharacteristicId`; `value` is the
+     * new stored payload.
+     */
+    suspend fun `writeLocalCharacteristic`(`characteristicJson`: kotlin.String, `value`: kotlin.ByteArray)
 
     companion object
 }
@@ -1976,6 +2089,32 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
     )
     }
 
+
+
+    /**
+     * Registers a local GATT service. `service_json` is a `LocalService`
+     * object; the returned string is a `LocalServiceId`.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `addLocalService`(`serviceJson`: kotlin.String) : kotlin.String {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_add_local_service(
+                uniffiHandle,
+
+        FfiConverterString.lower(`serviceJson`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterString.lift(it) },
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
 
 
     /**
@@ -2154,6 +2293,30 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
 
 
     /**
+     * Returns whether the adapter is currently advertising.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `isAdvertising`() : kotlin.Boolean {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_is_advertising(
+                uniffiHandle,
+
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_i8(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_i8(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_i8(future) },
+        // lift function
+        { FfiConverterBoolean.lift(it) },
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
      * Connection state of the device.
      *
      * # Errors
@@ -2176,6 +2339,31 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
         { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_i8(future) },
         // lift function
         { FfiConverterBoolean.lift(it) },
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
+     * Snapshot of registered local services as a JSON array of
+     * `LocalServiceSnapshot`.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `localServices`() : kotlin.String {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_local_services(
+                uniffiHandle,
+
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterString.lift(it) },
         // Error FFI converter
         RblueException.ErrorHandler,
     )
@@ -2271,6 +2459,33 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
 
 
     /**
+     * Updates a local characteristic value and notifies current subscribers.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `notifyLocalCharacteristic`(`characteristicJson`: kotlin.String, `value`: kotlin.ByteArray) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_notify_local_characteristic(
+                uniffiHandle,
+
+        FfiConverterString.lower(`characteristicJson`),
+        FfiConverterByteArray.lower(`value`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_void(future) },
+        // lift function
+        { },
+
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
      * Actively initiates pairing/bonding where the platform has an API.
      *
      * # Errors
@@ -2327,6 +2542,32 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
         { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_rust_buffer(future) },
         // lift function
         { FfiConverterByteArray.lift(it) },
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
+     * Unregisters a local GATT service. `service_json` is a `LocalServiceId`.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `removeLocalService`(`serviceJson`: kotlin.String) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_remove_local_service(
+                uniffiHandle,
+
+        FfiConverterString.lower(`serviceJson`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_void(future) },
+        // lift function
+        { },
+
         // Error FFI converter
         RblueException.ErrorHandler,
     )
@@ -2423,6 +2664,34 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
 
 
     /**
+     * Starts advertising as a peripheral. `params_json` is an
+     * `AdvertiseParams` object; `{}` uses the documented defaults
+     * (connectable, include name).
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `startAdvertising`(`paramsJson`: kotlin.String) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_start_advertising(
+                uniffiHandle,
+
+        FfiConverterString.lower(`paramsJson`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_void(future) },
+        // lift function
+        { },
+
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
      * Starts a scan with the given filter (`ScanFilter` JSON; `{}` accepts
      * the defaults of every field, i.e. no filtering). Discoveries arrive
      * through [`EventSink::on_event`] as `device_discovered` /
@@ -2444,6 +2713,31 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
                 uniffiHandle,
 
         FfiConverterString.lower(`filterJson`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_void(future) },
+        // lift function
+        { },
+
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
+     * Stops an active advertisement.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `stopAdvertising`() {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_stop_advertising(
+                uniffiHandle,
+
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
@@ -2614,6 +2908,35 @@ open class Rblue: Disposable, AutoCloseable, RblueInterface
         FfiConverterString.lower(`characteristicJson`),
         FfiConverterByteArray.lower(`data`),
         FfiConverterBoolean.lower(`withResponse`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_rblue_ffi_rust_future_free_void(future) },
+        // lift function
+        { },
+
+        // Error FFI converter
+        RblueException.ErrorHandler,
+    )
+    }
+
+
+    /**
+     * Updates a local characteristic value without notifying subscribers.
+     * `characteristic_json` is a `LocalCharacteristicId`; `value` is the
+     * new stored payload.
+     */
+    @Throws(RblueException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `writeLocalCharacteristic`(`characteristicJson`: kotlin.String, `value`: kotlin.ByteArray) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_rblue_ffi_fn_method_rblue_write_local_characteristic(
+                uniffiHandle,
+
+        FfiConverterString.lower(`characteristicJson`),
+        FfiConverterByteArray.lower(`value`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_rblue_ffi_rust_future_poll_void(future, callback, continuation) },
@@ -3326,6 +3649,12 @@ public interface EventSink {
      */
     fun `onNotification`(`notificationJson`: kotlin.String)
 
+    /**
+     * One local GATT server event (a serialized
+     * `rblue_api::GattServerEvent`).
+     */
+    fun `onGattServerEvent`(`eventJson`: kotlin.String)
+
     companion object
 }
 
@@ -3357,6 +3686,18 @@ internal object uniffiCallbackInterfaceEventSink {
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
         }
     }
+    internal object `onGattServerEvent`: UniffiCallbackInterfaceEventSinkMethod2 {
+        override fun callback(`uniffiHandle`: Long,`eventJson`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeEventSink.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`onGattServerEvent`(
+                    FfiConverterString.lift(`eventJson`),
+                )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
 
     internal object uniffiFree: UniffiCallbackInterfaceFree {
         override fun callback(handle: Long) {
@@ -3375,6 +3716,7 @@ internal object uniffiCallbackInterfaceEventSink {
         uniffiClone,
         `onEvent`,
         `onNotification`,
+        `onGattServerEvent`,
     )
 
     // Registers the foreign callback with the Rust side.

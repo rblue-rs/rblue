@@ -80,7 +80,7 @@ current Android versions.
 | BackgroundScan | no (conservative) | Since API 31, scanning from the background requires a foreground service (`FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_CONNECTED_DEVICE` for connected-device work). The shell reports the capability as absent rather than promising behavior it cannot verify; document the foreground-service route in the app instead |
 | PassiveScan | no | The fork always scans actively |
 | ScanResponse | no | Android merges advertisement and scan response into one `ScanRecord`; payloads are not delivered separately |
-| GattServer / Advertise | no | Phase 2 |
+| GattServer / Advertise | no | API defined (issue #49); native wiring is not landed. The methods return `Error::Unsupported`. Android can host a peripheral via `BluetoothLeAdvertiser` / `BluetoothGattServer`, but this shell stays on the btleplug central stack |
 | WatchAdvertisements | no | Web-only concept |
 | ConnectionPriority | yes | `BluetoothGatt.requestConnectionPriority`: `Low` → `CONNECTION_PRIORITY_LOW_POWER`, `Balanced` → `BALANCED`, `High` → `HIGH`. This is a request; the controller may ignore it. Requires an established local connection (`Error::NotConnected` otherwise) |
 | AdapterPowerControl | no | `BluetoothAdapter.enable`/`disable` are deprecated and typically rejected for non-system apps; `set_powered` returns `Error::Unsupported` |

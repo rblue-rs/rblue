@@ -29,6 +29,8 @@ const PUMP_CHANNEL_CAPACITY: usize = 256;
 enum PumpMessage {
     /// One adapter event from the single event stream.
     Event(AdapterEvent),
+    /// One local GATT server event.
+    GattServer(GattServerEvent),
     /// One notification from a per-device forwarder task, with the device it
     /// belongs to (the `Notification` itself only names the characteristic).
     Notification {
@@ -227,12 +229,24 @@ impl CoreInner {
         let callbacks = Arc::clone(&self.callbacks);
         pump.central = Some(tokio::spawn(async move {
             let mut events = adapter.events();
+            // Unsupported backends get a pending stream so the pump is not
+            // torn down when the unused branch yields None.
+            let mut server_events = match adapter.server_events() {
+                Ok(stream) => stream,
+                Err(_) => futures::stream::pending().boxed(),
+            };
             let mut rx = rx;
             loop {
                 tokio::select! {
                     event = events.next() => match event {
                         Some(event) => deliver(&callbacks, PumpMessage::Event(event)),
                         None => break,
+                    },
+                    event = server_events.next() => match event {
+                        Some(event) => deliver(&callbacks, PumpMessage::GattServer(event)),
+                        None => {
+                            server_events = futures::stream::pending().boxed();
+                        }
                     },
                     message = rx.recv() => match message {
                         Some(message) => deliver(&callbacks, message),
@@ -423,6 +437,7 @@ fn deliver(callbacks: &Callbacks, message: PumpMessage) {
         }
         .to_json(),
         PumpMessage::Supervisor(event) => EventEnvelope::SupervisorEvent { event }.to_json(),
+        PumpMessage::GattServer(event) => EventEnvelope::GattServerEvent { event }.to_json(),
     };
     callbacks.deliver_event(cstring(json));
 }

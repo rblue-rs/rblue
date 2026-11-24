@@ -181,7 +181,10 @@ pub extern "C" fn rblue_set_event_callback(
 /// `method` selects the operation (`initialize`, `start_scan`, `stop_scan`,
 /// `peripherals`, `connect`, `disconnect`, `discover_services`, `read`,
 /// `write`, `subscribe`, `unsubscribe`, `is_connected`,
-/// `backend_version`); `params_json` is a JSON object of the method's
+/// `backend_version`, `start_advertising`, `stop_advertising`,
+/// `is_advertising`, `add_local_service`, `remove_local_service`,
+/// `local_services`, `write_local_characteristic`,
+/// `notify_local_characteristic`); `params_json` is a JSON object of the method's
 /// rblue-api-shaped parameters (null counts as `{}`); `payload` carries
 /// binary write data (`payload` may be null when `payload_len` is 0).
 ///

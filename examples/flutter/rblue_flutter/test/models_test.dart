@@ -76,28 +76,26 @@ void main() {
 
   group('AdapterEvent', () {
     test('decodes every variant of the rblue-c envelope', () {
-      final discovered =
-          AdapterEvent.fromJson(const {
-                'device_discovered': {
-                  'id': {
-                    'mac': [
-                      [2, 0, 0, 0, 0, 1],
-                      'random_static',
-                    ],
-                  },
-                  'advertisement': {
-                    'local_name': 'sensor',
-                    'services': ['00000000-0000-0000-0000-00000000180f'],
-                    'service_data': [],
-                    'manufacturer_data': null,
-                    'tx_power': null,
-                    'adv_flags': null,
-                    'rssi': -40,
-                    'is_connectable': true,
-                  },
-                },
-              })
-              as AdapterDeviceDiscovered;
+      final discovered = AdapterEvent.fromJson(const {
+        'device_discovered': {
+          'id': {
+            'mac': [
+              [2, 0, 0, 0, 0, 1],
+              'random_static',
+            ],
+          },
+          'advertisement': {
+            'local_name': 'sensor',
+            'services': ['00000000-0000-0000-0000-00000000180f'],
+            'service_data': [],
+            'manufacturer_data': null,
+            'tx_power': null,
+            'adv_flags': null,
+            'rssi': -40,
+            'is_connectable': true,
+          },
+        },
+      }) as AdapterDeviceDiscovered;
       expect(discovered.device.advertisement.localName, 'sensor');
       expect(
         discovered.device.advertisement.services.single,
@@ -134,18 +132,14 @@ void main() {
       expect(drop.reason!.platformCode, 133);
       expect(drop.reason!.display, 'platform 133');
 
-      final connected =
-          AdapterEvent.fromJson(const {
-                'device_connected': {
-                  'uuid': '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f',
-                },
-              })
-              as AdapterDeviceConnected;
+      final connected = AdapterEvent.fromJson(const {
+        'device_connected': {'uuid': '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f'},
+      }) as AdapterDeviceConnected;
       expect(connected.id.display, '2f6f2cda-2f0f-4f1f-8f3f-3f4f5f6f7f8f');
 
-      final stateChanged =
-          AdapterEvent.fromJson(const {'state_changed': 'powered_on'})
-              as AdapterStateChanged;
+      final stateChanged = AdapterEvent.fromJson(const {
+        'state_changed': 'powered_on',
+      }) as AdapterStateChanged;
       expect(stateChanged.state, AdapterState.poweredOn);
     });
   });
@@ -249,6 +243,8 @@ void main() {
       expect(Capability.passiveScan, 1 << 0);
       expect(Capability.backgroundScan, 1 << 12);
       expect(Capability.autoConnect, 1 << 13);
+      expect(Capability.gattServer, 1 << 4);
+      expect(Capability.advertise, 1 << 5);
       expect(Capability.adapterPowerControl, 1 << 14);
       expect(
         Capability.has(
@@ -284,34 +280,71 @@ void main() {
 
   group('SupervisorEvent', () {
     test('parses connected and reconnect_scheduled shapes', () {
-      final connected =
-          SupervisorEvent.fromJson(const {
-                'connected': {
-                  'mac': [
-                    [2, 0, 0, 0, 0, 1],
-                    'random_static',
-                  ],
-                },
-              })
-              as SupervisorConnected;
+      final connected = SupervisorEvent.fromJson(const {
+        'connected': {
+          'mac': [
+            [2, 0, 0, 0, 0, 1],
+            'random_static',
+          ],
+        },
+      }) as SupervisorConnected;
       expect(connected.id.display, contains('02:00:00:00:00:01'));
 
-      final scheduled =
-          SupervisorEvent.fromJson(const {
-                'reconnect_scheduled': {
-                  'id': {
-                    'mac': [
-                      [2, 0, 0, 0, 0, 1],
-                      'random_static',
-                    ],
-                  },
-                  'delay': 500,
-                  'attempt': 2,
-                },
-              })
-              as SupervisorReconnectScheduled;
+      final scheduled = SupervisorEvent.fromJson(const {
+        'reconnect_scheduled': {
+          'id': {
+            'mac': [
+              [2, 0, 0, 0, 0, 1],
+              'random_static',
+            ],
+          },
+          'delay': 500,
+          'attempt': 2,
+        },
+      }) as SupervisorReconnectScheduled;
       expect(scheduled.delay, const Duration(milliseconds: 500));
       expect(scheduled.attempt, 2);
+    });
+  });
+
+  group('AdvertiseParams and GATT server models', () {
+    test('AdvertiseParams serializes timeout as timeout_ms', () {
+      const params = AdvertiseParams(
+        localName: 'beacon',
+        services: ['5b6e1f2a-9c3d-4e8f-a1b2-c3d4e5f600a1'],
+        connectable: false,
+        timeout: Duration(milliseconds: 1500),
+      );
+      expect(params.toJson()['timeout_ms'], 1500);
+      expect(params.toJson()['connectable'], isFalse);
+      expect(params.toJson()['include_name'], isTrue);
+    });
+
+    test('parses a gatt_server_event characteristic_write payload', () {
+      final event = GattServerEvent.fromJson({
+        'characteristic_write': {
+          'central': {
+            'mac': [
+              [2, 0, 0, 0, 0, 1],
+              'random_static',
+            ],
+          },
+          'characteristic': {
+            'service': {
+              'uuid': '5b6e1f2a-9c3d-4e8f-a1b2-c3d4e5f600a1',
+              'instance': 0,
+            },
+            'uuid': '5b6e1f2a-9c3d-4e8f-a1b2-c3d4e5f600a2',
+            'instance': 0,
+          },
+          'value': [1, 2, 3],
+          'mode': 'with_response',
+        },
+      });
+      expect(event, isA<GattServerCharacteristicWrite>());
+      final write = event as GattServerCharacteristicWrite;
+      expect(write.value, [1, 2, 3]);
+      expect(write.mode, WriteMode.withResponse);
     });
   });
 }

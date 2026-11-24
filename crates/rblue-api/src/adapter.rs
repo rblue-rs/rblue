@@ -1,13 +1,20 @@
-//! Central-role adapter trait.
+//! Adapter trait: central role plus optional peripheral advertising and GATT
+//! server methods, gated by [`crate::Capability::Advertise`] and
+//! [`crate::Capability::GattServer`].
 
 use std::sync::Arc;
 
 use futures::stream::BoxStream;
 
+use crate::advertise::AdvertiseParams;
 use crate::device::AdapterId;
 use crate::event::{AdapterEvent, AdapterState};
 use crate::peripheral::Peripheral;
 use crate::scan::{RequestDeviceOptions, ScanFilter};
+use crate::server::{
+    GattServerEventStream, LocalCharacteristicId, LocalService, LocalServiceId,
+    LocalServiceSnapshot,
+};
 use crate::{CapabilitySet, DeviceId, Error};
 
 /// Stream of [`AdapterEvent`] values.
@@ -23,7 +30,12 @@ use crate::{CapabilitySet, DeviceId, Error};
 /// `DeviceDisconnected`.
 pub type AdapterEventStream = BoxStream<'static, AdapterEvent>;
 
-/// A Bluetooth adapter in the central role.
+/// A Bluetooth adapter.
+///
+/// Central (GATT client) methods are always present. Peripheral advertising
+/// and GATT server methods have default implementations that return
+/// [`Error::Unsupported`]; backends implement them only when they report
+/// [`crate::Capability::Advertise`] or [`crate::Capability::GattServer`].
 ///
 /// 1.0 binds only the system default adapter; [`AdapterId`] is the reserved
 /// seam for multi-adapter enumeration post-1.0. All methods on
@@ -198,4 +210,128 @@ pub trait Adapter: Send + Sync {
         &self,
         opts: &RequestDeviceOptions,
     ) -> Result<Arc<dyn Peripheral>, Error>;
+
+    /// Starts advertising as a peripheral with `params`.
+    ///
+    /// Advertising continues until [`Adapter::stop_advertising`] or the
+    /// optional [`AdvertiseParams::timeout`] elapses. Calling
+    /// `start_advertising` while already advertising replaces the payload
+    /// (the same replacement rule as [`Adapter::start_scan`]).
+    ///
+    /// Check [`crate::Capability::Advertise`] first. Backends that do not
+    /// implement peripheral advertising return [`Error::Unsupported`] with
+    /// `feature: "start_advertising"`.
+    ///
+    /// Do not use `startAdvertising` as a public name.
+    async fn start_advertising(&self, _params: &AdvertiseParams) -> Result<(), Error> {
+        Err(unsupported("start_advertising"))
+    }
+
+    /// Stops an active advertisement.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidState`] when no advertisement is running,
+    /// [`Error::Unsupported`] with `feature: "stop_advertising"` when the
+    /// backend does not implement peripheral advertising.
+    ///
+    /// Do not use `stopAdvertising` as a public name.
+    async fn stop_advertising(&self) -> Result<(), Error> {
+        Err(unsupported("stop_advertising"))
+    }
+
+    /// Returns whether this adapter is currently advertising.
+    ///
+    /// Backends that do not implement peripheral advertising return
+    /// [`Error::Unsupported`] with `feature: "is_advertising"`.
+    async fn is_advertising(&self) -> Result<bool, Error> {
+        Err(unsupported("is_advertising"))
+    }
+
+    /// Registers a local GATT service and returns its session-scoped identity.
+    ///
+    /// Check [`crate::Capability::GattServer`] first. Backends that do not
+    /// implement a GATT server return [`Error::Unsupported`] with
+    /// `feature: "add_local_service"`.
+    ///
+    /// Do not use `addService` / `startGattServer` as public names.
+    async fn add_local_service(&self, _service: &LocalService) -> Result<LocalServiceId, Error> {
+        Err(unsupported("add_local_service"))
+    }
+
+    /// Unregisters a previously added local service.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidState`] when `id` is not registered,
+    /// [`Error::Unsupported`] with `feature: "remove_local_service"` when the
+    /// backend does not implement a GATT server.
+    async fn remove_local_service(&self, _id: &LocalServiceId) -> Result<(), Error> {
+        Err(unsupported("remove_local_service"))
+    }
+
+    /// Snapshot of every currently registered local service, including stored
+    /// characteristic values.
+    ///
+    /// Backends that do not implement a GATT server return
+    /// [`Error::Unsupported`] with `feature: "local_services"`.
+    async fn local_services(&self) -> Result<Vec<LocalServiceSnapshot>, Error> {
+        Err(unsupported("local_services"))
+    }
+
+    /// Replaces the stored value of a local characteristic without notifying
+    /// subscribers.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidState`] when `id` is not registered,
+    /// [`Error::InvalidLength`] when `value` is longer than the characteristic
+    /// bound, [`Error::Unsupported`] with
+    /// `feature: "write_local_characteristic"` when the backend does not
+    /// implement a GATT server.
+    async fn write_local_characteristic(
+        &self,
+        _id: &LocalCharacteristicId,
+        _value: &[u8],
+    ) -> Result<(), Error> {
+        Err(unsupported("write_local_characteristic"))
+    }
+
+    /// Replaces the stored value of a local characteristic and notifies or
+    /// indicates every current subscriber.
+    ///
+    /// Having no subscribers is not an error (`Ok`). The characteristic must
+    /// have the `NOTIFY` or `INDICATE` property.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidState`] when `id` is not registered or the
+    /// characteristic cannot notify, [`Error::InvalidLength`] when `value` is
+    /// longer than the characteristic bound, [`Error::Unsupported`] with
+    /// `feature: "notify_local_characteristic"` when the backend does not
+    /// implement a GATT server.
+    async fn notify_local_characteristic(
+        &self,
+        _id: &LocalCharacteristicId,
+        _value: &[u8],
+    ) -> Result<(), Error> {
+        Err(unsupported("notify_local_characteristic"))
+    }
+
+    /// Subscribes to GATT server events; see [`GattServerEventStream`] for
+    /// snapshot-then-live semantics.
+    ///
+    /// Backends that do not implement a GATT server return
+    /// [`Error::Unsupported`] with `feature: "server_events"`.
+    fn server_events(&self) -> Result<GattServerEventStream, Error> {
+        Err(unsupported("server_events"))
+    }
+}
+
+/// Builds an [`Error::Unsupported`] for `feature` on the current OS.
+pub(crate) fn unsupported(feature: &'static str) -> Error {
+    Error::Unsupported {
+        platform: std::env::consts::OS,
+        feature,
+    }
 }

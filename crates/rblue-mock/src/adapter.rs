@@ -5,17 +5,25 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use futures::channel::mpsc::unbounded;
 use futures::stream::StreamExt;
 
+use std::time::Instant;
+
 use rblue_api::adapter::{Adapter, AdapterEventStream};
+use rblue_api::advertise::AdvertiseParams;
 use rblue_api::capability::CapabilitySet;
 use rblue_api::device::{AdapterId, AddressType, DeviceId, Rssi};
 use rblue_api::error::Error;
-use rblue_api::event::{AdapterEvent, AdapterState};
+use rblue_api::event::{AdapterEvent, AdapterState, DisconnectReason};
 use rblue_api::gatt::CharacteristicProperties;
 use rblue_api::peripheral::Peripheral;
 use rblue_api::scan::{AdvertisementData, DiscoveredDevice, RequestDeviceOptions, ScanFilter};
+use rblue_api::server::{
+    GattServerEventStream, LocalCharacteristicId, LocalService, LocalServiceId,
+    LocalServiceSnapshot,
+};
 
 use crate::hub::BroadcastHub;
 use crate::peripheral::{matches_scan_filter, MockCharacteristic, MockPeripheral, MockService};
+use crate::server::{MockVirtualCentral, ServerState};
 
 /// RSSI of a simulated device that has not advertised an explicit value.
 pub(crate) const DEFAULT_RSSI: i16 = -55;
@@ -26,6 +34,18 @@ pub(crate) const MOCK_ATT_MTU: u16 = 517;
 /// Default per-characteristic write bound (`MOCK_ATT_MTU` minus the 3-byte
 /// ATT operation header).
 pub(crate) const DEFAULT_MAX_WRITE_LEN: usize = (MOCK_ATT_MTU - 3) as usize; // 514
+
+/// Identity used when this adapter's own advertisements are looped back
+/// into a running scan. This id is not a [`MockPeripheral`] in the
+/// environment and is not connectable through the central API.
+pub const LOCAL_ADVERTISEMENT_ID: DeviceId = DeviceId::Mac(
+    [0x02, 0x52, 0x42, 0x4C, 0x55, 0x45],
+    AddressType::RandomStatic,
+);
+
+/// Transmit power reported on loopback advertisements when
+/// [`AdvertiseParams::include_tx_power`] is set.
+const LOCAL_TX_POWER: i8 = 0;
 
 /// Mirrors `rblue_api::CONTRACT_SERVICE_UUID`, which the api crate exports
 /// only behind its `contract` feature.
@@ -48,11 +68,12 @@ const CONTRACT_INITIAL_VALUE: &[u8] = b"rblue-mock-echo";
 pub(crate) struct AdapterShared {
     id: AdapterId,
     events: BroadcastHub<AdapterEvent>,
+    pub(crate) server_events: BroadcastHub<rblue_api::GattServerEvent>,
     state: Mutex<AdapterInner>,
 }
 
 impl AdapterShared {
-    fn lock(&self) -> MutexGuard<'_, AdapterInner> {
+    pub(crate) fn lock(&self) -> MutexGuard<'_, AdapterInner> {
         self.state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -60,6 +81,29 @@ impl AdapterShared {
 
     pub(crate) fn publish(&self, event: AdapterEvent) {
         self.events.publish(event);
+    }
+
+    pub(crate) fn publish_server(&self, event: rblue_api::GattServerEvent) {
+        self.server_events.publish(event);
+    }
+
+    /// If a scan is running and this adapter is advertising, emit a loopback
+    /// sighting for [`LOCAL_ADVERTISEMENT_ID`].
+    pub(crate) fn sight_local_advertisement(&self) {
+        let advertisement = {
+            let mut state = self.lock();
+            expire_advertising_locked(&mut state);
+            if !state.scanning {
+                return;
+            }
+            state
+                .advertising
+                .as_ref()
+                .map(|session| advertisement_from_params(&session.params))
+        };
+        if let Some(advertisement) = advertisement {
+            self.record_sighting(&LOCAL_ADVERTISEMENT_ID, advertisement, DEFAULT_RSSI);
+        }
     }
 
     /// Records one sighting: applies the active scan filter, marks the device
@@ -95,17 +139,57 @@ impl AdapterShared {
 
 /// Environment bookkeeping of one mock adapter.
 #[derive(Debug)]
-struct AdapterInner {
+pub(crate) struct AdapterInner {
     initialized: bool,
     /// Current radio/permission state of the simulated adapter.
     radio: AdapterState,
     scanning: bool,
     filter: Option<ScanFilter>,
+    /// Currently broadcast advertisement, if any.
+    advertising: Option<AdvertiseSession>,
+    /// Local GATT server bookkeeping.
+    pub(crate) server: ServerState,
     /// Every registered device in registration order, visible or not.
     environment: Vec<Arc<MockPeripheral>>,
     /// Devices the adapter has reported at least once (scan history plus
     /// connected devices), in first-sighting order.
     known_order: Vec<DeviceId>,
+}
+
+/// Active advertisement plus an optional deadline.
+#[derive(Debug, Clone)]
+struct AdvertiseSession {
+    params: AdvertiseParams,
+    deadline: Option<Instant>,
+}
+
+fn expire_advertising_locked(state: &mut AdapterInner) {
+    let expired = match &state.advertising {
+        Some(session) => session
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline),
+        None => false,
+    };
+    if expired {
+        state.advertising = None;
+    }
+}
+
+fn advertisement_from_params(params: &AdvertiseParams) -> AdvertisementData {
+    AdvertisementData {
+        local_name: if params.include_name {
+            params.local_name.clone()
+        } else {
+            None
+        },
+        services: params.services.clone(),
+        service_data: params.service_data.clone(),
+        manufacturer_data: params.manufacturer_data.clone(),
+        tx_power: params.include_tx_power.then_some(LOCAL_TX_POWER),
+        is_connectable: Some(params.connectable),
+        rssi: Some(DEFAULT_RSSI),
+        ..AdvertisementData::default()
+    }
 }
 
 impl AdapterInner {
@@ -148,11 +232,14 @@ impl MockAdapter {
             shared: Arc::new(AdapterShared {
                 id: AdapterId::default_adapter(),
                 events: BroadcastHub::default(),
+                server_events: BroadcastHub::default(),
                 state: Mutex::new(AdapterInner {
                     initialized: false,
                     radio: AdapterState::Unknown,
                     scanning: false,
                     filter: None,
+                    advertising: None,
+                    server: ServerState::default(),
                     environment: Vec::new(),
                     known_order: Vec::new(),
                 }),
@@ -205,6 +292,35 @@ impl MockAdapter {
         self.shared.lock().environment.push(Arc::clone(&peripheral));
         peripheral
     }
+
+    /// Identity used for this adapter's looped-back advertisements.
+    #[must_use]
+    pub const fn local_advertisement_id() -> DeviceId {
+        LOCAL_ADVERTISEMENT_ID
+    }
+
+    /// Connects a simulated remote central to the mock GATT server.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidState`] if `id` is already connected.
+    pub fn connect_virtual_central(&self, id: DeviceId) -> Result<MockVirtualCentral, Error> {
+        self.shared.connect_virtual_central(id.clone())?;
+        Ok(MockVirtualCentral::new(Arc::clone(&self.shared), id))
+    }
+
+    /// Disconnects a simulated remote central from the mock GATT server.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidState`] if `id` is not connected.
+    pub fn disconnect_virtual_central(
+        &self,
+        id: &DeviceId,
+        reason: Option<DisconnectReason>,
+    ) -> Result<(), Error> {
+        self.shared.disconnect_virtual_central(id, reason)
+    }
 }
 
 impl Default for MockAdapter {
@@ -253,6 +369,14 @@ impl Adapter for MockAdapter {
         if previous != next {
             self.shared.publish(AdapterEvent::StateChanged(next));
         }
+        if next == AdapterState::PoweredOff {
+            {
+                let mut state = self.shared.lock();
+                state.advertising = None;
+            }
+            self.shared
+                .drop_all_virtual_centrals(Some(DisconnectReason::Local));
+        }
         Ok(())
     }
 
@@ -271,6 +395,7 @@ impl Adapter for MockAdapter {
         for device in &visible {
             device.sight_current_advertisement();
         }
+        self.shared.sight_local_advertisement();
         Ok(())
     }
 
@@ -388,6 +513,72 @@ impl Adapter for MockAdapter {
                 "rblue-mock: no visible device matches the request options".to_owned(),
             ))),
         }
+    }
+
+    async fn start_advertising(&self, params: &AdvertiseParams) -> Result<(), Error> {
+        let deadline = params.timeout.map(|timeout| Instant::now() + timeout);
+        if deadline.is_some_and(|when| Instant::now() >= when) {
+            let mut state = self.shared.lock();
+            state.advertising = None;
+            return Ok(());
+        }
+        {
+            let mut state = self.shared.lock();
+            state.advertising = Some(AdvertiseSession {
+                params: params.clone(),
+                deadline,
+            });
+        }
+        self.shared.sight_local_advertisement();
+        Ok(())
+    }
+
+    async fn stop_advertising(&self) -> Result<(), Error> {
+        let mut state = self.shared.lock();
+        expire_advertising_locked(&mut state);
+        if state.advertising.is_none() {
+            return Err(Error::InvalidState("no advertisement is running".into()));
+        }
+        state.advertising = None;
+        Ok(())
+    }
+
+    async fn is_advertising(&self) -> Result<bool, Error> {
+        let mut state = self.shared.lock();
+        expire_advertising_locked(&mut state);
+        Ok(state.advertising.is_some())
+    }
+
+    async fn add_local_service(&self, service: &LocalService) -> Result<LocalServiceId, Error> {
+        self.shared.add_local_service(service)
+    }
+
+    async fn remove_local_service(&self, id: &LocalServiceId) -> Result<(), Error> {
+        self.shared.remove_local_service(id)
+    }
+
+    async fn local_services(&self) -> Result<Vec<LocalServiceSnapshot>, Error> {
+        Ok(self.shared.local_services_snapshot())
+    }
+
+    async fn write_local_characteristic(
+        &self,
+        id: &LocalCharacteristicId,
+        value: &[u8],
+    ) -> Result<(), Error> {
+        self.shared.write_local_characteristic(id, value)
+    }
+
+    async fn notify_local_characteristic(
+        &self,
+        id: &LocalCharacteristicId,
+        value: &[u8],
+    ) -> Result<(), Error> {
+        self.shared.notify_local_characteristic(id, value)
+    }
+
+    fn server_events(&self) -> Result<GattServerEventStream, Error> {
+        Ok(self.shared.server_event_stream())
     }
 }
 
