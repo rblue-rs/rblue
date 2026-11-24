@@ -21,10 +21,18 @@ Linux, web, Intel iOS simulators, Windows ARM64, and HarmonyOS are **not**
 declared by this Flutter package. The Rust project has additional backends, but
 platform support is declared here only after Flutter packaging exists.
 
-Implemented operations include adapter initialization, scan/start/stop,
+Implemented operations in the packaged plugin include adapter initialization, scan/start/stop,
 peripheral lookup, connect/disconnect, service discovery, characteristic
 read/write, subscribe/unsubscribe, RSSI, MTU query, maximum write length,
 capabilities, connection state, system-connected peripheral lookup (Apple, Android, and Linux), and connection priority.
+
+The in-tree Dart client also exposes `readDescriptor` / `writeDescriptor`, but
+the packaged `so`/`dylib` and `native/source` snapshot still speak the pre-#12
+C ABI: those methods are absent, and `Characteristic.descriptors` is a list of
+UUID strings. Descriptor read/write needs a later provenance-checked native
+rebuild before it works in the packaged plugin. The Dart parser accepts both
+the new `Descriptor` object list and the legacy UUID-string list so
+`discoverServices` against the current snapshot does not throw.
 
 ## Installation
 
@@ -34,7 +42,9 @@ dependencies:
 ```
 
 The Pub package contains the native libraries. Consumers do not need Rust,
-Cargo, or a checkout of the rblue monorepo.
+Cargo, or a checkout of the rblue monorepo. Those binaries are a
+provenance-pinned snapshot and can lag in-tree Dart API additions until a
+checked native rebuild; see [Native packaging and provenance](#native-packaging-and-provenance).
 
 ## App setup
 
@@ -138,6 +148,15 @@ instructions, checksums, and exported-symbol checks are included under
 [`native/`](native/). This is for reproducibility and license compliance;
 normal Flutter builds consume the packaged binaries rather than compiling Rust.
 
+The currently packaged binaries and the `native/source` snapshot are still the
+pre-#12 C ABI and ServiceSet shape: `discover_services` returns
+`Characteristic.descriptors` as UUID strings, and `read_descriptor` /
+`write_descriptor` are not in that snapshot. The Dart client on this branch
+understands both the new `Descriptor` object list and the legacy UUID-string
+list so `discoverServices` against the packaged binary does not throw. Calling
+`readDescriptor` / `writeDescriptor` against that snapshot will not work until
+a provenance-checked native rebuild is recorded.
+
 See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for dependency
 attribution and license texts. The package itself is dual-licensed under MIT or
 Apache-2.0; the complete texts are embedded in [`LICENSE`](LICENSE) so automated
@@ -153,8 +172,12 @@ package analysis can recognize them.
   backpressure. Production consumers must define an aggregation/drop policy.
 - GATT characteristic instance IDs are connection-scoped and must be
   rediscovered after reconnecting.
-- Pairing, descriptor read/write, and explicit Android MTU requests are not
-  exposed yet.
+- Pairing and explicit Android MTU requests (`request_mtu`) are exposed by
+  the C ABI and Dart client when the backend supports them; they still return
+  `Unsupported` on platforms without those APIs. Descriptor read/write exists
+  on the Dart client (`readDescriptor` / `writeDescriptor`, wire names
+  `read_descriptor` / `write_descriptor`) but is not in the packaged native
+  snapshot yet; it needs a later provenance-checked native rebuild.
 - Some Android failures are collapsed by the pinned btleplug fork to
   `NotConnected`; raw GATT status is preserved only when the backend supplies it.
 

@@ -5,8 +5,10 @@ use std::time::Duration;
 
 use rblue::platform::mock::MockAdapter;
 use rblue::prelude::{AddressType, AdvertisementData, DeviceId};
-use rblue_api::contract::{CONTRACT_CHARACTERISTIC_UUID, CONTRACT_SERVICE_UUID};
-use rblue_api::gatt::{CharacteristicId, ServiceId};
+use rblue_api::contract::{
+    CONTRACT_CHARACTERISTIC_UUID, CONTRACT_DESCRIPTOR_UUID, CONTRACT_SERVICE_UUID,
+};
+use rblue_api::gatt::{CharacteristicId, DescriptorId, ServiceId};
 use rblue_api::Error as ApiError;
 
 use super::{EventSink, Rblue, RblueError};
@@ -106,6 +108,22 @@ fn fixture_device_json() -> String {
 }
 
 /// The contract echo characteristic id, serialized the same way.
+fn fixture_descriptor_json() -> String {
+    serde_json::to_string(&DescriptorId {
+        characteristic: CharacteristicId {
+            service: ServiceId {
+                uuid: CONTRACT_SERVICE_UUID,
+                instance: 0,
+            },
+            uuid: CONTRACT_CHARACTERISTIC_UUID,
+            instance: 0,
+        },
+        uuid: CONTRACT_DESCRIPTOR_UUID,
+        instance: 0,
+    })
+    .expect("descriptor JSON")
+}
+
 fn fixture_characteristic_json() -> String {
     serde_json::to_string(&CharacteristicId {
         service: ServiceId {
@@ -218,10 +236,25 @@ async fn gatt_roundtrip_read_write_and_len_through_the_facade() {
     let oversize = vec![0u8; (max_write_len + 1) as usize];
     assert!(matches!(
         rblue
-            .write(device_json, characteristic_json, oversize, true)
+            .write(device_json.clone(), characteristic_json, oversize, true)
             .await,
         Err(RblueError::InvalidLength { .. })
     ));
+
+    let descriptor_json = fixture_descriptor_json();
+    rblue
+        .write_descriptor(
+            device_json.clone(),
+            descriptor_json.clone(),
+            b"hello".to_vec(),
+        )
+        .await
+        .expect("write_descriptor");
+    let descriptor_value = rblue
+        .read_descriptor(device_json, descriptor_json)
+        .await
+        .expect("read_descriptor");
+    assert_eq!(descriptor_value, b"hello".to_vec());
 }
 
 #[tokio::test]

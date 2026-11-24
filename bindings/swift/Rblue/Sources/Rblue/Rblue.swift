@@ -783,6 +783,19 @@ public protocol RblueProtocol: AnyObject, Sendable {
     func read(deviceJson: String, characteristicJson: String) async throws  -> Data
     
     /**
+     * Reads the current value of the descriptor (`DescriptorId` JSON from
+     * the `discover_services` result).
+     *
+     * # Errors
+     *
+     * [`RblueError::NotConnected`], [`RblueError::NotFound`] or
+     * [`RblueError::Att`] when the descriptor is absent or the procedure
+     * fails, [`RblueError::Unsupported`] when the backend has no
+     * descriptor API.
+     */
+    func readDescriptor(deviceJson: String, descriptorJson: String) async throws  -> Data
+    
+    /**
      * Web-only entry point: shows the browser's device picker. Must be
      * called from a user-gesture handler (the TS binding layer provides the
      * helper for that).
@@ -895,6 +908,17 @@ public protocol RblueProtocol: AnyObject, Sendable {
      * [`RblueError::Att`].
      */
     func write(deviceJson: String, characteristicJson: String, data: Data, withResponse: Bool) async throws 
+    
+    /**
+     * Writes `data` to the descriptor. Oversize payloads are rejected with
+     * [`RblueError::InvalidLength`] - never truncated, never chunked.
+     *
+     * # Errors
+     *
+     * [`RblueError::InvalidLength`], [`RblueError::NotConnected`],
+     * [`RblueError::NotFound`] or [`RblueError::Att`].
+     */
+    func writeDescriptor(deviceJson: String, descriptorJson: String, data: Data) async throws 
     
 }
 /**
@@ -1272,6 +1296,33 @@ open func read(deviceJson: String, characteristicJson: String)async throws  -> D
 }
     
     /**
+     * Reads the current value of the descriptor (`DescriptorId` JSON from
+     * the `discover_services` result).
+     *
+     * # Errors
+     *
+     * [`RblueError::NotConnected`], [`RblueError::NotFound`] or
+     * [`RblueError::Att`] when the descriptor is absent or the procedure
+     * fails, [`RblueError::Unsupported`] when the backend has no
+     * descriptor API.
+     */
+open func readDescriptor(deviceJson: String, descriptorJson: String)async throws  -> Data  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_read_descriptor(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceJson),FfiConverterString.lower(descriptorJson)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_rblue_ffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterData.lift,
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
      * Web-only entry point: shows the browser's device picker. Must be
      * called from a user-gesture handler (the TS binding layer provides the
      * helper for that).
@@ -1494,6 +1545,31 @@ open func write(deviceJson: String, characteristicJson: String, data: Data, with
             rustFutureFunc: {
                 uniffi_rblue_ffi_fn_method_rblue_write(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceJson),FfiConverterString.lower(characteristicJson),FfiConverterData.lower(data),FfiConverterBool.lower(withResponse)
+                )
+            },
+            pollFunc: ffi_rblue_ffi_rust_future_poll_void,
+            completeFunc: ffi_rblue_ffi_rust_future_complete_void,
+            freeFunc: ffi_rblue_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeRblueError_lift
+        )
+}
+    
+    /**
+     * Writes `data` to the descriptor. Oversize payloads are rejected with
+     * [`RblueError::InvalidLength`] - never truncated, never chunked.
+     *
+     * # Errors
+     *
+     * [`RblueError::InvalidLength`], [`RblueError::NotConnected`],
+     * [`RblueError::NotFound`] or [`RblueError::Att`].
+     */
+open func writeDescriptor(deviceJson: String, descriptorJson: String, data: Data)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_rblue_ffi_fn_method_rblue_write_descriptor(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceJson),FfiConverterString.lower(descriptorJson),FfiConverterData.lower(data)
                 )
             },
             pollFunc: ffi_rblue_ffi_rust_future_poll_void,
@@ -2449,6 +2525,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_rblue_ffi_checksum_method_rblue_read() != 60552) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_rblue_ffi_checksum_method_rblue_read_descriptor() != 34732) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rblue_ffi_checksum_method_rblue_request_device() != 16933) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2474,6 +2553,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_method_rblue_write() != 27008) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rblue_ffi_checksum_method_rblue_write_descriptor() != 22556) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rblue_ffi_checksum_constructor_rblue_new() != 53450) {

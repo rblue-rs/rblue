@@ -192,7 +192,7 @@ class EventsJsonTest {
         val set = (
             "{\"services\":[" +
                 "{\"uuid\":\"180f\",\"primary\":true,\"characteristics\":[" +
-                "{\"uuid\":\"2a19\",\"properties\":10,\"descriptors\":[\"2901\"]}]}," +
+                "{\"uuid\":\"2a19\",\"properties\":10,\"descriptors\":[{\"characteristic\":{\"service\":{\"uuid\":\"180f\",\"instance\":0},\"uuid\":\"2a19\",\"instance\":0},\"uuid\":\"2901\",\"instance\":0}]}]}," +
                 "{\"uuid\":\"1800\",\"primary\":true,\"characteristics\":[]}]}"
             ).toServiceSet()
         assertEquals(2, set.services.size)
@@ -202,7 +202,7 @@ class EventsJsonTest {
         assertTrue(characteristic.canRead)
         assertTrue(characteristic.canWrite)
         assertFalse(characteristic.canNotify)
-        assertEquals(listOf("2901"), characteristic.descriptors)
+        assertEquals(listOf("2901"), characteristic.descriptors.map { it.uuid })
         assertEquals(listOf("R", "W"), characteristic.propertyBadges)
     }
 

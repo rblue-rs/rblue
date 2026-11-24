@@ -17,7 +17,7 @@ use btleplug::api::{CharPropFlags, Peripheral as BtlePeripheral, WriteType};
 use futures::stream::StreamExt;
 use rblue_api::device::DeviceId;
 use rblue_api::error::{AttError, Error};
-use rblue_api::gatt::{CharacteristicId, Notification, ServiceSet, WriteMode};
+use rblue_api::gatt::{CharacteristicId, DescriptorId, Notification, ServiceSet, WriteMode};
 use rblue_api::peripheral::{ConnectOptions, ConnectionPriority, NotificationStream, Peripheral};
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -84,12 +84,59 @@ impl AndroidPeripheral {
             descriptors: characteristic
                 .descriptors
                 .iter()
-                .map(|uuid| btleplug::api::Descriptor {
-                    uuid: *uuid,
+                .map(|descriptor| btleplug::api::Descriptor {
+                    uuid: descriptor.uuid,
                     service_uuid: id.service.uuid,
                     characteristic_uuid: id.uuid,
                 })
                 .collect(),
+        })
+    }
+
+    /// Resolves a session-scoped descriptor identity against the discovered
+    /// tree of the current connection and rebuilds the fork's descriptor
+    /// value. The fork addresses descriptors by UUID only, so a
+    /// `DescriptorId` with `instance > 0` or a characteristic that exposes
+    /// more than one descriptor with this UUID returns [`Error::Backend`]
+    /// rather than silently forwarding the first UUID match.
+    fn resolve_descriptor(&self, id: &DescriptorId) -> Result<btleplug::api::Descriptor, Error> {
+        let Some(services) = self.entry.services() else {
+            return Err(att_invalid_handle());
+        };
+        let service = services
+            .services
+            .iter()
+            .filter(|service| service.uuid == id.characteristic.service.uuid)
+            .nth(id.characteristic.service.instance as usize);
+        let characteristic = service.and_then(|service| {
+            service
+                .characteristics
+                .iter()
+                .filter(|characteristic| characteristic.uuid == id.characteristic.uuid)
+                .nth(id.characteristic.instance as usize)
+        });
+        let Some(characteristic) = characteristic else {
+            return Err(att_invalid_handle());
+        };
+        let same_uuid: Vec<_> = characteristic
+            .descriptors
+            .iter()
+            .filter(|descriptor| descriptor.uuid == id.uuid)
+            .collect();
+        let Some(descriptor) = same_uuid.get(id.instance as usize) else {
+            return Err(att_invalid_handle());
+        };
+        // The fork identifies descriptors by UUID only. Do not silently
+        // forward a colliding instance to whatever the first UUID match is.
+        if id.instance > 0 || same_uuid.len() > 1 {
+            return Err(Error::Backend(
+                "this backend addresses GATT descriptors by UUID only and cannot distinguish multiple descriptors that share a UUID (including DescriptorId.instance > 0)".to_owned(),
+            ));
+        }
+        Ok(btleplug::api::Descriptor {
+            uuid: descriptor.uuid,
+            service_uuid: id.characteristic.service.uuid,
+            characteristic_uuid: id.characteristic.uuid,
         })
     }
 }
@@ -253,6 +300,31 @@ impl Peripheral for AndroidPeripheral {
         // first connect. Both write modes share the limit. See
         // docs/platform-notes.md.
         Ok(max_write_len_from_mtu(peripheral.mtu()))
+    }
+
+    async fn read_descriptor(&self, id: &DescriptorId) -> Result<Vec<u8>, Error> {
+        let peripheral = self.entry.connected_handle().await?;
+        let descriptor = self.resolve_descriptor(id)?;
+        peripheral
+            .read_descriptor(&descriptor)
+            .await
+            .map_err(map_btleplug_error)
+    }
+
+    async fn write_descriptor(&self, id: &DescriptorId, data: &[u8]) -> Result<(), Error> {
+        let peripheral = self.entry.connected_handle().await?;
+        let descriptor = self.resolve_descriptor(id)?;
+        let max = max_write_len_from_mtu(peripheral.mtu());
+        if data.len() > max {
+            return Err(Error::InvalidLength {
+                len: data.len(),
+                max,
+            });
+        }
+        peripheral
+            .write_descriptor(&descriptor, data)
+            .await
+            .map_err(map_btleplug_error)
     }
 
     async fn subscribe(&self, ch: &CharacteristicId) -> Result<(), Error> {

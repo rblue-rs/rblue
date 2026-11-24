@@ -7,7 +7,8 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard, Weak};
 use async_trait::async_trait;
 use rblue_api::{
     AdvertisementData, AttError, CharacteristicId, CharacteristicProperties, ConnectOptions,
-    DeviceId, Error, Notification, NotificationStream, Peripheral, ServiceSet, WriteMode,
+    DescriptorId, DeviceId, Error, Notification, NotificationStream, Peripheral, ServiceSet,
+    WriteMode,
 };
 use rblue_driver::{BleDriverCommand, DriverValue};
 
@@ -185,7 +186,41 @@ impl OhosPeripheral {
         })
     }
 
-    /// Unified connection pre-check shared by every GATT operation.
+    /// Confirms `id` is present in the current session tree.
+    fn require_descriptor(&self, id: &DescriptorId) -> Result<(), Error> {
+        self.characteristic_properties(&id.characteristic)?;
+        let shared = self.lock_shared();
+        let services = shared.services.as_ref().ok_or_else(|| {
+            Error::InvalidState("services not discovered on this connection".to_owned())
+        })?;
+        let service = services
+            .services
+            .iter()
+            .filter(|service| service.uuid == id.characteristic.service.uuid)
+            .nth(usize::from(id.characteristic.service.instance));
+        let characteristic = service.and_then(|service| {
+            service
+                .characteristics
+                .iter()
+                .filter(|characteristic| characteristic.uuid == id.characteristic.uuid)
+                .nth(usize::from(id.characteristic.instance))
+        });
+        let found = characteristic.and_then(|characteristic| {
+            characteristic
+                .descriptors
+                .iter()
+                .find(|descriptor| descriptor.uuid == id.uuid && descriptor.instance == id.instance)
+        });
+        if found.is_some() {
+            Ok(())
+        } else {
+            Err(Error::Att(AttError {
+                code: 0x01,
+                handle: None,
+            }))
+        }
+    }
+
     fn require_connected(&self) -> Result<(), Error> {
         if self.lock_shared().connected {
             Ok(())
@@ -348,6 +383,40 @@ impl Peripheral for OhosPeripheral {
     ) -> Result<usize, Error> {
         self.require_connected()?;
         self.lock_shared_mtu()
+    }
+
+    async fn read_descriptor(&self, id: &DescriptorId) -> Result<Vec<u8>, Error> {
+        self.require_connected()?;
+        self.require_descriptor(id)?;
+        let value = self
+            .request(BleDriverCommand::ReadDescriptor {
+                device: self.id.clone(),
+                descriptor: *id,
+            })
+            .await?;
+        expect_data(value)
+    }
+
+    async fn write_descriptor(&self, id: &DescriptorId, data: &[u8]) -> Result<(), Error> {
+        self.require_connected()?;
+        self.require_descriptor(id)?;
+        let max = self.lock_shared_mtu()?;
+        if data.len() > max {
+            return Err(Error::InvalidLength {
+                len: data.len(),
+                max,
+            });
+        }
+        expect_none(
+            self.request_with_payload(
+                BleDriverCommand::WriteDescriptor {
+                    device: self.id.clone(),
+                    descriptor: *id,
+                },
+                data,
+            )
+            .await?,
+        )
     }
 
     async fn subscribe(&self, ch: &CharacteristicId) -> Result<(), Error> {

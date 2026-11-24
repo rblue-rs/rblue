@@ -22,7 +22,8 @@ use rblue_api::device::{AddressType, DeviceId};
 use rblue_api::error::{AttError, Error, PermissionReason};
 use rblue_api::event::AdapterState;
 use rblue_api::gatt::{
-    Characteristic, CharacteristicId, CharacteristicProperties, Service, ServiceId, ServiceSet,
+    descriptors_from_uuids, Characteristic, CharacteristicId, CharacteristicProperties, Service,
+    ServiceId, ServiceSet,
 };
 use rblue_api::scan::{AdvertisementData, ScanFilter};
 use uuid::Uuid;
@@ -468,27 +469,47 @@ pub(crate) fn service_set_from_btleplug(
     discovered: &std::collections::BTreeSet<btleplug::api::Service>,
     filter: &[Uuid],
 ) -> ServiceSet {
-    let services = discovered
+    let mut services = Vec::new();
+    for service in discovered
         .iter()
         .filter(|service| filter.is_empty() || filter.contains(&service.uuid))
-        .map(|service| Service {
+    {
+        let service_id = ServiceId {
             uuid: service.uuid,
-            primary: service.primary,
-            characteristics: service
-                .characteristics
+            instance: services
                 .iter()
-                .map(|characteristic| Characteristic {
-                    uuid: characteristic.uuid,
-                    properties: map_properties(characteristic.properties),
-                    descriptors: characteristic
+                .filter(|listed: &&Service| listed.uuid == service.uuid)
+                .count() as u16,
+        };
+        let mut characteristics = Vec::new();
+        for characteristic in &service.characteristics {
+            let instance = characteristics
+                .iter()
+                .filter(|listed: &&Characteristic| listed.uuid == characteristic.uuid)
+                .count() as u16;
+            let id = CharacteristicId {
+                service: service_id,
+                uuid: characteristic.uuid,
+                instance,
+            };
+            characteristics.push(Characteristic {
+                uuid: characteristic.uuid,
+                properties: map_properties(characteristic.properties),
+                descriptors: descriptors_from_uuids(
+                    id,
+                    characteristic
                         .descriptors
                         .iter()
-                        .map(|descriptor| descriptor.uuid)
-                        .collect(),
-                })
-                .collect(),
-        })
-        .collect();
+                        .map(|descriptor| descriptor.uuid),
+                ),
+            });
+        }
+        services.push(Service {
+            uuid: service.uuid,
+            primary: service.primary,
+            characteristics,
+        });
+    }
     ServiceSet { services }
 }
 

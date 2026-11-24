@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use futures::StreamExt;
 use rblue::prelude::{
-    Adapter, AdapterEvent, CapabilitySet, CharacteristicId, DeviceId, Notification, Peripheral,
-    RequestDeviceOptions, ScanFilter, ServiceSet, WriteMode,
+    Adapter, AdapterEvent, CapabilitySet, CharacteristicId, DescriptorId, DeviceId, Notification,
+    Peripheral, RequestDeviceOptions, ScanFilter, ServiceSet, WriteMode,
 };
 use serde::de::DeserializeOwned;
 use uuid::Uuid;
@@ -164,6 +164,15 @@ fn parse_device_id(device_json: &str) -> Result<DeviceId, RblueError> {
 /// [`RblueError::InvalidArgument`] for malformed JSON.
 fn parse_characteristic_id(characteristic_json: &str) -> Result<CharacteristicId, RblueError> {
     parse_json(characteristic_json, "CharacteristicId JSON")
+}
+
+/// Parses a `DescriptorId` argument.
+///
+/// # Errors
+///
+/// [`RblueError::InvalidArgument`] for malformed JSON.
+fn parse_descriptor_id(descriptor_json: &str) -> Result<DescriptorId, RblueError> {
+    parse_json(descriptor_json, "DescriptorId JSON")
 }
 
 /// Parses a service-UUID method argument.
@@ -426,6 +435,51 @@ impl Rblue {
             .peripheral(&device_json)
             .await?
             .write(&characteristic, &data, mode)
+            .await?)
+    }
+
+    /// Reads the current value of the descriptor (`DescriptorId` JSON from
+    /// the `discover_services` result).
+    ///
+    /// # Errors
+    ///
+    /// [`RblueError::NotConnected`], [`RblueError::NotFound`] or
+    /// [`RblueError::Att`] when the descriptor is absent or the procedure
+    /// fails, [`RblueError::Unsupported`] when the backend has no
+    /// descriptor API.
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn read_descriptor(
+        &self,
+        device_json: String,
+        descriptor_json: String,
+    ) -> Result<Vec<u8>, RblueError> {
+        let descriptor = parse_descriptor_id(&descriptor_json)?;
+        Ok(self
+            .peripheral(&device_json)
+            .await?
+            .read_descriptor(&descriptor)
+            .await?)
+    }
+
+    /// Writes `data` to the descriptor. Oversize payloads are rejected with
+    /// [`RblueError::InvalidLength`] - never truncated, never chunked.
+    ///
+    /// # Errors
+    ///
+    /// [`RblueError::InvalidLength`], [`RblueError::NotConnected`],
+    /// [`RblueError::NotFound`] or [`RblueError::Att`].
+    #[uniffi::method(async_runtime = "tokio")]
+    pub async fn write_descriptor(
+        &self,
+        device_json: String,
+        descriptor_json: String,
+        data: Vec<u8>,
+    ) -> Result<(), RblueError> {
+        let descriptor = parse_descriptor_id(&descriptor_json)?;
+        Ok(self
+            .peripheral(&device_json)
+            .await?
+            .write_descriptor(&descriptor, &data)
             .await?)
     }
 

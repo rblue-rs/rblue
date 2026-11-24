@@ -135,7 +135,7 @@ final class EventsJsonTests: XCTestCase {
         let set = try JSONDecoder().decode(
             ServiceSet.self,
             from: Data(
-                #"{"services":[{"uuid":"180f","primary":true,"characteristics":[{"uuid":"2a19","properties":10,"descriptors":["2901"]}]},{"uuid":"1800","primary":true,"characteristics":[]}]}"#
+                #"{"services":[{"uuid":"180f","primary":true,"characteristics":[{"uuid":"2a19","properties":10,"descriptors":[{"characteristic":{"service":{"uuid":"180f","instance":0},"uuid":"2a19","instance":0},"uuid":"2901","instance":0}]}]},{"uuid":"1800","primary":true,"characteristics":[]}]}"#
                     .utf8
             )
         )
@@ -146,7 +146,7 @@ final class EventsJsonTests: XCTestCase {
         XCTAssertTrue(characteristic.canRead)
         XCTAssertTrue(characteristic.canWrite)
         XCTAssertFalse(characteristic.canNotify)
-        XCTAssertEqual(characteristic.descriptors, ["2901"])
+        XCTAssertEqual(characteristic.descriptors.map(\.uuid), ["2901"])
         XCTAssertEqual(set.services[0].characteristics[0].propertyBadges, ["R", "W"])
     }
 

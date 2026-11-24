@@ -15,7 +15,9 @@ use rblue_api::peripheral::Peripheral;
 use rblue_api::scan::{AdvertisementData, DiscoveredDevice, RequestDeviceOptions, ScanFilter};
 
 use crate::hub::BroadcastHub;
-use crate::peripheral::{matches_scan_filter, MockCharacteristic, MockPeripheral, MockService};
+use crate::peripheral::{
+    matches_scan_filter, MockCharacteristic, MockDescriptor, MockPeripheral, MockService,
+};
 
 /// RSSI of a simulated device that has not advertised an explicit value.
 pub(crate) const DEFAULT_RSSI: i16 = -55;
@@ -36,6 +38,9 @@ const CONTRACT_SERVICE_UUID: uuid::Uuid =
 /// [`CONTRACT_SERVICE_UUID`].
 const CONTRACT_CHARACTERISTIC_UUID: uuid::Uuid =
     uuid::Uuid::from_u128(0x5b6e_1f2a_9c3d_4e8f_a1b2_c3d4_e5f6_0002);
+
+const CONTRACT_DESCRIPTOR_UUID: uuid::Uuid =
+    uuid::Uuid::from_u128(0x5b6e_1f2a_9c3d_4e8f_a1b2_c3d4_e5f6_0003);
 
 /// Initial value of the contract echo characteristic; the contract requires
 /// fixture reads to return non-empty data.
@@ -184,7 +189,11 @@ impl MockAdapter {
                         | CharacteristicProperties::NOTIFY,
                 )
                 .with_initial_value(CONTRACT_INITIAL_VALUE.to_vec())
-                .with_echo(),
+                .with_echo()
+                .with_descriptor(
+                    MockDescriptor::new(CONTRACT_DESCRIPTOR_UUID)
+                        .with_initial_value(b"rblue-mock-desc".to_vec()),
+                ),
             ),
         );
         device.set_advertisement(AdvertisementData {

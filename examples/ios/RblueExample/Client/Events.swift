@@ -297,11 +297,18 @@ struct Service: Decodable, Equatable, Sendable {
     let characteristics: [Characteristic]
 }
 
+/// One GATT descriptor (`rblue_api::Descriptor`).
+struct Descriptor: Decodable, Equatable, Sendable {
+    let characteristic: CharacteristicId
+    let uuid: String
+    let instance: UInt16
+}
+
 /// One GATT characteristic (`rblue_api::Characteristic`).
 struct Characteristic: Decodable, Equatable, Sendable {
     let uuid: String
     let properties: UInt16
-    let descriptors: [String]
+    let descriptors: [Descriptor]
 }
 
 extension Characteristic {

@@ -104,6 +104,11 @@ before GATT operations.
   fork's `BTreeSet` order. Same-UUID duplicate services/characteristics are
   rare; if present, instance order follows UUID sort order rather than
   hardware discovery order (inherited limitation of the fork's `BTreeSet`).
+- `read_descriptor` / `write_descriptor` are implemented, but the pinned
+  btleplug fork addresses descriptors by UUID only. If a characteristic
+  exposes more than one descriptor with the same UUID, or a `DescriptorId`
+  with `instance > 0` is used, the shell returns `Error::Backend` rather
+  than silently forwarding the first matching UUID.
 - `DeviceServicesModified` (service change mid-connection) clears the
   identifier cache; there is no unified event for it, so a rediscovery is
   required before further GATT operations (existing ids resolve to

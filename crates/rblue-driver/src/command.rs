@@ -9,8 +9,8 @@
 use serde::{Deserialize, Serialize};
 
 use rblue_api::{
-    AdapterState, AdvertisementData, CharacteristicId, DeviceId, DisconnectReason, Error,
-    ScanFilter, ServiceSet,
+    AdapterState, AdvertisementData, CharacteristicId, DescriptorId, DeviceId, DisconnectReason,
+    Error, ScanFilter, ServiceSet,
 };
 
 /// Correlation id carried by every request and its response.
@@ -149,6 +149,21 @@ pub enum BleDriverCommand {
         characteristic: CharacteristicId,
         /// `true` for write-with-response, `false` for write-without-response.
         with_response: bool,
+    },
+    /// Read a descriptor value.
+    ReadDescriptor {
+        /// Connected device.
+        device: DeviceId,
+        /// Session-scoped descriptor address.
+        descriptor: DescriptorId,
+    },
+    /// Write a descriptor value. The payload rides the binary data-plane
+    /// frame with the same `req_id`, as with [`BleDriverCommand::Write`].
+    WriteDescriptor {
+        /// Connected device.
+        device: DeviceId,
+        /// Session-scoped descriptor address.
+        descriptor: DescriptorId,
     },
     /// Subscribe to value changes. The driver picks notify vs. indicate from
     /// the characteristic properties (OHOS exposes distinct APIs).

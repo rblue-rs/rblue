@@ -56,9 +56,88 @@ pub struct Characteristic {
     /// Operations the characteristic permits; the basis for write mode and
     /// subscribe mechanism selection.
     pub properties: CharacteristicProperties,
-    /// Descriptors declared by the characteristic. 1.0 only enumerates them;
-    /// descriptor read/write is Phase 2.
-    pub descriptors: Vec<uuid::Uuid>,
+    /// Descriptors declared by the characteristic, with session-scoped
+    /// identities. A `Descriptor` is only valid for the current connection
+    /// and must never be persisted.
+    pub descriptors: Vec<Descriptor>,
+}
+
+/// One GATT descriptor in a discovered tree.
+///
+/// `instance` distinguishes multiple descriptors sharing one UUID on the
+/// same characteristic; it is the zero-based index among those descriptors,
+/// in the order [`crate::Peripheral::discover_services`] returned them.
+///
+/// The embedded [`CharacteristicId`] makes a discovered descriptor
+/// self-contained for [`crate::Peripheral::read_descriptor`] /
+/// [`crate::Peripheral::write_descriptor`]. Like those identifiers, a
+/// `Descriptor` is only valid for the current connection and must never be
+/// persisted.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Descriptor {
+    /// The characteristic containing this descriptor.
+    pub characteristic: CharacteristicId,
+    /// Descriptor UUID.
+    pub uuid: uuid::Uuid,
+    /// Zero-based index among same-UUID descriptors of that characteristic,
+    /// in discovery order. Almost always 0.
+    pub instance: u16,
+}
+
+impl Descriptor {
+    /// Session-scoped identity of this discovered descriptor.
+    #[must_use]
+    pub const fn id(&self) -> DescriptorId {
+        DescriptorId {
+            characteristic: self.characteristic,
+            uuid: self.uuid,
+            instance: self.instance,
+        }
+    }
+}
+
+/// Identity of a descriptor within one connected session.
+///
+/// Like [`CharacteristicId`], a `DescriptorId` is only valid for the current
+/// connection and must never be persisted. After a reconnect,
+/// [`crate::Peripheral::discover_services`] must run again and fresh
+/// identifiers be taken from its result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DescriptorId {
+    /// The characteristic containing the descriptor.
+    pub characteristic: CharacteristicId,
+    /// Descriptor UUID.
+    pub uuid: uuid::Uuid,
+    /// Zero-based index among same-UUID descriptors of that characteristic,
+    /// in discovery order. Almost always 0.
+    pub instance: u16,
+}
+
+/// Builds the discovered descriptor list for `characteristic`.
+///
+/// `instance` is the zero-based index among descriptors that share a UUID,
+/// in the order `uuids` is given (discovery order). This is the single
+/// discovery model: `Characteristic.descriptors` is `Vec<Descriptor>`, not a
+/// UUID list plus a parallel descriptor list.
+pub fn descriptors_from_uuids(
+    characteristic: CharacteristicId,
+    uuids: impl IntoIterator<Item = uuid::Uuid>,
+) -> Vec<Descriptor> {
+    let mut descriptors: Vec<Descriptor> = Vec::new();
+    for uuid in uuids {
+        let instance = descriptors
+            .iter()
+            .filter(|descriptor| descriptor.uuid == uuid)
+            .count() as u16;
+        descriptors.push(Descriptor {
+            characteristic,
+            uuid,
+            instance,
+        });
+    }
+    descriptors
 }
 
 /// The discovered GATT tree of one connection.
@@ -139,5 +218,37 @@ impl WriteMode {
     #[must_use]
     pub const fn with_response(self) -> bool {
         matches!(self, Self::WithResponse)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{descriptors_from_uuids, CharacteristicId, ServiceId};
+
+    fn characteristic_id() -> CharacteristicId {
+        CharacteristicId {
+            service: ServiceId {
+                uuid: uuid::Uuid::from_u128(0x180F),
+                instance: 0,
+            },
+            uuid: uuid::Uuid::from_u128(0x2A19),
+            instance: 0,
+        }
+    }
+
+    #[test]
+    fn descriptors_from_uuids_assigns_instance_among_same_uuid() {
+        let shared = uuid::Uuid::from_u128(0x2901);
+        let other = uuid::Uuid::from_u128(0x2902);
+        let descriptors = descriptors_from_uuids(characteristic_id(), [shared, other, shared]);
+        assert_eq!(descriptors.len(), 3);
+        assert_eq!(descriptors[0].uuid, shared);
+        assert_eq!(descriptors[0].instance, 0);
+        assert_eq!(descriptors[1].uuid, other);
+        assert_eq!(descriptors[1].instance, 0);
+        assert_eq!(descriptors[2].uuid, shared);
+        assert_eq!(descriptors[2].instance, 1);
+        assert_eq!(descriptors[2].characteristic, characteristic_id());
+        assert_eq!(descriptors[2].id().instance, 1);
     }
 }

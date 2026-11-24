@@ -138,7 +138,15 @@ final class DemoRblueFacade: RblueFacade, @unchecked Sendable {
                 "characteristics": [[
                     "uuid": Self.echoCharacteristic,
                     "properties": 30, // READ | WRITE_NR | WRITE | NOTIFY
-                    "descriptors": ["00002902-0000-1000-8000-00805f9b34fb"],
+                    "descriptors": [[
+                        "characteristic": [
+                            "service": ["uuid": Self.echoService, "instance": 0],
+                            "uuid": Self.echoCharacteristic,
+                            "instance": 0,
+                        ],
+                        "uuid": "00002902-0000-1000-8000-00805f9b34fb",
+                        "instance": 0,
+                    ]],
                 ]],
             ]]
         case Self.batteryDevice:
@@ -148,7 +156,15 @@ final class DemoRblueFacade: RblueFacade, @unchecked Sendable {
                 "characteristics": [[
                     "uuid": Self.batteryCharacteristic,
                     "properties": 18, // READ | NOTIFY
-                    "descriptors": ["00002902-0000-1000-8000-00805f9b34fb"],
+                    "descriptors": [[
+                        "characteristic": [
+                            "service": ["uuid": Self.batteryService, "instance": 0],
+                            "uuid": Self.batteryCharacteristic,
+                            "instance": 0,
+                        ],
+                        "uuid": "00002902-0000-1000-8000-00805f9b34fb",
+                        "instance": 0,
+                    ]],
                 ]],
             ]]
         default:

@@ -642,6 +642,109 @@ class CharacteristicId {
   int get hashCode => Object.hash(service, uuid, instance);
 }
 
+/// Identity of a descriptor within one connected session
+/// (`rblue_api::DescriptorId`). Valid only for the current connection:
+/// after a reconnect, re-run [RblueClient.discoverServices] and use fresh ids.
+/// Never persist this identifier.
+class DescriptorId {
+  /// The characteristic containing the descriptor.
+  final CharacteristicId characteristic;
+
+  /// Descriptor UUID.
+  final String uuid;
+
+  /// Zero-based index among same-UUID descriptors of that characteristic.
+  final int instance;
+
+  /// Parses the serde form.
+  factory DescriptorId.fromJson(Map<String, Object?> json) => DescriptorId(
+    characteristic: CharacteristicId.fromJson(
+      (json['characteristic']! as Map).cast<String, Object?>(),
+    ),
+    uuid: json['uuid']! as String,
+    instance: json['instance']! as int,
+  );
+
+  const DescriptorId({
+    required this.characteristic,
+    required this.uuid,
+    required this.instance,
+  });
+
+  /// The serde form (the `read_descriptor` / `write_descriptor` parameter).
+  Map<String, Object?> toJson() => {
+    'characteristic': characteristic.toJson(),
+    'uuid': uuid,
+    'instance': instance,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is DescriptorId &&
+      other.characteristic == characteristic &&
+      other.uuid == uuid &&
+      other.instance == instance;
+
+  @override
+  int get hashCode => Object.hash(characteristic, uuid, instance);
+}
+
+/// One GATT descriptor (`rblue_api::Descriptor`).
+///
+/// The embedded [characteristic] makes a discovered descriptor
+/// self-contained for [RblueClient.readDescriptor] /
+/// [RblueClient.writeDescriptor]. Valid only for the current connection
+/// and must never be persisted.
+class Descriptor {
+  /// The characteristic containing this descriptor.
+  final CharacteristicId characteristic;
+
+  /// Descriptor UUID.
+  final String uuid;
+
+  /// Zero-based index among same-UUID descriptors of that characteristic.
+  final int instance;
+
+  /// Parses the serde form.
+  factory Descriptor.fromJson(Map<String, Object?> json) => Descriptor(
+    characteristic: CharacteristicId.fromJson(
+      (json['characteristic']! as Map).cast<String, Object?>(),
+    ),
+    uuid: json['uuid']! as String,
+    instance: json['instance']! as int,
+  );
+
+  const Descriptor({
+    required this.characteristic,
+    required this.uuid,
+    required this.instance,
+  });
+
+  /// Session-scoped identity of this discovered descriptor.
+  DescriptorId get id => DescriptorId(
+    characteristic: characteristic,
+    uuid: uuid,
+    instance: instance,
+  );
+
+  /// The serde form.
+  Map<String, Object?> toJson() => {
+    'characteristic': characteristic.toJson(),
+    'uuid': uuid,
+    'instance': instance,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is Descriptor &&
+      other.characteristic == characteristic &&
+      other.uuid == uuid &&
+      other.instance == instance;
+
+  @override
+  int get hashCode => Object.hash(characteristic, uuid, instance);
+}
+
 /// One GATT characteristic (`rblue_api::Characteristic`).
 class Characteristic {
   /// Characteristic UUID.
@@ -650,17 +753,25 @@ class Characteristic {
   /// Property bits; see [CharacteristicProperties].
   final int properties;
 
-  /// Descriptor UUIDs (enumerated only in 1.0).
-  final List<String> descriptors;
+  /// Discovered descriptors, with session-scoped identities.
+  final List<Descriptor> descriptors;
 
   /// Parses the serde form.
-  factory Characteristic.fromJson(Map<String, Object?> json) => Characteristic(
-    uuid: json['uuid']! as String,
-    properties: CharacteristicProperties.fromJson(
-      json['properties']! as String,
-    ),
-    descriptors: (json['descriptors']! as List<Object?>).cast<String>(),
-  );
+  ///
+  /// Accepts both the current `Descriptor` object list and the pre-#12
+  /// UUID-string list used by packaged native snapshots. Legacy strings
+  /// get a placeholder [CharacteristicId] (empty service UUID) until
+  /// [ServiceSet.fromJson] fills in the owning session id.
+  factory Characteristic.fromJson(Map<String, Object?> json) {
+    final uuid = json['uuid']! as String;
+    return Characteristic(
+      uuid: uuid,
+      properties: CharacteristicProperties.fromJson(
+        json['properties']! as String,
+      ),
+      descriptors: _descriptorsFromJson(json['descriptors'], uuid),
+    );
+  }
 
   const Characteristic({
     required this.uuid,
@@ -722,13 +833,20 @@ class ServiceSet {
   final List<Service> services;
 
   /// Parses the serde form.
-  factory ServiceSet.fromJson(Map<String, Object?> json) => ServiceSet(
-    services: (json['services']! as List<Object?>)
-        .map(
-          (value) => Service.fromJson((value! as Map).cast<String, Object?>()),
-        )
-        .toList(),
-  );
+  ///
+  /// Legacy UUID-string descriptor lists are rewritten so each [Descriptor]
+  /// carries the owning [CharacteristicId] derived from discovery order.
+  factory ServiceSet.fromJson(Map<String, Object?> json) {
+    final parsed = ServiceSet(
+      services: (json['services']! as List<Object?>)
+          .map(
+            (value) =>
+                Service.fromJson((value! as Map).cast<String, Object?>()),
+          )
+          .toList(),
+    );
+    return parsed._withLegacyDescriptorOwners();
+  }
 
   const ServiceSet({required this.services});
 
@@ -772,6 +890,95 @@ class ServiceSet {
     }
     return null;
   }
+
+  /// Fills the owning [CharacteristicId] on descriptors parsed from the
+  /// pre-#12 UUID-string list (placeholder service UUID is empty).
+  ServiceSet _withLegacyDescriptorOwners() {
+    final serviceCounts = <String, int>{};
+    final services = <Service>[];
+    for (final service in this.services) {
+      final serviceInstance = serviceCounts.update(
+        service.uuid,
+        (n) => n + 1,
+        ifAbsent: () => 0,
+      );
+      final characteristicCounts = <String, int>{};
+      final characteristics = <Characteristic>[];
+      for (final characteristic in service.characteristics) {
+        final instance = characteristicCounts.update(
+          characteristic.uuid,
+          (n) => n + 1,
+          ifAbsent: () => 0,
+        );
+        final owner = CharacteristicId(
+          service: ServiceId(uuid: service.uuid, instance: serviceInstance),
+          uuid: characteristic.uuid,
+          instance: instance,
+        );
+        characteristics.add(
+          Characteristic(
+            uuid: characteristic.uuid,
+            properties: characteristic.properties,
+            descriptors: [
+              for (final descriptor in characteristic.descriptors)
+                descriptor.characteristic.service.uuid.isEmpty
+                    ? Descriptor(
+                        characteristic: owner,
+                        uuid: descriptor.uuid,
+                        instance: descriptor.instance,
+                      )
+                    : descriptor,
+            ],
+          ),
+        );
+      }
+      services.add(
+        Service(
+          uuid: service.uuid,
+          primary: service.primary,
+          characteristics: characteristics,
+        ),
+      );
+    }
+    return ServiceSet(services: services);
+  }
+}
+
+/// Parses `descriptors` as either `Descriptor` objects or legacy UUID strings.
+List<Descriptor> _descriptorsFromJson(Object? raw, String characteristicUuid) {
+  if (raw == null) {
+    return const [];
+  }
+  if (raw is! List) {
+    throw FormatException(
+      'descriptors must be a JSON list, got ${raw.runtimeType}',
+    );
+  }
+  final values = List<Object?>.from(raw);
+  final descriptors = <Descriptor>[];
+  for (final value in values) {
+    if (value is String) {
+      final instance = descriptors.where((d) => d.uuid == value).length;
+      descriptors.add(
+        Descriptor(
+          characteristic: CharacteristicId(
+            service: const ServiceId(uuid: '', instance: 0),
+            uuid: characteristicUuid,
+            instance: 0,
+          ),
+          uuid: value,
+          instance: instance,
+        ),
+      );
+    } else if (value is Map) {
+      descriptors.add(Descriptor.fromJson(value.cast<String, Object?>()));
+    } else {
+      throw FormatException(
+        'descriptor entry must be a UUID string or a Descriptor object, got ${value.runtimeType}',
+      );
+    }
+  }
+  return descriptors;
 }
 
 /// Connection priority (`rblue_api::ConnectionPriority`).
